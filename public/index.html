@@ -2025,7 +2025,7 @@ function renderReportForm() {
         <div class="card">
           <div class="card-hd"><span class="card-title">Report Details</span></div>
           <div class="card-body">
-            <div class="fg"><label class="flbl">Technician Name *</label><input class="fc" type="text" id="rf-tech" placeholder="Your name" required></div>
+            <div class="fg"><label class="flbl">Technician Name *</label><input class="fc" type="text" id="rf-tech" placeholder="Your name" value="${esc(currentUser?.name||'')}" required></div>
             <div class="fr">
               <div class="fg"><label class="flbl">Date *</label><input class="fc" type="date" id="rf-date" value="${today}" required></div>
               <div class="fg"><label class="flbl">Time</label><input class="fc" type="time" id="rf-time" value="${new Date().toTimeString().slice(0,5)}"></div>

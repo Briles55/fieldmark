@@ -265,6 +265,15 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .photo-lightbox .lb-close:hover{background:rgba(255,255,255,.3);}
 @media(max-width:600px){.photo-fields{grid-template-columns:1fr;max-width:240px;margin:0 auto;}}
 
+/* SERVICE REQUEST PHOTOS */
+.sr-photos{display:flex;flex-wrap:wrap;gap:10px;}
+.sr-add-photo{width:100px;height:100px;border:2px dashed var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;gap:4px;}
+.sr-add-photo:hover{border-color:var(--accent);background:rgba(59,130,246,.04);}
+.sr-photo-thumb{width:100px;height:100px;border-radius:8px;position:relative;overflow:hidden;}
+.sr-photo-thumb img{width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;}
+.sr-photo-thumb .photo-remove{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:none;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}
+.sr-photo-thumb .photo-remove:hover{background:var(--red);}
+
 .sb-user{padding:14px 20px;border-top:1px solid var(--border);}
 .sb-uname{font-size:13px;font-weight:600;color:var(--text);}
 .sb-urole{font-size:11px;color:var(--muted);text-transform:capitalize;margin-bottom:8px;}
@@ -356,6 +365,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <button id="nav-portal-equipment" class="nav-item" onclick="nav('portal-equipment',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       <span>Equipment</span>
+    </button>
+    <button id="nav-portal-request" class="nav-item" onclick="nav('portal-request',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+      <span>Request Service</span>
     </button>
     <button id="nav-scanner" class="nav-item" onclick="nav('scanner',this)">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
@@ -708,6 +721,14 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           </table>
         </div>
       </div>
+    </div>
+
+    <!-- REQUEST SERVICE (client portal) -->
+    <div id="view-portal-request" class="view">
+      <div class="ph">
+        <div><div class="ph-title">Request Service</div><div class="ph-sub">Submit a service request to our team</div></div>
+      </div>
+      <div id="sr-form-content"></div>
     </div>
 
     <!-- FORM TEMPLATES (admin only) -->
@@ -1262,6 +1283,7 @@ function enterClientMode() {
   // Show client portal nav items
   document.getElementById('nav-portal-locations').style.display = '';
   document.getElementById('nav-portal-equipment').style.display = '';
+  document.getElementById('nav-portal-request').style.display = '';
   // Update sidebar branding
   document.querySelector('.sb-logo p').textContent = 'Client Portal';
   // Update sidebar user info
@@ -1282,6 +1304,7 @@ function exitClientMode() {
   // Hide client portal nav items
   document.getElementById('nav-portal-locations').style.display = 'none';
   document.getElementById('nav-portal-equipment').style.display = 'none';
+  document.getElementById('nav-portal-request').style.display = 'none';
   // Restore staff nav visibility (will be re-set by applyRoleUI on next staff login)
   document.getElementById('nav-dashboard').style.display = '';
   document.getElementById('nav-clients').style.display = '';
@@ -1376,6 +1399,7 @@ const app = {
   formBuilderFields: [],
   formBuilderName: '',
   reportPhotos: { before: null, after: null, nameplate: null },
+  requestPhotos: [],
 };
 
 // â”€â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1384,7 +1408,7 @@ function nav(viewName, navEl) {
     showToast('Access restricted to administrators', 'error'); return;
   }
   if (isClient() && viewName === 'clients') { viewName = 'portal-locations'; }
-  if (isClient() && !['portal-locations','portal-equipment','location','equipment','report-detail'].includes(viewName)) {
+  if (isClient() && !['portal-locations','portal-equipment','portal-request','location','equipment','report-detail'].includes(viewName)) {
     showToast('Access restricted', 'error'); return;
   }
   stopScanner();
@@ -1401,7 +1425,7 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings' };
+  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-request':'nav-portal-request' };
   if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
 }
 
@@ -1503,6 +1527,11 @@ function renderView(name) {
       bc.innerHTML = '<span class="cur">My Equipment</span>';
       renderPortalEquipment('');
       break;
+    case 'portal-request':
+      bc.innerHTML = '<span class="cur">Request Service</span>';
+      setNav('portal-request');
+      renderServiceRequest();
+      break;
   }
   applyRoleUI();
 }
@@ -1552,6 +1581,118 @@ function renderPortalEquipment(search) {
 }
 
 // â”€â”€â”€ FORM TEMPLATES & BUILDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── SERVICE REQUEST (Client Portal) ──────────────────────────────────────────
+function renderServiceRequest() {
+  app.requestPhotos = [];
+  const locOptions = db.locations.map(l => `<option value="${l.id}">${esc(l.buildingName)}</option>`).join('');
+  document.getElementById('sr-form-content').innerHTML = `
+    <form onsubmit="submitServiceRequest(event)" id="sr-form" style="max-width:700px;">
+      <div class="card">
+        <div class="card-hd"><span class="card-title">Service Request Details</span></div>
+        <div class="card-body">
+          <div class="fg"><label class="flbl">Location *</label>
+            <select class="fc" id="sr-location" required onchange="updateRequestEquipment()">
+              <option value="">— Select Location —</option>
+              ${locOptions}
+            </select>
+          </div>
+          <div class="fg"><label class="flbl">Equipment</label>
+            <select class="fc" id="sr-equipment">
+              <option value="">— Select Equipment (optional) —</option>
+            </select>
+          </div>
+          <div class="fg"><label class="flbl">Urgency *</label>
+            <select class="fc" id="sr-urgency" required>
+              <option value="">— Select Urgency —</option>
+              <option>Routine</option>
+              <option>Urgent</option>
+              <option>Emergency</option>
+            </select>
+          </div>
+          <div class="fg"><label class="flbl">Description *</label>
+            <textarea class="fc" id="sr-description" placeholder="Describe the issue or service needed…" style="min-height:140px;" required></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <div class="card-hd"><span class="card-title">Photos</span><span class="badge bgr">Optional</span></div>
+        <div class="card-body">
+          <div class="sr-photos" id="sr-photos-grid">
+            <div class="sr-add-photo" onclick="document.getElementById('sr-photo-input').click()">
+              <span style="font-size:24px;">📷</span>
+              <span style="font-size:12px;color:var(--muted);">Add Photo</span>
+            </div>
+          </div>
+          <input type="file" id="sr-photo-input" accept="image/*" style="display:none;" onchange="handleRequestPhoto(this)">
+          <div style="font-size:11px;color:var(--muted);margin-top:8px;">Up to 5 photos. Tap to add.</div>
+        </div>
+      </div>
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;">
+        <button type="submit" class="btn btn-primary" id="sr-submit-btn">Submit Request</button>
+      </div>
+    </form>
+  `;
+}
+
+function updateRequestEquipment() {
+  const locId = document.getElementById('sr-location').value;
+  const eqSelect = document.getElementById('sr-equipment');
+  const eqs = locId ? db.equipment.filter(e => e.locationId === locId) : [];
+  eqSelect.innerHTML = '<option value="">— Select Equipment (optional) —</option>' +
+    eqs.map(e => `<option value="${e.id}">${esc(e.name)}${e.model ? ' — ' + esc(e.model) : ''}</option>`).join('');
+}
+
+function handleRequestPhoto(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  if (app.requestPhotos.length >= 5) { showToast('Maximum 5 photos allowed','error'); inputEl.value=''; return; }
+  compressImage(file).then(dataUrl => {
+    app.requestPhotos.push(dataUrl);
+    renderRequestPhotos();
+  }).catch(() => showToast('Failed to process image','error'));
+  inputEl.value = '';
+}
+
+function removeRequestPhoto(idx) {
+  app.requestPhotos.splice(idx, 1);
+  renderRequestPhotos();
+}
+
+function renderRequestPhotos() {
+  const grid = document.getElementById('sr-photos-grid');
+  const thumbs = app.requestPhotos.map((p, i) => `
+    <div class="sr-photo-thumb">
+      <img src="${p}" alt="Photo ${i+1}" onclick="openPhotoLightbox(app.requestPhotos[${i}])">
+      <button type="button" class="photo-remove" onclick="removeRequestPhoto(${i})">✕</button>
+    </div>`).join('');
+  const addBtn = app.requestPhotos.length < 5 ? `
+    <div class="sr-add-photo" onclick="document.getElementById('sr-photo-input').click()">
+      <span style="font-size:24px;">📷</span>
+      <span style="font-size:12px;color:var(--muted);">Add Photo</span>
+    </div>` : '';
+  grid.innerHTML = thumbs + addBtn;
+}
+
+async function submitServiceRequest(e) {
+  e.preventDefault();
+  const locationId = document.getElementById('sr-location').value;
+  const equipmentId = document.getElementById('sr-equipment').value;
+  const urgency = document.getElementById('sr-urgency').value;
+  const description = document.getElementById('sr-description').value.trim();
+  if (!locationId || !urgency || !description) { showToast('Please fill in all required fields','error'); return; }
+  const btn = document.getElementById('sr-submit-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await apiPost('/api/service-requests', { locationId, equipmentId: equipmentId||undefined, urgency, description, photos: app.requestPhotos });
+    showToast('Service request submitted successfully!','success');
+    renderServiceRequest(); // reset form
+  } catch(err) {
+    showToast(err.message,'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit Request';
+  }
+}
+
 function renderFormTemplates() {
   const list = db.formTemplates || [];
   document.getElementById('templates-sub').textContent = `${list.length} template${list.length!==1?'s':''}`;

@@ -462,6 +462,91 @@ app.get('/api/reports/:id/photos', requireAuth, (req, res) => {
   res.json(row);
 });
 
+// ─── SERVICE REQUESTS ─────────────────────────────────────────────────────────
+app.post('/api/service-requests', requireClientAuth, async (req, res) => {
+  const cfg = getEmailSettings();
+  if (!cfg.enabled || !cfg.smtpUser || !cfg.smtpPass) {
+    return res.status(400).json({ error: 'Email is not configured. Please contact your service provider.' });
+  }
+  const { locationId, equipmentId, urgency, description, photos } = req.body;
+  if (!locationId || !urgency || !description) return res.status(400).json({ error: 'Location, urgency, and description are required' });
+
+  const client = db.prepare('SELECT * FROM clients WHERE id=?').get(req.session.client.id);
+  const loc = db.prepare('SELECT * FROM locations WHERE id=?').get(locationId);
+  const equip = equipmentId ? db.prepare('SELECT * FROM equipment WHERE id=?').get(equipmentId) : null;
+  const fromName = cfg.fromName || 'FieldMark Service';
+
+  const urgencyColors = { 'Routine': '#22c55e', 'Urgent': '#f59e0b', 'Emergency': '#ef4444' };
+  const urgencyColor = urgencyColors[urgency] || '#64748b';
+
+  const photosHtml = (photos && photos.length)
+    ? `<tr><td colspan="2" style="padding:16px 0"><p style="color:#64748b;margin:0 0 10px;font-weight:600">Attached Photos (${photos.length})</p>
+        <div>${photos.map((p, i) => `<img src="${p}" alt="Photo ${i+1}" style="max-width:280px;border-radius:6px;margin:4px;border:1px solid #e2e8f0">`).join('')}</div></td></tr>`
+    : '';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222">
+      <div style="background:#1a1d27;padding:24px 32px;border-radius:8px 8px 0 0">
+        <h1 style="color:#3b82f6;margin:0;font-size:22px">FieldMark</h1>
+        <p style="color:#94a3b8;margin:4px 0 0">Service Request</p>
+      </div>
+      <div style="background:#f8fafc;padding:32px;border-radius:0 0 8px 8px;border:1px solid #e2e8f0">
+        <p style="margin-top:0">A client has submitted a new service request.</p>
+        <table style="width:100%;border-collapse:collapse;margin:20px 0">
+          <tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:10px 0;color:#64748b;width:40%">Client</td>
+            <td style="padding:10px 0;font-weight:600">${client?.name || 'Unknown'}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:10px 0;color:#64748b">Contact Email</td>
+            <td style="padding:10px 0">${client?.email || 'N/A'}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:10px 0;color:#64748b">Phone</td>
+            <td style="padding:10px 0">${client?.phone || 'N/A'}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:10px 0;color:#64748b">Location</td>
+            <td style="padding:10px 0">${loc?.buildingName || 'Unknown'}${loc?.address ? ', ' + loc.address : ''}</td>
+          </tr>
+          ${equip ? `<tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:10px 0;color:#64748b">Equipment</td>
+            <td style="padding:10px 0">${equip.name}${equip.model ? ' — ' + equip.model : ''}</td>
+          </tr>` : ''}
+          <tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:10px 0;color:#64748b">Urgency</td>
+            <td style="padding:10px 0"><span style="background:${urgencyColor};color:#fff;padding:3px 10px;border-radius:4px;font-size:13px;font-weight:600">${urgency}</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:10px 0;color:#64748b;vertical-align:top">Description</td>
+            <td style="padding:10px 0">${description.replace(/\n/g, '<br>')}</td>
+          </tr>
+          ${photosHtml}
+        </table>
+        <p style="color:#64748b;font-size:13px;margin-top:32px">Submitted on ${new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' })}.</p>
+      </div>
+    </div>`;
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com', port: 587, secure: false,
+      auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
+    });
+    await transporter.sendMail({
+      from: `"${fromName}" <${cfg.smtpUser}>`,
+      to: cfg.smtpUser,
+      replyTo: client?.email || undefined,
+      subject: `Service Request — ${client?.name || 'Client'} — ${loc?.buildingName || 'Location'}${equip ? ' — ' + equip.name : ''}`,
+      html,
+    });
+    console.log(`Service request email sent from client ${client?.name}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Service request email error:', err.message);
+    res.status(500).json({ error: 'Failed to send service request. Please try again.' });
+  }
+});
+
 // ─── USERS ────────────────────────────────────────────────────────────────────
 app.get('/api/users', requireAdmin, (req, res) => {
   const users = db.prepare('SELECT id,username,name,role,createdAt FROM users ORDER BY name').all();

@@ -246,6 +246,25 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
   .fb-mobile-reorder button{background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;padding:2px 4px;border-radius:3px;font-size:11px;line-height:1;}
   .fb-mobile-reorder button:hover{color:var(--text);background:var(--surface2);}
 }
+
+/* PHOTO FIELDS */
+.photo-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.photo-field{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.photo-field label{font-size:12px;font-weight:600;color:var(--text);}
+.photo-field .photo-drop{width:100%;aspect-ratio:1;border:2px dashed var(--border);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;background:var(--bg);position:relative;overflow:hidden;}
+.photo-field .photo-drop:hover{border-color:var(--accent);background:rgba(59,130,246,.04);}
+.photo-field .photo-drop .ph-icon{font-size:28px;color:var(--muted);margin-bottom:4px;}
+.photo-field .photo-drop .ph-text{font-size:11px;color:var(--muted);text-align:center;padding:0 8px;}
+.photo-field .photo-drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;}
+.photo-field .photo-drop .photo-remove{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;z-index:2;}
+.photo-field .photo-drop .photo-remove:hover{background:var(--red);}
+.photo-field input[type="file"]{display:none;}
+.photo-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.photo-lightbox img{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px;}
+.photo-lightbox .lb-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;border:none;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;}
+.photo-lightbox .lb-close:hover{background:rgba(255,255,255,.3);}
+@media(max-width:600px){.photo-fields{grid-template-columns:1fr;max-width:240px;margin:0 auto;}}
+
 .sb-user{padding:14px 20px;border-top:1px solid var(--border);}
 .sb-uname{font-size:13px;font-weight:600;color:var(--text);}
 .sb-urole{font-size:11px;color:var(--muted);text-transform:capitalize;margin-bottom:8px;}
@@ -1110,6 +1129,55 @@ function fmtDT(iso) {
 }
 
 // â”€â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── IMAGE COMPRESSION ────────────────────────────────────────────────────────
+function compressImage(file, maxW=1200, quality=0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function handlePhotoSelect(key, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  compressImage(file).then(dataUrl => {
+    app.reportPhotos[key] = dataUrl;
+    const drop = inputEl.previousElementSibling;
+    drop.innerHTML = `<img src="${dataUrl}" alt=""><button type="button" class="photo-remove" onclick="event.stopPropagation();clearPhoto('${key}',this)">✕</button>`;
+  }).catch(() => showToast('Failed to process image','error'));
+}
+
+function clearPhoto(key, btn) {
+  app.reportPhotos[key] = null;
+  const drop = btn.parentElement;
+  const label = key === 'before' ? 'Before' : key === 'after' ? 'After' : 'Nameplate';
+  const icon = key === 'nameplate' ? '🏷️' : '📷';
+  drop.innerHTML = `<span class="ph-icon">${icon}</span><span class="ph-text">${label} Photo</span>`;
+  drop.parentElement.querySelector('input[type="file"]').value = '';
+}
+
+function openPhotoLightbox(src) {
+  const lb = document.createElement('div');
+  lb.className = 'photo-lightbox';
+  lb.innerHTML = `<button class="lb-close" onclick="this.parentElement.remove()">✕</button><img src="${src}">`;
+  lb.addEventListener('click', e => { if (e.target === lb) lb.remove(); });
+  document.body.appendChild(lb);
+}
+
 function showLoginScreen() {
   document.getElementById('login-screen').style.display = 'flex';
   exitClientMode();
@@ -1307,6 +1375,7 @@ const app = {
   editingTemplateId: null,
   formBuilderFields: [],
   formBuilderName: '',
+  reportPhotos: { before: null, after: null, nameplate: null },
 };
 
 // â”€â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2019,6 +2088,8 @@ function renderReportForm() {
     </div>`;
   }
 
+  app.reportPhotos = { before: null, after: null, nameplate: null };
+
   document.getElementById('rpt-form-content').innerHTML = `
     <form onsubmit="submitReport(event)" id="rpt-form">
       <div class="g2">
@@ -2048,6 +2119,28 @@ function renderReportForm() {
             <div class="fg"><label class="flbl">Parts Used / Replaced</label><textarea class="fc" id="rf-parts" placeholder="List any parts used or replaced\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Recommendations</label><textarea class="fc" id="rf-recs" placeholder="Recommendations for follow-up or future work\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Next Service Date</label><input class="fc" type="date" id="rf-next"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Photos</span><span class="badge br">Required</span></div>
+          <div class="card-body">
+            <div class="photo-fields">
+              <div class="photo-field">
+                <label>Before Photo <span style="color:var(--red);">*</span></label>
+                <div class="photo-drop" onclick="this.nextElementSibling.click()"><span class="ph-icon">📷</span><span class="ph-text">Before Photo</span></div>
+                <input type="file" accept="image/*" capture="environment" onchange="handlePhotoSelect('before',this)">
+              </div>
+              <div class="photo-field">
+                <label>After Photo <span style="color:var(--red);">*</span></label>
+                <div class="photo-drop" onclick="this.nextElementSibling.click()"><span class="ph-icon">📷</span><span class="ph-text">After Photo</span></div>
+                <input type="file" accept="image/*" capture="environment" onchange="handlePhotoSelect('after',this)">
+              </div>
+              <div class="photo-field">
+                <label>Nameplate <span style="color:var(--red);">*</span></label>
+                <div class="photo-drop" onclick="this.nextElementSibling.click()"><span class="ph-icon">🏷️</span><span class="ph-text">Nameplate Photo</span></div>
+                <input type="file" accept="image/*" capture="environment" onchange="handlePhotoSelect('nameplate',this)">
+              </div>
+            </div>
           </div>
         </div>
         ${checklistCard}
@@ -2091,6 +2184,11 @@ async function submitReport(e) {
       checklist = maintChecklist.map((item,i)=>({ item, done: document.getElementById('chk-'+i)?.checked||false }));
     }
   }
+  // Validate photos
+  if (!app.reportPhotos.before) { showToast('Before photo is required','error'); return; }
+  if (!app.reportPhotos.after) { showToast('After photo is required','error'); return; }
+  if (!app.reportPhotos.nameplate) { showToast('Nameplate photo is required','error'); return; }
+
   const reportData = {
     equipmentId: app.equipmentId, type,
     techName: document.getElementById('rf-tech').value.trim(),
@@ -2107,6 +2205,9 @@ async function submitReport(e) {
     dischargePressure: document.getElementById('rf-discharge')?.value||'',
     supplyTemp: document.getElementById('rf-supply')?.value||'',
     returnTemp: document.getElementById('rf-return')?.value||'',
+    photoBefore: app.reportPhotos.before,
+    photoAfter: app.reportPhotos.after,
+    photoNameplate: app.reportPhotos.nameplate,
   };
   try {
     const created = await apiPost('/api/reports', reportData);
@@ -2222,7 +2323,31 @@ function renderReportDetail() {
       </div>
     </div>
     ${checklistHtml}
+    <div id="rpt-photos-card"></div>
   `;
+  // Lazy-load photos
+  loadReportPhotos(r.id);
+}
+
+async function loadReportPhotos(reportId) {
+  try {
+    const photos = await apiGet('/api/reports/' + reportId + '/photos');
+    const el = document.getElementById('rpt-photos-card');
+    if (!el) return;
+    if (!photos.photoBefore && !photos.photoAfter && !photos.photoNameplate) { el.innerHTML = ''; return; }
+    // Store photos in temp var so lightbox can access them without inline base64
+    app._detailPhotos = photos;
+    el.innerHTML = `<div class="card" style="margin-top:16px;">
+      <div class="card-hd"><span class="card-title">Photos</span></div>
+      <div class="card-body">
+        <div class="photo-fields">
+          ${photos.photoBefore ? `<div class="photo-field"><label>Before</label><div class="photo-drop" style="border:none;cursor:pointer;" onclick="openPhotoLightbox(app._detailPhotos.photoBefore)"><img src="${photos.photoBefore}" alt="Before"></div></div>` : ''}
+          ${photos.photoAfter ? `<div class="photo-field"><label>After</label><div class="photo-drop" style="border:none;cursor:pointer;" onclick="openPhotoLightbox(app._detailPhotos.photoAfter)"><img src="${photos.photoAfter}" alt="After"></div></div>` : ''}
+          ${photos.photoNameplate ? `<div class="photo-field"><label>Nameplate</label><div class="photo-drop" style="border:none;cursor:pointer;" onclick="openPhotoLightbox(app._detailPhotos.photoNameplate)"><img src="${photos.photoNameplate}" alt="Nameplate"></div></div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  } catch(e) { /* old report, no photos */ }
 }
 
 function deleteReport(id) { confirmDelete('report', id); }

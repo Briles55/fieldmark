@@ -97,6 +97,9 @@ db.exec(`
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
 try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE reports ADD COLUMN photoBefore TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE reports ADD COLUMN photoAfter TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE reports ADD COLUMN photoNameplate TEXT DEFAULT ''"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -192,7 +195,7 @@ async function sendClientNotification(report) {
 }
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: SECRET,
@@ -269,7 +272,7 @@ app.get('/api/client-data', requireClientAuth, (req, res) => {
     const equipmentIds = equipment.map(e => e.id);
     if (equipmentIds.length) {
       const ePlaceholders = equipmentIds.map(() => '?').join(',');
-      reports = db.prepare(`SELECT * FROM reports WHERE equipmentId IN (${ePlaceholders}) ORDER BY createdAt DESC`).all(...equipmentIds);
+      reports = db.prepare(`SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,createdAt FROM reports WHERE equipmentId IN (${ePlaceholders}) ORDER BY createdAt DESC`).all(...equipmentIds);
       reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
     }
   }
@@ -283,7 +286,7 @@ app.get('/api/data', requireAuth, (req, res) => {
   const clients   = db.prepare('SELECT * FROM clients ORDER BY name').all();
   const locations = db.prepare('SELECT * FROM locations ORDER BY buildingName').all();
   const equipment = db.prepare('SELECT * FROM equipment ORDER BY name').all();
-  const reports   = db.prepare('SELECT * FROM reports ORDER BY createdAt DESC').all();
+  const reports   = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,createdAt FROM reports ORDER BY createdAt DESC').all();
   const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
   // Parse checklist JSON for each report
   reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
@@ -430,17 +433,18 @@ app.delete('/api/form-templates/:id', requireAdmin, (req, res) => {
 app.post('/api/reports', requireAuth, async (req, res) => {
   const { equipmentId, type, techName, date, status, workPerformed, cause, parts,
           recommendations, nextDate, checklist, refrigerantType, suctionPressure,
-          dischargePressure, supplyTemp, returnTemp } = req.body;
+          dischargePressure, supplyTemp, returnTemp, photoBefore, photoAfter, photoNameplate } = req.body;
   if (!equipmentId || !type) return res.status(400).json({ error: 'equipmentId and type required' });
   const id = genId();
   db.prepare(`INSERT INTO reports
-    (id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,createdAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    (id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,photoBefore,photoAfter,photoNameplate,createdAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, equipmentId, type, techName||'', date||'', status||'', workPerformed||'', cause||'',
          parts||'', recommendations||'', nextDate||'', JSON.stringify(checklist||[]),
          refrigerantType||'', suctionPressure||'', dischargePressure||'', supplyTemp||'', returnTemp||'',
+         photoBefore||'', photoAfter||'', photoNameplate||'',
          new Date().toISOString());
-  const report = db.prepare('SELECT * FROM reports WHERE id=?').get(id);
+  const report = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,createdAt FROM reports WHERE id=?').get(id);
   report.checklist = checklist || [];
   // Send email in background (don't block response)
   sendClientNotification(report);
@@ -450,6 +454,12 @@ app.post('/api/reports', requireAuth, async (req, res) => {
 app.delete('/api/reports/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM reports WHERE id=?').run(req.params.id);
   res.json({ ok: true });
+});
+
+app.get('/api/reports/:id/photos', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT photoBefore,photoAfter,photoNameplate FROM reports WHERE id=?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Report not found' });
+  res.json(row);
 });
 
 // ─── USERS ────────────────────────────────────────────────────────────────────

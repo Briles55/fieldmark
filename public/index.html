@@ -2128,17 +2128,17 @@ function renderReportForm() {
               <div class="photo-field">
                 <label>Before Photo <span style="color:var(--red);">*</span></label>
                 <div class="photo-drop" onclick="this.nextElementSibling.click()"><span class="ph-icon">📷</span><span class="ph-text">Before Photo</span></div>
-                <input type="file" accept="image/*" capture="environment" onchange="handlePhotoSelect('before',this)">
+                <input type="file" accept="image/*" onchange="handlePhotoSelect('before',this)">
               </div>
               <div class="photo-field">
                 <label>After Photo <span style="color:var(--red);">*</span></label>
                 <div class="photo-drop" onclick="this.nextElementSibling.click()"><span class="ph-icon">📷</span><span class="ph-text">After Photo</span></div>
-                <input type="file" accept="image/*" capture="environment" onchange="handlePhotoSelect('after',this)">
+                <input type="file" accept="image/*" onchange="handlePhotoSelect('after',this)">
               </div>
               <div class="photo-field">
                 <label>Nameplate <span style="color:var(--red);">*</span></label>
                 <div class="photo-drop" onclick="this.nextElementSibling.click()"><span class="ph-icon">🏷️</span><span class="ph-text">Nameplate Photo</span></div>
-                <input type="file" accept="image/*" capture="environment" onchange="handlePhotoSelect('nameplate',this)">
+                <input type="file" accept="image/*" onchange="handlePhotoSelect('nameplate',this)">
               </div>
             </div>
           </div>

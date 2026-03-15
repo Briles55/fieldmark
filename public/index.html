@@ -1259,6 +1259,13 @@ function applyRoleUI() {
   });
 }
 
+function handleHashRoute() {
+  const h = window.location.hash;
+  if (h.startsWith('#eq=')) { const id = h.replace('#eq=',''); window.location.hash = ''; openEquipmentView(id); return true; }
+  if (h.startsWith('#report-')) { const id = h.replace('#report-',''); window.location.hash = ''; openReportDetail(id); return true; }
+  return false;
+}
+
 async function checkAuth() {
   const loginScreen = document.getElementById('login-screen');
   // Try staff auth first
@@ -1267,7 +1274,7 @@ async function checkAuth() {
     loginScreen.style.display = 'none';
     await loadDB();
     updateSidebarUser();
-    renderDashboard();
+    handleHashRoute() || renderDashboard();
     return;
   } catch(e) {}
   // Try client auth
@@ -1867,7 +1874,7 @@ function renderEquipmentDetail() {
     </div>
     ${eq.notes?`<hr class="div"><div class="ii-lbl">Notes</div><div style="font-size:13.5px;color:var(--muted);margin-top:4px;">${esc(eq.notes)}</div>`:''}
   `;
-  const qrData = 'FMAPP:' + eq.id;
+  const qrData = window.location.origin + '/#eq=' + eq.id;
   const canvas = document.getElementById('eq-qr-canvas');
   function tryRenderQR() {
     if (typeof QRCode !== 'undefined') {
@@ -2257,7 +2264,10 @@ function scanLoop() {
   const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
   if (code) {
     const val = code.data;
-    if (val.startsWith('FMAPP:')) { const eqId = val.replace('FMAPP:',''); stopScanner(); handleScannedEquipment(eqId); return; }
+    let eqId = null;
+    if (val.includes('#eq=')) { eqId = val.split('#eq=')[1]; }
+    else if (val.startsWith('FMAPP:')) { eqId = val.replace('FMAPP:',''); }
+    if (eqId) { stopScanner(); handleScannedEquipment(eqId); return; }
   }
   app.scanAnimFrame = requestAnimationFrame(scanLoop);
 }

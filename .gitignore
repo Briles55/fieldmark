@@ -1,0 +1,7 @@
+node_modules/
+fieldmark.db
+.env
+*.db-shm
+*.db-wal
+index.html
+recover-admin.html

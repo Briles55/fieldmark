@@ -282,6 +282,14 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       Clients
     </button>
+    <button id="nav-portal-locations" class="nav-item" onclick="nav('portal-locations',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <span>Locations</span>
+    </button>
+    <button id="nav-portal-equipment" class="nav-item" onclick="nav('portal-equipment',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <span>Equipment</span>
+    </button>
     <button id="nav-scanner" class="nav-item" onclick="nav('scanner',this)">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
       QR Scanner
@@ -572,6 +580,60 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
               </tr>
             </thead>
             <tbody id="reports-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLIENT PORTAL: ALL LOCATIONS -->
+    <div id="view-portal-locations" class="view">
+      <div class="ph">
+        <div><div class="ph-title">My Locations</div><div class="ph-sub" id="portal-loc-sub"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">Locations</span>
+          <input class="fc" type="text" placeholder="Search locations..." oninput="renderPortalLocations(this.value)" style="width:200px;padding:5px 10px;font-size:12px;">
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Building Name</th>
+                <th>Address</th>
+                <th>City / State</th>
+                <th>Equipment</th>
+              </tr>
+            </thead>
+            <tbody id="portal-loc-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLIENT PORTAL: ALL EQUIPMENT -->
+    <div id="view-portal-equipment" class="view">
+      <div class="ph">
+        <div><div class="ph-title">My Equipment</div><div class="ph-sub" id="portal-eq-sub"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">Equipment</span>
+          <input class="fc" type="text" placeholder="Search equipment..." oninput="renderPortalEquipment(this.value)" style="width:200px;padding:5px 10px;font-size:12px;">
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Model</th>
+                <th>Serial</th>
+                <th>Type</th>
+                <th>Location</th>
+                <th>Reports</th>
+              </tr>
+            </thead>
+            <tbody id="portal-eq-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -984,14 +1046,14 @@ function enterClientMode() {
   document.body.classList.add('client-portal-mode');
   // Hide nav items not relevant to clients
   document.getElementById('nav-dashboard').style.display = 'none';
-  document.getElementById('nav-clients').style.display = '';
+  document.getElementById('nav-clients').style.display = 'none';
   document.getElementById('nav-scanner').style.display = 'none';
   document.getElementById('nav-reports').style.display = 'none';
   document.getElementById('nav-users').style.display = 'none';
   document.getElementById('nav-settings').style.display = 'none';
-  // Update the clients nav label to "My Locations"
-  const clientsNav = document.getElementById('nav-clients');
-  clientsNav.querySelector('span').textContent = 'My Locations';
+  // Show client portal nav items
+  document.getElementById('nav-portal-locations').style.display = '';
+  document.getElementById('nav-portal-equipment').style.display = '';
   // Update sidebar branding
   document.querySelector('.sb-logo p').textContent = 'Client Portal';
   // Update sidebar user info
@@ -999,22 +1061,22 @@ function enterClientMode() {
   document.getElementById('sb-urole').textContent = 'Client';
   // Set the client's own ID and jump to their locations view
   app.clientId = currentUser.id;
-  showView('client');
-  renderClientDetail();
+  showView('portal-locations');
   // Update breadcrumb
-  document.querySelectorAll('.sb-nav a').forEach(a => a.classList.remove('active'));
-  clientsNav.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-portal-locations').classList.add('active');
 }
 
 function exitClientMode() {
   document.body.classList.remove('client-portal-mode');
-  // Restore nav labels
-  const clientsNav = document.getElementById('nav-clients');
-  if (clientsNav.querySelector('span')) clientsNav.querySelector('span').textContent = 'Clients';
   // Restore sidebar branding
   document.querySelector('.sb-logo p').textContent = 'Service Management';
-  // Restore nav visibility (will be re-set by applyRoleUI on next staff login)
+  // Hide client portal nav items
+  document.getElementById('nav-portal-locations').style.display = 'none';
+  document.getElementById('nav-portal-equipment').style.display = 'none';
+  // Restore staff nav visibility (will be re-set by applyRoleUI on next staff login)
   document.getElementById('nav-dashboard').style.display = '';
+  document.getElementById('nav-clients').style.display = '';
   document.getElementById('nav-scanner').style.display = '';
   document.getElementById('nav-reports').style.display = '';
 }
@@ -1099,8 +1161,8 @@ function nav(viewName, navEl) {
   if (viewName === 'users' && !isAdmin()) {
     showToast('Access restricted to administrators', 'error'); return;
   }
-  if (isClient() && viewName === 'clients') { viewName = 'client'; app.clientId = currentUser.id; }
-  if (isClient() && !['client','location','equipment','report-detail'].includes(viewName)) {
+  if (isClient() && viewName === 'clients') { viewName = 'portal-locations'; }
+  if (isClient() && !['portal-locations','portal-equipment','location','equipment','report-detail'].includes(viewName)) {
     showToast('Access restricted', 'error'); return;
   }
   stopScanner();
@@ -1156,7 +1218,7 @@ function renderView(name) {
       const loc = db.locations.find(l=>l.id===app.locationId);
       const cl2 = db.clients.find(c=>c.id===app.clientId);
       if (isClient()) {
-        bc.innerHTML = `<span onclick="showView('client');renderClientDetail();">My Locations</span><span class="bc-sep">/</span><span class="cur">${esc(loc?.buildingName||'Location')}</span>`;
+        bc.innerHTML = `<span onclick="nav('portal-locations')">Locations</span><span class="bc-sep">/</span><span class="cur">${esc(loc?.buildingName||'Location')}</span>`;
       } else {
         bc.innerHTML = `<span onclick="nav('clients')">Clients</span><span class="bc-sep">/</span><span onclick="openClientView(app.clientId)">${esc(cl2?.name||'Client')}</span><span class="bc-sep">/</span><span class="cur">${esc(loc?.buildingName||'Location')}</span>`;
       }
@@ -1166,7 +1228,8 @@ function renderView(name) {
     case 'equipment':
       const eq = db.equipment.find(e=>e.id===app.equipmentId);
       if (isClient()) {
-        bc.innerHTML = `<span onclick="showView('client');renderClientDetail();">My Locations</span><span class="bc-sep">/</span><span onclick="goBackToClient()">Location</span><span class="bc-sep">/</span><span class="cur">${esc(eq?.name||'Equipment')}</span>`;
+        const eqLoc = db.locations.find(l=>l.id===eq?.locationId);
+        bc.innerHTML = `<span onclick="nav('portal-locations')">Locations</span><span class="bc-sep">/</span><span onclick="openLocationView('${eq?.locationId}')">${esc(eqLoc?.buildingName||'Location')}</span><span class="bc-sep">/</span><span class="cur">${esc(eq?.name||'Equipment')}</span>`;
       } else {
         bc.innerHTML = `<span onclick="nav('clients')">Clients</span><span class="bc-sep">/</span><span onclick="goBackToClient()">Location</span><span class="bc-sep">/</span><span class="cur">${esc(eq?.name||'Equipment')}</span>`;
       }
@@ -1200,8 +1263,60 @@ function renderView(name) {
       setNav('settings');
       renderSettingsView();
       break;
+    case 'portal-locations':
+      bc.innerHTML = '<span class="cur">My Locations</span>';
+      renderPortalLocations('');
+      break;
+    case 'portal-equipment':
+      bc.innerHTML = '<span class="cur">My Equipment</span>';
+      renderPortalEquipment('');
+      break;
   }
   applyRoleUI();
+}
+
+// â”€â”€â”€ CLIENT PORTAL VIEWS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function renderPortalLocations(search) {
+  search = (search||'').toLowerCase();
+  let list = db.locations.filter(l => !search || l.buildingName.toLowerCase().includes(search) || (l.address||'').toLowerCase().includes(search) || (l.city||'').toLowerCase().includes(search));
+  document.getElementById('portal-loc-sub').textContent = `${list.length} location(s)`;
+  const tbody = document.getElementById('portal-loc-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan=”4”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCD</div><div class=”empty-title”>No locations found</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(l => {
+    const eqCount = db.equipment.filter(e=>e.locationId===l.id).length;
+    return `<tr class=”clickable” onclick=”openLocationView('${l.id}')”>
+      <td><strong>${esc(l.buildingName)}</strong></td>
+      <td>${esc(l.address||'\u2014')}</td>
+      <td>${esc([l.city,l.state].filter(Boolean).join(', ')||'\u2014')}</td>
+      <td>${eqCount} unit(s)</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPortalEquipment(search) {
+  search = (search||'').toLowerCase();
+  let list = db.equipment.filter(e => !search || e.name.toLowerCase().includes(search) || (e.model||'').toLowerCase().includes(search) || (e.serial||'').toLowerCase().includes(search) || (e.type||'').toLowerCase().includes(search));
+  document.getElementById('portal-eq-sub').textContent = `${list.length} unit(s)`;
+  const tbody = document.getElementById('portal-eq-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan=”6”><div class=”empty”><div class=”empty-ico”>\u2699\uFE0F</div><div class=”empty-title”>No equipment found</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(e => {
+    const loc = db.locations.find(l=>l.id===e.locationId);
+    const rptCount = db.reports.filter(r=>r.equipmentId===e.id).length;
+    return `<tr class=”clickable” onclick=”openEquipmentView('${e.id}')”>
+      <td><strong>${esc(e.name)}</strong></td>
+      <td>${esc(e.model||'\u2014')}</td>
+      <td>${esc(e.serial||'\u2014')}</td>
+      <td>${esc(e.type||'\u2014')}</td>
+      <td>${esc(loc?.buildingName||'\u2014')}</td>
+      <td>${rptCount} report(s)</td>
+    </tr>`;
+  }).join('');
 }
 
 // â”€â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

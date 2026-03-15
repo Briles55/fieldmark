@@ -1107,6 +1107,7 @@ function updateSidebarUser() {
 function isAdmin() { return currentUser && currentUser.role === 'admin'; }
 
 function applyRoleUI() {
+  if (isClient()) return; // client portal mode manages its own nav visibility
   const admin = isAdmin();
   document.getElementById('nav-clients').style.display = '';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';

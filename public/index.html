@@ -1099,10 +1099,10 @@ function nav(viewName, navEl) {
   if (viewName === 'users' && !isAdmin()) {
     showToast('Access restricted to administrators', 'error'); return;
   }
+  if (isClient() && viewName === 'clients') { viewName = 'client'; app.clientId = currentUser.id; }
   if (isClient() && !['client','location','equipment','report-detail'].includes(viewName)) {
     showToast('Access restricted', 'error'); return;
   }
-  if (isClient() && viewName === 'clients') { viewName = 'client'; app.clientId = currentUser.id; }
   stopScanner();
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + viewName).classList.add('active');

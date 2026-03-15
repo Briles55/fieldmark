@@ -198,6 +198,54 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .staff-only{}
 .client-portal-mode .staff-only{display:none!important;}
 .client-portal-mode .admin-only{display:none!important;}
+
+/* FORM BUILDER */
+.fb-layout{display:grid;grid-template-columns:240px 1fr;gap:20px;}
+.fb-palette{position:sticky;top:80px;align-self:start;}
+.fb-palette-item{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:grab;margin-bottom:8px;font-size:13px;font-weight:500;transition:all .15s;user-select:none;}
+.fb-palette-item:hover{border-color:var(--accent);background:rgba(59,130,246,.06);}
+.fb-palette-item:active{cursor:grabbing;}
+.fb-palette-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.fb-palette-icon.chk{background:rgba(34,197,94,.15);color:var(--green);}
+.fb-palette-icon.txt{background:rgba(59,130,246,.15);color:var(--accent);}
+.fb-palette-icon.sel{background:rgba(245,158,11,.15);color:var(--amber);}
+.fb-canvas{min-height:200px;border:2px dashed var(--border);border-radius:8px;padding:12px;transition:border-color .2s;}
+.fb-canvas.drag-over{border-color:var(--accent);background:rgba(59,130,246,.03);}
+.fb-canvas-empty{text-align:center;padding:48px 20px;color:var(--muted);}
+.fb-field{display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;transition:all .15s;}
+.fb-field:hover{border-color:var(--accent);}
+.fb-field.dragging{opacity:.4;border-style:dashed;}
+.fb-handle{cursor:grab;color:var(--muted);flex-shrink:0;padding:4px;}
+.fb-handle:active{cursor:grabbing;}
+.fb-field-body{flex:1;min-width:0;}
+.fb-field-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.fb-field-type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 6px;border-radius:4px;}
+.fb-field-type.chk{background:rgba(34,197,94,.15);color:var(--green);}
+.fb-field-type.txt{background:rgba(59,130,246,.15);color:var(--accent);}
+.fb-field-type.sel{background:rgba(245,158,11,.15);color:var(--amber);}
+.fb-field-label{flex:1;}
+.fb-field-label input{width:100%;background:transparent;border:1px solid transparent;border-radius:4px;padding:4px 6px;color:var(--text);font-size:13px;font-family:inherit;}
+.fb-field-label input:focus{outline:none;border-color:var(--accent);background:var(--surface);}
+.fb-field-opts{margin-top:4px;}
+.fb-field-opts input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px;font-family:inherit;}
+.fb-field-opts input:focus{outline:none;border-color:var(--accent);}
+.fb-req-toggle{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer;flex-shrink:0;}
+.fb-req-toggle input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;}
+.fb-del{background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:4px;flex-shrink:0;}
+.fb-del:hover{color:var(--red);background:rgba(239,68,68,.1);}
+.fb-drop-indicator{height:3px;background:var(--accent);border-radius:2px;margin:2px 0;transition:opacity .1s;}
+.fb-mobile-add{display:none;gap:8px;margin-bottom:12px;}
+.fb-mobile-reorder{display:none;}
+.fb-field-required-star{color:var(--red);margin-left:2px;}
+@media(max-width:768px){
+  .fb-layout{grid-template-columns:1fr;}
+  .fb-palette{display:none;}
+  .fb-mobile-add{display:flex;}
+  .fb-handle{display:none;}
+  .fb-mobile-reorder{display:flex;flex-direction:column;gap:2px;flex-shrink:0;}
+  .fb-mobile-reorder button{background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;padding:2px 4px;border-radius:3px;font-size:11px;line-height:1;}
+  .fb-mobile-reorder button:hover{color:var(--text);background:var(--surface2);}
+}
 .sb-user{padding:14px 20px;border-top:1px solid var(--border);}
 .sb-uname{font-size:13px;font-weight:600;color:var(--text);}
 .sb-urole{font-size:11px;color:var(--muted);text-transform:capitalize;margin-bottom:8px;}
@@ -297,6 +345,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <button id="nav-reports" class="nav-item" onclick="nav('reports',this)">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
       All Reports
+    </button>
+    <button id="nav-form-templates" class="nav-item" onclick="nav('form-templates',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+      Form Templates
     </button>
     <button id="nav-users" class="nav-item" onclick="nav('users',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
@@ -639,6 +691,86 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
     </div>
 
+    <!-- FORM TEMPLATES (admin only) -->
+    <div id="view-form-templates" class="view">
+      <div class="ph">
+        <div><div class="ph-title">Form Templates</div><div class="ph-sub" id="templates-sub">Custom inspection checklists for equipment</div></div>
+        <button class="btn btn-primary" onclick="openFormBuilder()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          New Template
+        </button>
+      </div>
+      <div class="card">
+        <div class="card-hd"><span class="card-title">All Templates</span></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Template Name</th>
+                <th>Fields</th>
+                <th>Created</th>
+                <th>Updated</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="templates-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORM BUILDER -->
+    <div id="view-form-builder" class="view">
+      <div class="back-link" onclick="showView('form-templates')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back to Templates
+      </div>
+      <div class="ph">
+        <div><div class="ph-title" id="fb-title">New Template</div><div class="ph-sub">Drag fields from the palette to build your inspection form</div></div>
+      </div>
+      <div class="fg" style="max-width:400px;margin-bottom:20px;">
+        <label class="flbl">Template Name *</label>
+        <input class="fc" type="text" id="fb-name" placeholder="e.g. RTU Maintenance Checklist">
+      </div>
+      <div class="fb-layout">
+        <div class="fb-palette">
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Field Types</span></div>
+            <div class="card-body" style="padding:12px;">
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'checkbox')">
+                <div class="fb-palette-icon chk"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
+                <div><div style="font-weight:600;">Checkbox</div><div style="font-size:11px;color:var(--muted)">Yes / No toggle</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'text')">
+                <div class="fb-palette-icon txt"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+                <div><div style="font-weight:600;">Text Input</div><div style="font-size:11px;color:var(--muted)">Free-text notes</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'select')">
+                <div class="fb-palette-icon sel"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/></svg></div>
+                <div><div style="font-weight:600;">Dropdown</div><div style="font-size:11px;color:var(--muted)">Select from options</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="fb-mobile-add">
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('checkbox')">+ Checkbox</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('text')">+ Text</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('select')">+ Dropdown</button>
+          </div>
+          <div class="fb-canvas" id="fb-canvas"
+               ondragover="fbCanvasDragOver(event)"
+               ondragleave="fbCanvasDragLeave(event)"
+               ondrop="fbCanvasDrop(event)">
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-secondary" onclick="showView('form-templates')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveFormTemplate()">Save Template</button>
+      </div>
+    </div>
+
     <!-- USERS (admin only) -->
     <div id="view-users" class="view">
       <div class="ph">
@@ -870,6 +1002,13 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         </div>
       </div>
       <div class="fg"><label class="flbl">Notes / Location Description</label><textarea class="fc" id="e-notes" placeholder="Describe equipment location, any special notesâ€¦"></textarea></div>
+      <div class="fg admin-only">
+        <label class="flbl">Inspection Form Template</label>
+        <select class="fc" id="e-template">
+          <option value="">Default Checklist</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Assign a custom inspection form for maintenance reports on this equipment.</div>
+      </div>
     </div>
     <div class="modal-ft">
       <button class="btn btn-secondary" onclick="closeModal('modal-equipment')">Cancel</button>
@@ -938,7 +1077,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 <div id="toasts"></div>
 <script>
 // â”€â”€â”€ DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-let db = { clients: [], locations: [], equipment: [], reports: [] };
+let db = { clients: [], locations: [], equipment: [], reports: [], formTemplates: [] };
 let currentUser = null;
 
 async function apiGet(url) {
@@ -1037,7 +1176,7 @@ async function doClientLogin() {
 
 async function loadClientDB() {
   const data = await apiGet('/api/client-data');
-  db = { clients: [], locations: data.locations, equipment: data.equipment, reports: data.reports };
+  db = { clients: [], locations: data.locations, equipment: data.equipment, reports: data.reports, formTemplates: data.formTemplates || [] };
 }
 
 function isClient() { return currentUser && currentUser.role === 'client'; }
@@ -1049,6 +1188,7 @@ function enterClientMode() {
   document.getElementById('nav-clients').style.display = 'none';
   document.getElementById('nav-scanner').style.display = 'none';
   document.getElementById('nav-reports').style.display = 'none';
+  document.getElementById('nav-form-templates').style.display = 'none';
   document.getElementById('nav-users').style.display = 'none';
   document.getElementById('nav-settings').style.display = 'none';
   // Show client portal nav items
@@ -1110,6 +1250,7 @@ function applyRoleUI() {
   if (isClient()) return; // client portal mode manages its own nav visibility
   const admin = isAdmin();
   document.getElementById('nav-clients').style.display = '';
+  document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';
   document.getElementById('nav-settings').style.display = admin ? '' : 'none';
   document.querySelectorAll('.admin-only').forEach(el => {
@@ -1155,11 +1296,14 @@ const app = {
   scanStream: null,
   scanActive: false,
   scanAnimFrame: null,
+  editingTemplateId: null,
+  formBuilderFields: [],
+  formBuilderName: '',
 };
 
 // â”€â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function nav(viewName, navEl) {
-  if (viewName === 'users' && !isAdmin()) {
+  if ((viewName === 'users' || viewName === 'form-templates' || viewName === 'form-builder') && !isAdmin()) {
     showToast('Access restricted to administrators', 'error'); return;
   }
   if (isClient() && viewName === 'clients') { viewName = 'portal-locations'; }
@@ -1180,7 +1324,7 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', users:'nav-users', settings:'nav-settings' };
+  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings' };
   if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
 }
 
@@ -1264,6 +1408,16 @@ function renderView(name) {
       setNav('settings');
       renderSettingsView();
       break;
+    case 'form-templates':
+      bc.innerHTML = '<span class="cur">Form Templates</span>';
+      setNav('form-templates');
+      renderFormTemplates();
+      break;
+    case 'form-builder':
+      bc.innerHTML = `<span onclick="showView('form-templates')">Form Templates</span><span class="bc-sep">/</span><span class="cur">${app.editingTemplateId?'Edit':'New'} Template</span>`;
+      setNav('form-templates');
+      renderFormBuilder();
+      break;
     case 'portal-locations':
       bc.innerHTML = '<span class="cur">My Locations</span>';
       renderPortalLocations('');
@@ -1318,6 +1472,177 @@ function renderPortalEquipment(search) {
       <td>${rptCount} report(s)</td>
     </tr>`;
   }).join('');
+}
+
+// â”€â”€â”€ FORM TEMPLATES & BUILDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function renderFormTemplates() {
+  const list = db.formTemplates || [];
+  document.getElementById('templates-sub').textContent = `${list.length} template${list.length!==1?'s':''}`;
+  const tbody = document.getElementById('templates-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan=”5”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCB</div><div class=”empty-title”>No templates yet</div><div class=”empty-desc”>Create a custom inspection form template</div><button class=”btn btn-primary” onclick=”openFormBuilder()”>New Template</button></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(t => {
+    const fields = Array.isArray(t.fields) ? t.fields : [];
+    return `<tr>
+      <td><strong>${esc(t.name)}</strong></td>
+      <td><span class=”badge bgr”>${fields.length} field${fields.length!==1?'s':''}</span></td>
+      <td>${fmtDate(t.createdAt)}</td>
+      <td>${fmtDate(t.updatedAt)}</td>
+      <td><div style=”display:flex;gap:6px;”>
+        <button class=”btn btn-ghost btn-sm” onclick=”openFormBuilder('${t.id}')”>Edit</button>
+        <button class=”btn btn-danger btn-sm” onclick=”confirmDeleteTemplate('${t.id}')”>Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function confirmDeleteTemplate(id) {
+  const t = (db.formTemplates||[]).find(x=>x.id===id);
+  document.getElementById('delete-msg').textContent = `Delete template “${t?.name}”? Equipment using this template will revert to the default checklist.`;
+  document.getElementById('delete-confirm-btn').onclick = async () => {
+    try {
+      await apiPost('/api/form-templates/'+id, {}, 'DELETE');
+      db.formTemplates = db.formTemplates.filter(x=>x.id!==id);
+      db.equipment.forEach(e => { if (e.formTemplateId === id) e.formTemplateId = ''; });
+      showToast('Template deleted','success');
+      closeModal('modal-delete');
+      renderFormTemplates();
+    } catch(err) { showToast(err.message,'error'); }
+  };
+  openModal('modal-delete');
+}
+
+function openFormBuilder(templateId) {
+  app.editingTemplateId = templateId || null;
+  if (templateId) {
+    const t = (db.formTemplates||[]).find(x=>x.id===templateId);
+    app.formBuilderFields = t ? JSON.parse(JSON.stringify(t.fields)) : [];
+    app.formBuilderName = t ? t.name : '';
+  } else {
+    app.formBuilderFields = [];
+    app.formBuilderName = '';
+  }
+  showView('form-builder');
+}
+
+function renderFormBuilder() {
+  document.getElementById('fb-title').textContent = app.editingTemplateId ? 'Edit Template' : 'New Template';
+  document.getElementById('fb-name').value = app.formBuilderName || '';
+  renderFBCanvas();
+}
+
+function renderFBCanvas() {
+  const canvas = document.getElementById('fb-canvas');
+  const fields = app.formBuilderFields;
+  if (!fields || fields.length === 0) {
+    canvas.innerHTML = '<div class=”fb-canvas-empty”><div style=”font-size:32px;margin-bottom:8px;opacity:.4;”>\uD83D\uDCCB</div><div style=”font-size:14px;font-weight:500;margin-bottom:4px;”>No fields yet</div><div style=”font-size:12px;”>Drag fields from the palette or use the buttons above on mobile</div></div>';
+    return;
+  }
+  canvas.innerHTML = fields.map((f, i) => {
+    const typeCls = f.type === 'checkbox' ? 'chk' : f.type === 'text' ? 'txt' : 'sel';
+    const typeLabel = f.type === 'checkbox' ? 'Checkbox' : f.type === 'text' ? 'Text' : 'Dropdown';
+    return `<div class=”fb-field” draggable=”true” data-idx=”${i}”
+                ondragstart=”fbFieldDragStart(event,${i})”
+                ondragover=”fbFieldDragOver(event,${i})”
+                ondragend=”fbFieldDragEnd(event)”
+                ondrop=”fbFieldDrop(event,${i})”>
+      <div class=”fb-handle” title=”Drag to reorder”>
+        <svg width=”14” height=”14” fill=”currentColor” viewBox=”0 0 24 24”><circle cx=”9” cy=”5” r=”1.5”/><circle cx=”15” cy=”5” r=”1.5”/><circle cx=”9” cy=”12” r=”1.5”/><circle cx=”15” cy=”12” r=”1.5”/><circle cx=”9” cy=”19” r=”1.5”/><circle cx=”15” cy=”19” r=”1.5”/></svg>
+      </div>
+      <div class=”fb-mobile-reorder”>
+        <button onclick=”fbMoveField(${i},-1)” ${i===0?'disabled':''}>&#9650;</button>
+        <button onclick=”fbMoveField(${i},1)” ${i===fields.length-1?'disabled':''}>&#9660;</button>
+      </div>
+      <div class=”fb-field-body”>
+        <div class=”fb-field-top”>
+          <span class=”fb-field-type ${typeCls}”>${typeLabel}</span>
+          <div class=”fb-field-label”><input type=”text” value=”${esc(f.label)}” placeholder=”Field label...” onchange=”fbUpdateLabel(${i},this.value)”></div>
+          <label class=”fb-req-toggle”><input type=”checkbox” ${f.required?'checked':''} onchange=”fbToggleReq(${i},this.checked)”> Required</label>
+        </div>
+        ${f.type==='select'?`<div class=”fb-field-opts”><input type=”text” value=”${esc((f.options||[]).join(', '))}” placeholder=”Options (comma separated, e.g. Pass, Fail, N/A)” onchange=”fbUpdateOptions(${i},this.value)”></div>`:''}
+      </div>
+      <button class=”fb-del” onclick=”fbRemoveField(${i})” title=”Remove field”>
+        <svg width=”16” height=”16” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16”/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function fbDragPalette(e, type) { e.dataTransfer.setData('fb-type', type); e.dataTransfer.effectAllowed = 'copy'; }
+function fbCanvasDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; document.getElementById('fb-canvas').classList.add('drag-over'); }
+function fbCanvasDragLeave(e) { document.getElementById('fb-canvas').classList.remove('drag-over'); }
+function fbCanvasDrop(e) {
+  e.preventDefault();
+  document.getElementById('fb-canvas').classList.remove('drag-over');
+  const type = e.dataTransfer.getData('fb-type');
+  if (type) { fbAddField(type); return; }
+}
+
+let fbDragIdx = null;
+function fbFieldDragStart(e, idx) {
+  fbDragIdx = idx;
+  e.dataTransfer.setData('fb-reorder', idx.toString());
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => e.target.classList.add('dragging'), 0);
+}
+function fbFieldDragOver(e, idx) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+function fbFieldDrop(e, idx) {
+  e.preventDefault(); e.stopPropagation();
+  const fromIdx = parseInt(e.dataTransfer.getData('fb-reorder'));
+  if (!isNaN(fromIdx) && fromIdx !== idx) {
+    const fields = app.formBuilderFields;
+    const item = fields.splice(fromIdx, 1)[0];
+    fields.splice(idx, 0, item);
+    renderFBCanvas();
+  }
+}
+function fbFieldDragEnd(e) { e.target.classList.remove('dragging'); fbDragIdx = null; }
+
+function fbAddField(type) {
+  const id = 'f_' + Date.now().toString(36);
+  const defaults = { checkbox: 'New Checkbox', text: 'New Text Field', select: 'New Dropdown' };
+  const field = { id, type, label: defaults[type] || 'New Field', required: false };
+  if (type === 'select') field.options = ['Pass', 'Fail', 'N/A'];
+  app.formBuilderFields.push(field);
+  renderFBCanvas();
+}
+
+function fbRemoveField(idx) { app.formBuilderFields.splice(idx, 1); renderFBCanvas(); }
+function fbUpdateLabel(idx, val) { app.formBuilderFields[idx].label = val; }
+function fbToggleReq(idx, val) { app.formBuilderFields[idx].required = val; }
+function fbUpdateOptions(idx, val) { app.formBuilderFields[idx].options = val.split(',').map(s => s.trim()).filter(Boolean); }
+function fbMoveField(idx, dir) {
+  const fields = app.formBuilderFields;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= fields.length) return;
+  [fields[idx], fields[newIdx]] = [fields[newIdx], fields[idx]];
+  renderFBCanvas();
+}
+
+async function saveFormTemplate() {
+  const name = document.getElementById('fb-name').value.trim();
+  if (!name) { showToast('Template name is required', 'error'); return; }
+  if (!app.formBuilderFields.length) { showToast('Add at least one field', 'error'); return; }
+  for (const f of app.formBuilderFields) {
+    if (!f.label.trim()) { showToast('All fields must have a label', 'error'); return; }
+    if (f.type === 'select' && (!f.options || !f.options.length)) { showToast(`Dropdown “${f.label}” needs at least one option`, 'error'); return; }
+  }
+  try {
+    const body = { name, fields: app.formBuilderFields };
+    if (app.editingTemplateId) {
+      const updated = await apiPost('/api/form-templates/' + app.editingTemplateId, body, 'PUT');
+      const idx = db.formTemplates.findIndex(t => t.id === app.editingTemplateId);
+      if (idx >= 0) db.formTemplates[idx] = updated; else db.formTemplates.push(updated);
+      showToast('Template updated', 'success');
+    } else {
+      const created = await apiPost('/api/form-templates', body);
+      db.formTemplates.push(created);
+      showToast('Template created', 'success');
+    }
+    showView('form-templates');
+  } catch (err) { showToast(err.message, 'error'); }
 }
 
 // â”€â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1537,6 +1862,7 @@ function renderEquipmentDetail() {
       <div><div class="ii-lbl">Year Installed</div><div class="ii-val">${eq.yearInstalled||'\u2014'}</div></div>
       <div><div class="ii-lbl">Equipment Age</div><div class="ii-val">${eq.yearInstalled ? (new Date().getFullYear()-eq.yearInstalled)+' years' : '\u2014'}</div></div>
       <div><div class="ii-lbl">Location</div><div class="ii-val">${esc(loc?.buildingName||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Inspection Form</div><div class="ii-val">${(() => { const tmpl = getEquipmentTemplate(eq); return tmpl ? `<span class="badge bb">${esc(tmpl.name)}</span>` : '<span style="color:var(--muted)">Default Checklist</span>'; })()}</div></div>
     </div>
     ${eq.notes?`<hr class="div"><div class="ii-lbl">Notes</div><div style="font-size:13.5px;color:var(--muted);margin-top:4px;">${esc(eq.notes)}</div>`:''}
   `;
@@ -1610,15 +1936,80 @@ function renderReportsView() {
 function startReport(type) { app.reportType = type; app.prevView = 'equipment'; showView('report-form'); }
 function goBackFromReport() { openEquipmentView(app.equipmentId); }
 
+function getEquipmentTemplate(eq) {
+  if (!eq || !eq.formTemplateId) return null;
+  return (db.formTemplates||[]).find(t => t.id === eq.formTemplateId) || null;
+}
+
+function renderCustomChecklistFields(template) {
+  if (!template || !template.fields) return '';
+  return template.fields.map((f, i) => {
+    const reqStar = f.required ? '<span class="fb-field-required-star">*</span>' : '';
+    if (f.type === 'checkbox') {
+      return `<div class="chk-item"><input type="checkbox" id="cf-${i}" data-cf-idx="${i}"><label for="cf-${i}" style="cursor:pointer;flex:1;">${esc(f.label)}${reqStar}</label></div>`;
+    } else if (f.type === 'text') {
+      return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${esc(f.label)}${reqStar}</label><input class="fc" type="text" id="cf-${i}" data-cf-idx="${i}" placeholder="Enter ${esc(f.label).toLowerCase()}..."></div>`;
+    } else if (f.type === 'select') {
+      const opts = (f.options||[]).map(o => `<option>${esc(o)}</option>`).join('');
+      return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${esc(f.label)}${reqStar}</label><select class="fc" id="cf-${i}" data-cf-idx="${i}"><option value="">\u2014 Select \u2014</option>${opts}</select></div>`;
+    }
+    return '';
+  }).join('');
+}
+
 function renderReportForm() {
   const eq = db.equipment.find(e=>e.id===app.equipmentId);
   const loc = eq ? db.locations.find(l=>l.id===eq.locationId) : null;
   const cl = loc ? db.clients.find(c=>c.id===loc.clientId) : null;
   const type = app.reportType;
+  const template = type === 'maintenance' ? getEquipmentTemplate(eq) : null;
   document.getElementById('rpt-form-title').textContent = type==='service' ? 'Service Report' : 'Maintenance Report';
   document.getElementById('rpt-form-sub').textContent = `${eq?.name||''} \u2014 ${loc?.buildingName||''} \u2014 ${cl?.name||''}`;
   const today = new Date().toISOString().split('T')[0];
   const maintChecklist = ['Filter Replacement','Belt Inspection/Adjustment','Lubricate Moving Parts','Clean Condenser Coil','Clean Evaporator Coil','Check Refrigerant Charge','Inspect Electrical Connections','Check/Test Safety Controls','Drain Pan & Condensate Drain','Check/Record Operating Pressures','Check/Record Temperatures','Inspect Ductwork','Test Thermostat/Controls','Record Amp Draw','Visual Inspection'];
+
+  let checklistCard = '';
+  if (type === 'maintenance') {
+    if (template) {
+      checklistCard = `<div class="card">
+        <div class="card-hd"><span class="card-title">${esc(template.name)}</span><span class="badge bb">Custom</span></div>
+        <div class="card-body" style="padding:12px 20px;">
+          ${renderCustomChecklistFields(template)}
+        </div>
+      </div>`;
+    } else {
+      checklistCard = `<div class="card">
+        <div class="card-hd"><span class="card-title">Maintenance Checklist</span></div>
+        <div class="card-body" style="padding:12px 20px;">
+          ${maintChecklist.map((item,i)=>`<div class="chk-item"><input type="checkbox" id="chk-${i}"><label for="chk-${i}" style="cursor:pointer;flex:1;">${esc(item)}</label></div>`).join('')}
+        </div>
+      </div>`;
+    }
+  } else {
+    checklistCard = `<div class="card">
+      <div class="card-hd"><span class="card-title">Equipment Info</span></div>
+      <div class="card-body">
+        <div class="ig">
+          <div><div class="ii-lbl">Equipment</div><div class="ii-val">${esc(eq?.name||'\u2014')}</div></div>
+          <div><div class="ii-lbl">Type</div><div class="ii-val">${esc(eq?.type||'\u2014')}</div></div>
+          <div><div class="ii-lbl">Model</div><div class="ii-val"><code>${esc(eq?.model||'\u2014')}</code></div></div>
+          <div><div class="ii-lbl">Serial</div><div class="ii-val"><code>${esc(eq?.serial||'\u2014')}</code></div></div>
+          <div><div class="ii-lbl">Year</div><div class="ii-val">${eq?.yearInstalled||'\u2014'}</div></div>
+          <div><div class="ii-lbl">Client</div><div class="ii-val">${esc(cl?.name||'\u2014')}</div></div>
+        </div>
+        <hr class="div">
+        <div class="fg"><label class="flbl">Refrigerant Type</label><input class="fc" type="text" id="rf-reftype" placeholder="R-410A, R-22, etc."></div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">Suction Pressure (PSI)</label><input class="fc" type="text" id="rf-suction" placeholder="\u2014"></div>
+          <div class="fg"><label class="flbl">Discharge Pressure (PSI)</label><input class="fc" type="text" id="rf-discharge" placeholder="\u2014"></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">Supply Air Temp (\u00B0F)</label><input class="fc" type="text" id="rf-supply" placeholder="\u2014"></div>
+          <div class="fg"><label class="flbl">Return Air Temp (\u00B0F)</label><input class="fc" type="text" id="rf-return" placeholder="\u2014"></div>
+        </div>
+      </div>
+    </div>`;
+  }
 
   document.getElementById('rpt-form-content').innerHTML = `
     <form onsubmit="submitReport(event)" id="rpt-form">
@@ -1651,37 +2042,7 @@ function renderReportForm() {
             <div class="fg"><label class="flbl">Next Service Date</label><input class="fc" type="date" id="rf-next"></div>
           </div>
         </div>
-        ${type==='maintenance'?`
-        <div class="card">
-          <div class="card-hd"><span class="card-title">Maintenance Checklist</span></div>
-          <div class="card-body" style="padding:12px 20px;">
-            ${maintChecklist.map((item,i)=>`<div class="chk-item"><input type="checkbox" id="chk-${i}"><label for="chk-${i}" style="cursor:pointer;flex:1;">${esc(item)}</label></div>`).join('')}
-          </div>
-        </div>
-        `:
-        `<div class="card">
-          <div class="card-hd"><span class="card-title">Equipment Info</span></div>
-          <div class="card-body">
-            <div class="ig">
-              <div><div class="ii-lbl">Equipment</div><div class="ii-val">${esc(eq?.name||'\u2014')}</div></div>
-              <div><div class="ii-lbl">Type</div><div class="ii-val">${esc(eq?.type||'\u2014')}</div></div>
-              <div><div class="ii-lbl">Model</div><div class="ii-val"><code>${esc(eq?.model||'\u2014')}</code></div></div>
-              <div><div class="ii-lbl">Serial</div><div class="ii-val"><code>${esc(eq?.serial||'\u2014')}</code></div></div>
-              <div><div class="ii-lbl">Year</div><div class="ii-val">${eq?.yearInstalled||'\u2014'}</div></div>
-              <div><div class="ii-lbl">Client</div><div class="ii-val">${esc(cl?.name||'\u2014')}</div></div>
-            </div>
-            <hr class="div">
-            <div class="fg"><label class="flbl">Refrigerant Type</label><input class="fc" type="text" id="rf-reftype" placeholder="R-410A, R-22, etc."></div>
-            <div class="fr">
-              <div class="fg"><label class="flbl">Suction Pressure (PSI)</label><input class="fc" type="text" id="rf-suction" placeholder="\u2014"></div>
-              <div class="fg"><label class="flbl">Discharge Pressure (PSI)</label><input class="fc" type="text" id="rf-discharge" placeholder="\u2014"></div>
-            </div>
-            <div class="fr">
-              <div class="fg"><label class="flbl">Supply Air Temp (\u00B0F)</label><input class="fc" type="text" id="rf-supply" placeholder="\u2014"></div>
-              <div class="fg"><label class="flbl">Return Air Temp (\u00B0F)</label><input class="fc" type="text" id="rf-return" placeholder="\u2014"></div>
-            </div>
-          </div>
-        </div>`}
+        ${checklistCard}
       </div>
       <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;">
         <button type="button" class="btn btn-secondary" onclick="goBackFromReport()">Cancel</button>
@@ -1694,12 +2055,33 @@ function renderReportForm() {
 async function submitReport(e) {
   e.preventDefault();
   const type = app.reportType;
+  const eq = db.equipment.find(x=>x.id===app.equipmentId);
+  const template = type === 'maintenance' ? getEquipmentTemplate(eq) : null;
   const date = document.getElementById('rf-date').value;
   const time = document.getElementById('rf-time')?.value || '';
   const maintChecklist = ['Filter Replacement','Belt Inspection/Adjustment','Lubricate Moving Parts','Clean Condenser Coil','Clean Evaporator Coil','Check Refrigerant Charge','Inspect Electrical Connections','Check/Test Safety Controls','Drain Pan & Condensate Drain','Check/Record Operating Pressures','Check/Record Temperatures','Inspect Ductwork','Test Thermostat/Controls','Record Amp Draw','Visual Inspection'];
   let checklist = [];
   if (type==='maintenance') {
-    checklist = maintChecklist.map((item,i)=>({ item, done: document.getElementById('chk-'+i)?.checked||false }));
+    if (template) {
+      // Custom template — validate required fields and collect values
+      const fieldValues = [];
+      for (let i = 0; i < template.fields.length; i++) {
+        const f = template.fields[i];
+        const el = document.getElementById('cf-'+i);
+        let value;
+        if (f.type === 'checkbox') { value = el?.checked || false; }
+        else if (f.type === 'text') { value = el?.value?.trim() || ''; }
+        else if (f.type === 'select') { value = el?.value || ''; }
+        if (f.required) {
+          if (f.type === 'text' && !value) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
+          if (f.type === 'select' && !value) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
+        }
+        fieldValues.push({ id: f.id, type: f.type, label: f.label, value });
+      }
+      checklist = { templateId: template.id, templateName: template.name, fields: fieldValues };
+    } else {
+      checklist = maintChecklist.map((item,i)=>({ item, done: document.getElementById('chk-'+i)?.checked||false }));
+    }
   }
   const reportData = {
     equipmentId: app.equipmentId, type,
@@ -1740,7 +2122,37 @@ function renderReportDetail() {
   document.getElementById('rpt-detail-sub').textContent = `${eq?.name||''} \u2014 ${fmtDT(r.date)}`;
   const statusCls = r.status==='Operational'?'bg':r.status==='Needs Attention'?'ba':'br';
   let checklistHtml = '';
-  if (r.checklist && r.checklist.length) {
+  if (r.checklist && r.checklist.templateId) {
+    // Custom template format
+    const cf = r.checklist;
+    checklistHtml = `<div class="card" style="margin-top:16px;">
+      <div class="card-hd"><span class="card-title">${esc(cf.templateName||'Custom Checklist')}</span><span class="badge bb">Custom</span></div>
+      <div class="card-body" style="padding:12px 20px;">
+        ${(cf.fields||[]).map(f => {
+          if (f.type === 'checkbox') {
+            return `<div class="chk-item">
+              <span style="width:16px;height:16px;border-radius:3px;background:${f.value?'var(--green)':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                ${f.value?'<svg width="10" height="10" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
+              </span>
+              <span style="${f.value?'':'color:var(--muted)'}">${esc(f.label)}</span>
+            </div>`;
+          } else if (f.type === 'text') {
+            return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px;">${esc(f.label)}</div>
+              <div style="font-size:13.5px;">${esc(f.value||'No response')}</div>
+            </div>`;
+          } else if (f.type === 'select') {
+            return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:13.5px;">${esc(f.label)}</span>
+              <span class="badge ${f.value==='Pass'?'bg':f.value==='Fail'?'br':'bgr'}">${esc(f.value||'N/A')}</span>
+            </div>`;
+          }
+          return '';
+        }).join('')}
+      </div>
+    </div>`;
+  } else if (r.checklist && Array.isArray(r.checklist) && r.checklist.length) {
+    // Legacy format
     const done = r.checklist.filter(c=>c.done).length;
     checklistHtml = `<div class="card" style="margin-top:16px;">
       <div class="card-hd"><span class="card-title">Maintenance Checklist</span><span class="badge bgr">${done}/${r.checklist.length} complete</span></div>
@@ -1952,6 +2364,11 @@ function openEquipmentModal(id) {
   document.getElementById('e-year').value = e?.yearInstalled||'';
   document.getElementById('e-type').value = e?.type||'';
   document.getElementById('e-notes').value = e?.notes||'';
+  // Populate template dropdown
+  const tmplSelect = document.getElementById('e-template');
+  tmplSelect.innerHTML = '<option value="">Default Checklist</option>' +
+    (db.formTemplates||[]).map(t => `<option value="${t.id}">${esc(t.name)} (${(t.fields||[]).length} fields)</option>`).join('');
+  tmplSelect.value = e?.formTemplateId || '';
   openModal('modal-equipment');
 }
 
@@ -1959,7 +2376,7 @@ async function saveEquipment() {
   const id = document.getElementById('eq-id-field').value;
   const name = document.getElementById('e-name').value.trim();
   if (!name) { showToast('Equipment name is required','error'); return; }
-  const data = { locationId: app.locationId, name, model: document.getElementById('e-model').value.trim(), serial: document.getElementById('e-serial').value.trim(), yearInstalled: document.getElementById('e-year').value ? parseInt(document.getElementById('e-year').value) : null, type: document.getElementById('e-type').value, notes: document.getElementById('e-notes').value.trim() };
+  const data = { locationId: app.locationId, name, model: document.getElementById('e-model').value.trim(), serial: document.getElementById('e-serial').value.trim(), yearInstalled: document.getElementById('e-year').value ? parseInt(document.getElementById('e-year').value) : null, type: document.getElementById('e-type').value, notes: document.getElementById('e-notes').value.trim(), formTemplateId: document.getElementById('e-template').value };
   try {
     if (id) { const u = await apiPost('/api/equipment/'+id, data, 'PUT'); const idx = db.equipment.findIndex(e=>e.id===id); if(idx>=0) db.equipment[idx]=u; showToast('Equipment updated','success'); }
     else { const e = await apiPost('/api/equipment', data); db.equipment.push(e); showToast('Equipment added \u2014 QR code generated','success'); }

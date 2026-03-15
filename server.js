@@ -85,10 +85,18 @@ db.exec(`
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS form_templates (
+    id        TEXT PRIMARY KEY,
+    name      TEXT NOT NULL,
+    fields    TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
 `);
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
 try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -265,7 +273,9 @@ app.get('/api/client-data', requireClientAuth, (req, res) => {
       reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
     }
   }
-  res.json({ locations, equipment, reports });
+  const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
+  formTemplates.forEach(t => { try { t.fields = JSON.parse(t.fields); } catch { t.fields = []; } });
+  res.json({ locations, equipment, reports, formTemplates });
 });
 
 // ─── DATA (full load) ─────────────────────────────────────────────────────────
@@ -274,9 +284,11 @@ app.get('/api/data', requireAuth, (req, res) => {
   const locations = db.prepare('SELECT * FROM locations ORDER BY buildingName').all();
   const equipment = db.prepare('SELECT * FROM equipment ORDER BY name').all();
   const reports   = db.prepare('SELECT * FROM reports ORDER BY createdAt DESC').all();
+  const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
   // Parse checklist JSON for each report
   reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
-  res.json({ clients, locations, equipment, reports });
+  formTemplates.forEach(t => { try { t.fields = JSON.parse(t.fields); } catch { t.fields = []; } });
+  res.json({ clients, locations, equipment, reports, formTemplates });
 });
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
@@ -351,19 +363,19 @@ app.delete('/api/locations/:id', requireAdmin, (req, res) => {
 
 // ─── EQUIPMENT ────────────────────────────────────────────────────────────────
 app.post('/api/equipment', requireAdmin, (req, res) => {
-  const { locationId, name, model, serial, yearInstalled, type, notes } = req.body;
+  const { locationId, name, model, serial, yearInstalled, type, notes, formTemplateId } = req.body;
   if (!locationId || !name) return res.status(400).json({ error: 'locationId and name required' });
   const id = genId();
-  db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,createdAt) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', new Date().toISOString());
+  db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,formTemplateId,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', new Date().toISOString());
   res.json(db.prepare('SELECT * FROM equipment WHERE id=?').get(id));
 });
 
 app.put('/api/equipment/:id', requireAdmin, (req, res) => {
-  const { name, model, serial, yearInstalled, type, notes } = req.body;
+  const { name, model, serial, yearInstalled, type, notes, formTemplateId } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=? WHERE id=?')
-    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', req.params.id);
+  db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=?,formTemplateId=? WHERE id=?')
+    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', req.params.id);
   res.json(db.prepare('SELECT * FROM equipment WHERE id=?').get(req.params.id));
 });
 
@@ -371,6 +383,46 @@ app.delete('/api/equipment/:id', requireAdmin, (req, res) => {
   const id = req.params.id;
   db.prepare('DELETE FROM reports WHERE equipmentId=?').run(id);
   db.prepare('DELETE FROM equipment WHERE id=?').run(id);
+  res.json({ ok: true });
+});
+
+// ─── FORM TEMPLATES ──────────────────────────────────────────────────────────
+app.get('/api/form-templates', requireAuth, (req, res) => {
+  const templates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
+  templates.forEach(t => { try { t.fields = JSON.parse(t.fields); } catch { t.fields = []; } });
+  res.json(templates);
+});
+
+app.post('/api/form-templates', requireAdmin, (req, res) => {
+  const { name, fields } = req.body;
+  if (!name) return res.status(400).json({ error: 'Template name required' });
+  if (!fields || !fields.length) return res.status(400).json({ error: 'At least one field is required' });
+  const id = genId();
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO form_templates (id,name,fields,createdAt,updatedAt) VALUES (?,?,?,?,?)')
+    .run(id, name, JSON.stringify(fields), now, now);
+  const t = db.prepare('SELECT * FROM form_templates WHERE id=?').get(id);
+  t.fields = JSON.parse(t.fields);
+  res.json(t);
+});
+
+app.put('/api/form-templates/:id', requireAdmin, (req, res) => {
+  const { name, fields } = req.body;
+  if (!name) return res.status(400).json({ error: 'Template name required' });
+  if (!fields || !fields.length) return res.status(400).json({ error: 'At least one field is required' });
+  const now = new Date().toISOString();
+  db.prepare('UPDATE form_templates SET name=?,fields=?,updatedAt=? WHERE id=?')
+    .run(name, JSON.stringify(fields), now, req.params.id);
+  const t = db.prepare('SELECT * FROM form_templates WHERE id=?').get(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Template not found' });
+  t.fields = JSON.parse(t.fields);
+  res.json(t);
+});
+
+app.delete('/api/form-templates/:id', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM form_templates WHERE id=?').run(req.params.id);
+  // Clear formTemplateId from any equipment using this template
+  db.prepare("UPDATE equipment SET formTemplateId='' WHERE formTemplateId=?").run(req.params.id);
   res.json({ ok: true });
 });
 

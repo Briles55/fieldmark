@@ -87,6 +87,9 @@ db.exec(`
   );
 `);
 
+// ─── MIGRATIONS ──────────────────────────────────────────────────────────────
+try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } catch(e) {}
+
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
 if (userCount === 0) {
@@ -199,6 +202,10 @@ function requireAdmin(req, res, next) {
   if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
   next();
 }
+function requireClientAuth(req, res, next) {
+  if (!req.session?.client) return res.status(401).json({ error: 'Not authenticated' });
+  next();
+}
 
 // ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
@@ -220,6 +227,47 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json(req.session.user);
 });
 
+// ─── CLIENT AUTH ─────────────────────────────────────────────────────────────
+app.post('/api/auth/client-login', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const client = db.prepare('SELECT * FROM clients WHERE LOWER(email)=LOWER(?)').get(email);
+  if (!client || !client.passwordHash) return res.status(401).json({ error: 'Incorrect email or password' });
+  const match = await bcrypt.compare(password, client.passwordHash);
+  if (!match) return res.status(401).json({ error: 'Incorrect email or password' });
+  req.session.client = { id: client.id, name: client.name, email: client.email };
+  req.session.user = null; // clear any staff session
+  res.json({ id: client.id, name: client.name, email: client.email, role: 'client' });
+});
+
+app.post('/api/auth/client-logout', requireClientAuth, (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+app.get('/api/auth/client-me', requireClientAuth, (req, res) => {
+  res.json({ ...req.session.client, role: 'client' });
+});
+
+// ─── CLIENT DATA (filtered to their own data) ───────────────────────────────
+app.get('/api/client-data', requireClientAuth, (req, res) => {
+  const clientId = req.session.client.id;
+  const locations = db.prepare('SELECT * FROM locations WHERE clientId=? ORDER BY buildingName').all(clientId);
+  const locationIds = locations.map(l => l.id);
+  let equipment = [];
+  let reports = [];
+  if (locationIds.length) {
+    const placeholders = locationIds.map(() => '?').join(',');
+    equipment = db.prepare(`SELECT * FROM equipment WHERE locationId IN (${placeholders}) ORDER BY name`).all(...locationIds);
+    const equipmentIds = equipment.map(e => e.id);
+    if (equipmentIds.length) {
+      const ePlaceholders = equipmentIds.map(() => '?').join(',');
+      reports = db.prepare(`SELECT * FROM reports WHERE equipmentId IN (${ePlaceholders}) ORDER BY createdAt DESC`).all(...equipmentIds);
+      reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
+    }
+  }
+  res.json({ locations, equipment, reports });
+});
+
 // ─── DATA (full load) ─────────────────────────────────────────────────────────
 app.get('/api/data', requireAuth, (req, res) => {
   const clients   = db.prepare('SELECT * FROM clients ORDER BY name').all();
@@ -232,20 +280,26 @@ app.get('/api/data', requireAuth, (req, res) => {
 });
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
-app.post('/api/clients', requireAdmin, (req, res) => {
-  const { name, phone, email, address, city, state, notes } = req.body;
+app.post('/api/clients', requireAdmin, async (req, res) => {
+  const { name, phone, email, address, city, state, notes, portalPassword } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const id = genId();
-  db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,createdAt) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', new Date().toISOString());
+  let hash = '';
+  if (portalPassword && portalPassword.length >= 6) hash = await bcrypt.hash(portalPassword, 10);
+  db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,passwordHash,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', hash, new Date().toISOString());
   res.json(db.prepare('SELECT * FROM clients WHERE id=?').get(id));
 });
 
-app.put('/api/clients/:id', requireAdmin, (req, res) => {
-  const { name, phone, email, address, city, state, notes } = req.body;
+app.put('/api/clients/:id', requireAdmin, async (req, res) => {
+  const { name, phone, email, address, city, state, notes, portalPassword } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   db.prepare('UPDATE clients SET name=?,phone=?,email=?,address=?,city=?,state=?,notes=? WHERE id=?')
     .run(name, phone||'', email||'', address||'', city||'', state||'', notes||'', req.params.id);
+  if (portalPassword && portalPassword.length >= 6) {
+    const hash = await bcrypt.hash(portalPassword, 10);
+    db.prepare('UPDATE clients SET passwordHash=? WHERE id=?').run(hash, req.params.id);
+  }
   res.json(db.prepare('SELECT * FROM clients WHERE id=?').get(req.params.id));
 });
 

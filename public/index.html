@@ -191,6 +191,13 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .login-logo-icon{width:56px;height:56px;background:rgba(59,130,246,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
 .login-err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);color:var(--red);padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:16px;display:none;}
 .login-hint{text-align:center;font-size:12px;color:var(--muted);margin-top:16px;padding-top:16px;border-top:1px solid var(--border);}
+.login-tabs{display:flex;gap:0;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
+.login-tab{flex:1;padding:10px;font-size:13px;font-weight:600;background:var(--bg);color:var(--muted);border:none;cursor:pointer;transition:all .2s;}
+.login-tab.active{background:var(--accent);color:#fff;}
+.login-tab:hover:not(.active){background:var(--surface-hover,#2a2d3a);color:var(--text);}
+.staff-only{}
+.client-portal-mode .staff-only{display:none!important;}
+.client-portal-mode .admin-only{display:none!important;}
 .sb-user{padding:14px 20px;border-top:1px solid var(--border);}
 .sb-uname{font-size:13px;font-weight:600;color:var(--text);}
 .sb-urole{font-size:11px;color:var(--muted);text-transform:capitalize;margin-bottom:8px;}
@@ -226,16 +233,36 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <h1>FieldMark</h1>
       <p>Service Management Platform</p>
     </div>
+    <!-- Login tabs -->
+    <div class="login-tabs">
+      <button class="login-tab active" id="tab-staff" onclick="switchLoginTab('staff')">Staff Login</button>
+      <button class="login-tab" id="tab-client" onclick="switchLoginTab('client')">Client Portal</button>
+    </div>
     <div id="login-err" class="login-err"></div>
-    <div class="fg">
-      <label class="flbl">Username</label>
-      <input class="fc" type="text" id="login-user" placeholder="Enter your username" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+    <!-- Staff login fields -->
+    <div id="staff-login-fields">
+      <div class="fg">
+        <label class="flbl">Username</label>
+        <input class="fc" type="text" id="login-user" placeholder="Enter your username" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="fg">
+        <label class="flbl">Password</label>
+        <input class="fc" type="password" id="login-pass" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;font-size:15px;" onclick="doLogin()">Sign In</button>
     </div>
-    <div class="fg">
-      <label class="flbl">Password</label>
-      <input class="fc" type="password" id="login-pass" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <!-- Client login fields -->
+    <div id="client-login-fields" style="display:none;">
+      <div class="fg">
+        <label class="flbl">Email Address</label>
+        <input class="fc" type="email" id="client-login-email" placeholder="Enter your email" autocomplete="email" onkeydown="if(event.key==='Enter')doClientLogin()">
+      </div>
+      <div class="fg">
+        <label class="flbl">Password</label>
+        <input class="fc" type="password" id="client-login-pass" placeholder="Enter your portal password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doClientLogin()">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;font-size:15px;" onclick="doClientLogin()">Sign In to Portal</button>
     </div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;font-size:15px;" onclick="doLogin()">Sign In</button>
     <div class="login-hint" id="login-hint"></div>
   </div>
 </div>
@@ -456,11 +483,11 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div><div class="ph-title" id="eq-title">Equipment</div><div class="ph-sub" id="eq-sub"></div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-secondary admin-only" onclick="openEquipmentModal(app.equipmentId)">Edit Equipment</button>
-          <button class="btn btn-success" onclick="startReport('service')">
+          <button class="btn btn-success staff-only" onclick="startReport('service')">
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Service Report
           </button>
-          <button class="btn btn-primary" onclick="startReport('maintenance')">
+          <button class="btn btn-primary staff-only" onclick="startReport('maintenance')">
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             Maintenance Report
           </button>
@@ -700,6 +727,12 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div class="fg"><label class="flbl">State / Province</label><input class="fc" type="text" id="c-state" placeholder="State"></div>
       </div>
       <div class="fg"><label class="flbl">Notes</label><textarea class="fc" id="c-notes" placeholder="Additional notesâ€¦"></textarea></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+      <div class="fg">
+        <label class="flbl">Client Portal Password</label>
+        <input class="fc" type="password" id="c-portal-pass" placeholder="Set password for portal access (min 6 chars)">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">If set, the client can log in to view their locations, equipment, and reports using their email and this password. Leave blank to keep unchanged when editing.</div>
+      </div>
     </div>
     <div class="modal-ft">
       <button class="btn btn-secondary" onclick="closeModal('modal-client')">Cancel</button>
@@ -878,7 +911,19 @@ function fmtDT(iso) {
 // â”€â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showLoginScreen() {
   document.getElementById('login-screen').style.display = 'flex';
+  exitClientMode();
+  switchLoginTab('staff');
   setTimeout(()=>document.getElementById('login-user').focus(), 50);
+}
+
+function switchLoginTab(tab) {
+  document.getElementById('tab-staff').classList.toggle('active', tab === 'staff');
+  document.getElementById('tab-client').classList.toggle('active', tab === 'client');
+  document.getElementById('staff-login-fields').style.display = tab === 'staff' ? '' : 'none';
+  document.getElementById('client-login-fields').style.display = tab === 'client' ? '' : 'none';
+  document.getElementById('login-err').style.display = 'none';
+  if (tab === 'staff') setTimeout(()=>document.getElementById('login-user').focus(), 50);
+  else setTimeout(()=>document.getElementById('client-login-email').focus(), 50);
 }
 
 async function doLogin() {
@@ -905,14 +950,89 @@ async function doLogin() {
   }
 }
 
+async function doClientLogin() {
+  const email = document.getElementById('client-login-email').value.trim();
+  const password = document.getElementById('client-login-pass').value;
+  const errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+  if (!email || !password) {
+    errEl.textContent = 'Please enter your email and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+  try {
+    currentUser = await apiPost('/api/auth/client-login', { email, password });
+    document.getElementById('login-screen').style.display = 'none';
+    await loadClientDB();
+    enterClientMode();
+  } catch(err) {
+    errEl.textContent = err.message || 'Incorrect email or password.';
+    errEl.style.display = 'block';
+    document.getElementById('client-login-pass').value = '';
+    document.getElementById('client-login-pass').focus();
+  }
+}
+
+async function loadClientDB() {
+  const data = await apiGet('/api/client-data');
+  db = { clients: [], locations: data.locations, equipment: data.equipment, reports: data.reports };
+}
+
+function isClient() { return currentUser && currentUser.role === 'client'; }
+
+function enterClientMode() {
+  document.body.classList.add('client-portal-mode');
+  // Hide nav items not relevant to clients
+  document.getElementById('nav-dashboard').style.display = 'none';
+  document.getElementById('nav-clients').style.display = '';
+  document.getElementById('nav-scanner').style.display = 'none';
+  document.getElementById('nav-reports').style.display = 'none';
+  document.getElementById('nav-users').style.display = 'none';
+  document.getElementById('nav-settings').style.display = 'none';
+  // Update the clients nav label to "My Locations"
+  const clientsNav = document.getElementById('nav-clients');
+  clientsNav.querySelector('span').textContent = 'My Locations';
+  // Update sidebar branding
+  document.querySelector('.sb-logo p').textContent = 'Client Portal';
+  // Update sidebar user info
+  document.getElementById('sb-uname').textContent = currentUser.name || currentUser.email;
+  document.getElementById('sb-urole').textContent = 'Client';
+  // Set the client's own ID and jump to their locations view
+  app.clientId = currentUser.id;
+  showView('client');
+  renderClientDetail();
+  // Update breadcrumb
+  document.querySelectorAll('.sb-nav a').forEach(a => a.classList.remove('active'));
+  clientsNav.classList.add('active');
+}
+
+function exitClientMode() {
+  document.body.classList.remove('client-portal-mode');
+  // Restore nav labels
+  const clientsNav = document.getElementById('nav-clients');
+  if (clientsNav.querySelector('span')) clientsNav.querySelector('span').textContent = 'Clients';
+  // Restore sidebar branding
+  document.querySelector('.sb-logo p').textContent = 'Service Management';
+  // Restore nav visibility (will be re-set by applyRoleUI on next staff login)
+  document.getElementById('nav-dashboard').style.display = '';
+  document.getElementById('nav-scanner').style.display = '';
+  document.getElementById('nav-reports').style.display = '';
+}
+
 async function doLogout() {
-  try { await apiPost('/api/auth/logout', {}); } catch(e) {}
+  try {
+    if (isClient()) await apiPost('/api/auth/client-logout', {});
+    else await apiPost('/api/auth/logout', {});
+  } catch(e) {}
   currentUser = null;
+  exitClientMode();
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-user').value = '';
   document.getElementById('login-pass').value = '';
+  document.getElementById('client-login-email').value = '';
+  document.getElementById('client-login-pass').value = '';
   document.getElementById('login-err').style.display = 'none';
-  document.getElementById('login-user').focus();
+  switchLoginTab('staff');
 }
 
 function updateSidebarUser() {
@@ -936,17 +1056,27 @@ function applyRoleUI() {
 
 async function checkAuth() {
   const loginScreen = document.getElementById('login-screen');
+  // Try staff auth first
   try {
     currentUser = await apiGet('/api/auth/me');
     loginScreen.style.display = 'none';
     await loadDB();
     updateSidebarUser();
     renderDashboard();
-  } catch(e) {
-    loginScreen.style.display = 'flex';
-    document.getElementById('login-hint').innerHTML = '<strong>First time?</strong> Default login: <code>admin</code> / <code>fieldmark</code>';
-    setTimeout(()=>document.getElementById('login-user').focus(), 50);
-  }
+    return;
+  } catch(e) {}
+  // Try client auth
+  try {
+    currentUser = await apiGet('/api/auth/client-me');
+    loginScreen.style.display = 'none';
+    await loadClientDB();
+    enterClientMode();
+    return;
+  } catch(e2) {}
+  // Not authenticated — show login
+  loginScreen.style.display = 'flex';
+  document.getElementById('login-hint').innerHTML = '<strong>First time?</strong> Default login: <code>admin</code> / <code>fieldmark</code>';
+  setTimeout(()=>document.getElementById('login-user').focus(), 50);
 }
 
 // â”€â”€â”€ APP STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -969,6 +1099,10 @@ function nav(viewName, navEl) {
   if (viewName === 'users' && !isAdmin()) {
     showToast('Access restricted to administrators', 'error'); return;
   }
+  if (isClient() && !['client','location','equipment','report-detail'].includes(viewName)) {
+    showToast('Access restricted', 'error'); return;
+  }
+  if (isClient() && viewName === 'clients') { viewName = 'client'; app.clientId = currentUser.id; }
   stopScanner();
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + viewName).classList.add('active');
@@ -1010,20 +1144,32 @@ function renderView(name) {
       break;
     case 'client':
       const cl = db.clients.find(c=>c.id===app.clientId);
-      bc.innerHTML = `<span onclick="nav('clients')">Clients</span><span class="bc-sep">/</span><span class="cur">${esc(cl?.name||'Client')}</span>`;
+      if (isClient()) {
+        bc.innerHTML = '<span class="cur">My Locations</span>';
+      } else {
+        bc.innerHTML = `<span onclick="nav('clients')">Clients</span><span class="bc-sep">/</span><span class="cur">${esc(cl?.name||'Client')}</span>`;
+      }
       setNav('clients');
       renderClientDetail();
       break;
     case 'location':
       const loc = db.locations.find(l=>l.id===app.locationId);
       const cl2 = db.clients.find(c=>c.id===app.clientId);
-      bc.innerHTML = `<span onclick="nav('clients')">Clients</span><span class="bc-sep">/</span><span onclick="openClientView(app.clientId)">${esc(cl2?.name||'Client')}</span><span class="bc-sep">/</span><span class="cur">${esc(loc?.buildingName||'Location')}</span>`;
+      if (isClient()) {
+        bc.innerHTML = `<span onclick="showView('client');renderClientDetail();">My Locations</span><span class="bc-sep">/</span><span class="cur">${esc(loc?.buildingName||'Location')}</span>`;
+      } else {
+        bc.innerHTML = `<span onclick="nav('clients')">Clients</span><span class="bc-sep">/</span><span onclick="openClientView(app.clientId)">${esc(cl2?.name||'Client')}</span><span class="bc-sep">/</span><span class="cur">${esc(loc?.buildingName||'Location')}</span>`;
+      }
       setNav('clients');
       renderLocationDetail();
       break;
     case 'equipment':
       const eq = db.equipment.find(e=>e.id===app.equipmentId);
-      bc.innerHTML = `<span onclick="nav('clients')">Clients</span><span class="bc-sep">/</span><span onclick="goBackToClient()">Location</span><span class="bc-sep">/</span><span class="cur">${esc(eq?.name||'Equipment')}</span>`;
+      if (isClient()) {
+        bc.innerHTML = `<span onclick="showView('client');renderClientDetail();">My Locations</span><span class="bc-sep">/</span><span onclick="goBackToClient()">Location</span><span class="bc-sep">/</span><span class="cur">${esc(eq?.name||'Equipment')}</span>`;
+      } else {
+        bc.innerHTML = `<span onclick="nav('clients')">Clients</span><span class="bc-sep">/</span><span onclick="goBackToClient()">Location</span><span class="bc-sep">/</span><span class="cur">${esc(eq?.name||'Equipment')}</span>`;
+      }
       setNav('clients');
       renderEquipmentDetail();
       break;
@@ -1141,6 +1287,14 @@ function openClientView(id) { app.clientId = id; showView('client'); }
 
 function renderClientDetail() {
   const c = db.clients.find(cl=>cl.id===app.clientId);
+  if (isClient()) {
+    // Client portal mode — show their name and locations directly
+    document.getElementById('client-title').textContent = currentUser.name || 'My Locations';
+    document.getElementById('client-sub').textContent = `${db.locations.length} location(s)`;
+    document.getElementById('client-info').innerHTML = '';
+    renderLocationsTable();
+    return;
+  }
   if (!c) { nav('clients'); return; }
   document.getElementById('client-title').textContent = c.name;
   document.getElementById('client-sub').textContent = `${db.locations.filter(l=>l.clientId===c.id).length} location(s)`;
@@ -1154,12 +1308,13 @@ function renderClientDetail() {
 }
 
 function renderLocationsTable() {
-  let list = db.locations.filter(l=>l.clientId===app.clientId);
+  let list = isClient() ? db.locations : db.locations.filter(l=>l.clientId===app.clientId);
   list = sortArr(list, app.locSort.field, app.locSort.dir);
   updateLocSortBtns();
   const tbody = document.getElementById('locations-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-ico">\uD83D\uDCCD</div><div class="empty-title">No locations yet</div><div class="empty-desc">Add a location for this client</div><button class="btn btn-primary" onclick="openLocationModal()">Add Location</button></div></td></tr>`;
+    const addBtn = isClient() ? '' : '<button class="btn btn-primary" onclick="openLocationModal()">Add Location</button>';
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-ico">\uD83D\uDCCD</div><div class="empty-title">No locations yet</div><div class="empty-desc">${isClient()?'No locations have been added to your account yet.':'Add a location for this client'}</div>${addBtn}</div></td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(l => {
@@ -1623,6 +1778,7 @@ function openClientModal(id) {
   document.getElementById('c-city').value = c?.city||'';
   document.getElementById('c-state').value = c?.state||'';
   document.getElementById('c-notes').value = c?.notes||'';
+  document.getElementById('c-portal-pass').value = '';
   openModal('modal-client');
 }
 
@@ -1631,6 +1787,8 @@ async function saveClient() {
   const name = document.getElementById('c-name').value.trim();
   if (!name) { showToast('Company name is required','error'); return; }
   const data = { name, phone: document.getElementById('c-phone').value.trim(), email: document.getElementById('c-email').value.trim(), address: document.getElementById('c-address').value.trim(), city: document.getElementById('c-city').value.trim(), state: document.getElementById('c-state').value.trim(), notes: document.getElementById('c-notes').value.trim() };
+  const portalPass = document.getElementById('c-portal-pass').value;
+  if (portalPass) data.portalPassword = portalPass;
   try {
     if (id) { const u = await apiPost('/api/clients/'+id, data, 'PUT'); const idx = db.clients.findIndex(c=>c.id===id); if(idx>=0) db.clients[idx]=u; showToast('Client updated','success'); }
     else { const c = await apiPost('/api/clients', data); db.clients.push(c); showToast('Client added','success'); }

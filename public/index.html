@@ -1975,23 +1975,23 @@ function renderFormTemplates() {
     tbody.innerHTML = '<tr><td colspan=”5”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCB</div><div class=”empty-title”>No templates yet</div><div class=”empty-desc”>Create a custom inspection form template</div><button class=”btn btn-primary” onclick=”openFormBuilder()”>New Template</button></div></td></tr>';
     return;
   }
-  tbody.innerHTML = '';
-  list.forEach((t, idx) => {
+  // Store templates for button handlers
+  window._tplList = list;
+  tbody.innerHTML = list.map((t, idx) => {
     const fields = Array.isArray(t.fields) ? t.fields : [];
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
+    return `<tr>
       <td><strong>${esc(t.name)}</strong></td>
       <td><span class=”badge bgr”>${fields.length} field${fields.length!==1?'s':''}</span></td>
       <td>${fmtDate(t.createdAt)}</td>
       <td>${fmtDate(t.updatedAt)}</td>
       <td><div style=”display:flex;gap:6px;”>
-        <button class=”btn btn-ghost btn-sm tpl-edit-btn”>Edit</button>
-        <button class=”btn btn-danger btn-sm tpl-del-btn”>Delete</button>
-      </div></td>`;
-    tr.querySelector('.tpl-edit-btn').addEventListener('click', function() { openFormBuilder(t); });
-    tr.querySelector('.tpl-del-btn').addEventListener('click', function() { confirmDeleteTemplate(t.id); });
-    tbody.appendChild(tr);
-  });
+        <button class=”btn btn-ghost btn-sm” onclick=”window._tplEdit(${idx})”>Edit</button>
+        <button class=”btn btn-danger btn-sm” onclick=”window._tplDel(${idx})”>Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  window._tplEdit = function(idx) { openFormBuilder(window._tplList[idx]); };
+  window._tplDel = function(idx) { confirmDeleteTemplate(window._tplList[idx].id); };
 }
 
 function confirmDeleteTemplate(id) {

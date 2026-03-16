@@ -2713,12 +2713,10 @@ function renderReportForm() {
                 <option>Out of Service</option>
               </select>
             </div>
-            ${type==='service'?`
             <div class="fg"><label class="flbl">Work Performed *</label><textarea class="fc" id="rf-work" placeholder="Describe all work performed\u2026" style="min-height:120px;" required></textarea></div>
+            ${type==='service'?`
             <div class="fg"><label class="flbl">Cause / Finding</label><textarea class="fc" id="rf-cause" placeholder="Root cause or finding (if applicable)\u2026"></textarea></div>
-            `:`
-            <div class="fg"><label class="flbl">General Notes</label><textarea class="fc" id="rf-work" placeholder="General observations, work performed\u2026" style="min-height:100px;"></textarea></div>
-            `}
+            `:``}
             <div class="fg"><label class="flbl">Parts Used / Replaced</label><textarea class="fc" id="rf-parts" placeholder="List any parts used or replaced\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Recommendations</label><textarea class="fc" id="rf-recs" placeholder="Recommendations for follow-up or future work\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Next Service Date</label><input class="fc" type="date" id="rf-next"></div>
@@ -2792,6 +2790,9 @@ async function submitReport(e) {
       checklist = maintChecklist.map((item,i)=>({ item, done: document.getElementById('chk-'+i)?.checked||false }));
     }
   }
+  // Validate work performed
+  var workVal = document.getElementById('rf-work')?.value.trim()||'';
+  if (!workVal) { showToast('Work Performed is required','error'); document.getElementById('rf-work')?.focus(); return; }
   // Validate photos
   if (!app.reportPhotos.before) { showToast('Before photo is required','error'); return; }
   if (!app.reportPhotos.after) { showToast('After photo is required','error'); return; }

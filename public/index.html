@@ -1987,21 +1987,24 @@ function renderFormTemplates() {
     rows += '<td>' + fmtDate(t.createdAt) + '</td>';
     rows += '<td>' + fmtDate(t.updatedAt) + '</td>';
     rows += '<td><div style=”display:flex;gap:6px;”>';
-    rows += '<button class=”btn btn-ghost btn-sm” data-idx=”' + i + '” data-act=”edit”>Edit</button>';
-    rows += '<button class=”btn btn-danger btn-sm” data-idx=”' + i + '” data-act=”del”>Delete</button>';
+    rows += '<button class=”btn btn-ghost btn-sm tpl-edit”>Edit</button>';
+    rows += '<button class=”btn btn-danger btn-sm tpl-del”>Delete</button>';
     rows += '</div></td>';
     rows += '</tr>';
   }
   tbody.innerHTML = rows;
-  tbody.onclick = function(e) {
-    var btn = e.target.closest('[data-act]');
-    if (!btn) return;
-    var idx = parseInt(btn.getAttribute('data-idx'));
-    var tpl = window._tplList[idx];
-    if (!tpl) return;
-    if (btn.getAttribute('data-act') === 'edit') openFormBuilder(tpl);
-    if (btn.getAttribute('data-act') === 'del') confirmDeleteTemplate(tpl.id);
-  };
+  var editBtns = tbody.getElementsByClassName('tpl-edit');
+  var delBtns = tbody.getElementsByClassName('tpl-del');
+  for (var j = 0; j < editBtns.length; j++) {
+    (function(idx) {
+      editBtns[idx].onclick = function() { openFormBuilder(window._tplList[idx]); };
+    })(j);
+  }
+  for (var k = 0; k < delBtns.length; k++) {
+    (function(idx) {
+      delBtns[idx].onclick = function() { confirmDeleteTemplate(window._tplList[idx].id); };
+    })(k);
+  }
 }
 
 function confirmDeleteTemplate(id) {

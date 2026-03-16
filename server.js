@@ -123,6 +123,149 @@ if (userCount === 0) {
   console.log('Seeded default admin — username: admin  password: fieldmark');
 }
 
+// Seed default form templates if none exist
+const templateCount = db.prepare('SELECT COUNT(*) as c FROM form_templates').get().c;
+if (templateCount === 0) {
+  const now = new Date().toISOString();
+  const defaultTemplates = [
+    {
+      id: 'tpl_hvac_maintenance',
+      name: 'HVAC Maintenance Checklist',
+      fields: [
+        { id: 'f_filter', type: 'checkbox', label: 'Filter Replacement', required: false },
+        { id: 'f_belt', type: 'checkbox', label: 'Belt Inspection/Adjustment', required: false },
+        { id: 'f_lube', type: 'checkbox', label: 'Lubricate Moving Parts', required: false },
+        { id: 'f_condcoil', type: 'checkbox', label: 'Clean Condenser Coil', required: false },
+        { id: 'f_evapcoil', type: 'checkbox', label: 'Clean Evaporator Coil', required: false },
+        { id: 'f_refcharge', type: 'checkbox', label: 'Check Refrigerant Charge', required: false },
+        { id: 'f_elec', type: 'checkbox', label: 'Inspect Electrical Connections', required: false },
+        { id: 'f_safety', type: 'checkbox', label: 'Check/Test Safety Controls', required: false },
+        { id: 'f_drain', type: 'checkbox', label: 'Drain Pan & Condensate Drain', required: false },
+        { id: 'f_pressures', type: 'checkbox', label: 'Check/Record Operating Pressures', required: false },
+        { id: 'f_temps', type: 'checkbox', label: 'Check/Record Temperatures', required: false },
+        { id: 'f_duct', type: 'checkbox', label: 'Inspect Ductwork', required: false },
+        { id: 'f_thermo', type: 'checkbox', label: 'Test Thermostat/Controls', required: false },
+        { id: 'f_amps', type: 'checkbox', label: 'Record Amp Draw', required: false },
+        { id: 'f_visual', type: 'checkbox', label: 'Visual Inspection', required: false },
+        { id: 'f_notes', type: 'text', label: 'Additional Notes', required: false },
+        { id: 'f_photo1', type: 'photo', label: 'Inspection Photo', required: false }
+      ]
+    },
+    {
+      id: 'tpl_hvac_service',
+      name: 'HVAC Service Report',
+      fields: [
+        { id: 'f_reftype', type: 'text', label: 'Refrigerant Type', required: false },
+        { id: 'f_suction', type: 'text', label: 'Suction Pressure (PSI)', required: false },
+        { id: 'f_discharge', type: 'text', label: 'Discharge Pressure (PSI)', required: false },
+        { id: 'f_supply', type: 'text', label: 'Supply Air Temp (°F)', required: false },
+        { id: 'f_return', type: 'text', label: 'Return Air Temp (°F)', required: false },
+        { id: 'f_condition', type: 'select', label: 'Filter Condition', required: false, options: ['Good', 'Dirty', 'Replaced'] },
+        { id: 'f_leak', type: 'select', label: 'Refrigerant Leak Detected', required: false, options: ['No', 'Yes — Minor', 'Yes — Major'] },
+        { id: 'f_compressor', type: 'select', label: 'Compressor Operation', required: true, options: ['Normal', 'Abnormal Noise', 'Not Running', 'Short Cycling'] },
+        { id: 'f_electrical', type: 'checkbox', label: 'Electrical Connections Inspected', required: false },
+        { id: 'f_condensate', type: 'checkbox', label: 'Condensate Drain Clear', required: false },
+        { id: 'f_diagphoto', type: 'photo', label: 'Diagnostic Photo', required: false },
+        { id: 'f_repairphoto', type: 'photo', label: 'Repair Photo', required: false }
+      ]
+    },
+    {
+      id: 'tpl_rooftop_unit',
+      name: 'Rooftop Unit (RTU) Inspection',
+      fields: [
+        { id: 'f_filter', type: 'select', label: 'Filter Status', required: true, options: ['Clean', 'Dirty', 'Replaced'] },
+        { id: 'f_belts', type: 'select', label: 'Belt Condition', required: true, options: ['Good', 'Worn', 'Replaced', 'N/A — Direct Drive'] },
+        { id: 'f_coils', type: 'select', label: 'Coil Condition', required: true, options: ['Clean', 'Dirty — Cleaned', 'Dirty — Needs Cleaning'] },
+        { id: 'f_reftype', type: 'text', label: 'Refrigerant Type', required: false },
+        { id: 'f_suction', type: 'text', label: 'Suction Pressure (PSI)', required: false },
+        { id: 'f_discharge', type: 'text', label: 'Discharge Pressure (PSI)', required: false },
+        { id: 'f_superheat', type: 'text', label: 'Superheat (°F)', required: false },
+        { id: 'f_subcool', type: 'text', label: 'Subcooling (°F)', required: false },
+        { id: 'f_supply', type: 'text', label: 'Supply Air Temp (°F)', required: false },
+        { id: 'f_return', type: 'text', label: 'Return Air Temp (°F)', required: false },
+        { id: 'f_compamps', type: 'text', label: 'Compressor Amp Draw', required: false },
+        { id: 'f_fanamps', type: 'text', label: 'Fan Motor Amp Draw', required: false },
+        { id: 'f_elec', type: 'checkbox', label: 'Electrical Connections Tight', required: false },
+        { id: 'f_cap', type: 'checkbox', label: 'Capacitor(s) Tested', required: false },
+        { id: 'f_contactor', type: 'checkbox', label: 'Contactor Inspected', required: false },
+        { id: 'f_drain', type: 'checkbox', label: 'Condensate Drain Clear', required: false },
+        { id: 'f_thermo', type: 'checkbox', label: 'Thermostat Calibrated', required: false },
+        { id: 'f_economizer', type: 'select', label: 'Economizer Operation', required: false, options: ['Functioning', 'Not Functioning', 'N/A'] },
+        { id: 'f_photo', type: 'photo', label: 'Unit Overview Photo', required: false },
+        { id: 'f_dataplate', type: 'photo', label: 'Data Plate Photo', required: false }
+      ]
+    },
+    {
+      id: 'tpl_boiler',
+      name: 'Boiler Inspection',
+      fields: [
+        { id: 'f_type', type: 'select', label: 'Boiler Type', required: true, options: ['Gas', 'Oil', 'Electric', 'Steam', 'Hot Water'] },
+        { id: 'f_flame', type: 'select', label: 'Flame Appearance', required: true, options: ['Clean Blue', 'Yellow/Lazy', 'Lifting', 'N/A'] },
+        { id: 'f_psi', type: 'text', label: 'Operating Pressure (PSI)', required: false },
+        { id: 'f_temp', type: 'text', label: 'Operating Temperature (°F)', required: false },
+        { id: 'f_gaspress', type: 'text', label: 'Gas Pressure (in. WC)', required: false },
+        { id: 'f_co', type: 'text', label: 'CO Reading (PPM)', required: false },
+        { id: 'f_combustion', type: 'text', label: 'Combustion Efficiency (%)', required: false },
+        { id: 'f_safety', type: 'checkbox', label: 'Safety/Relief Valve Tested', required: true },
+        { id: 'f_lwco', type: 'checkbox', label: 'Low Water Cutoff Tested', required: false },
+        { id: 'f_venting', type: 'checkbox', label: 'Venting Inspected', required: false },
+        { id: 'f_refractory', type: 'checkbox', label: 'Refractory/Heat Exchanger Inspected', required: false },
+        { id: 'f_leak', type: 'select', label: 'Leak Detected', required: false, options: ['No', 'Water Leak', 'Gas Leak'] },
+        { id: 'f_pump', type: 'select', label: 'Circulating Pump', required: false, options: ['Operating Normal', 'Noisy', 'Not Running', 'N/A'] },
+        { id: 'f_photo', type: 'photo', label: 'Boiler Photo', required: false },
+        { id: 'f_flamephoto', type: 'photo', label: 'Flame Photo', required: false }
+      ]
+    },
+    {
+      id: 'tpl_chiller',
+      name: 'Chiller Inspection',
+      fields: [
+        { id: 'f_type', type: 'select', label: 'Chiller Type', required: true, options: ['Air-Cooled', 'Water-Cooled', 'Absorption'] },
+        { id: 'f_reftype', type: 'text', label: 'Refrigerant Type', required: false },
+        { id: 'f_ewt', type: 'text', label: 'Entering Water Temp (°F)', required: false },
+        { id: 'f_lwt', type: 'text', label: 'Leaving Water Temp (°F)', required: false },
+        { id: 'f_suction', type: 'text', label: 'Suction Pressure (PSI)', required: false },
+        { id: 'f_discharge', type: 'text', label: 'Discharge Pressure (PSI)', required: false },
+        { id: 'f_oilpress', type: 'text', label: 'Oil Pressure (PSI)', required: false },
+        { id: 'f_oiltemp', type: 'text', label: 'Oil Temperature (°F)', required: false },
+        { id: 'f_amps', type: 'text', label: 'Compressor Amp Draw', required: false },
+        { id: 'f_approach', type: 'text', label: 'Approach Temperature (°F)', required: false },
+        { id: 'f_oillevel', type: 'select', label: 'Oil Level', required: false, options: ['Normal', 'Low', 'Added Oil'] },
+        { id: 'f_leak', type: 'select', label: 'Refrigerant Leak Detected', required: false, options: ['No', 'Yes — Minor', 'Yes — Major'] },
+        { id: 'f_tubes', type: 'checkbox', label: 'Tubes/Heat Exchanger Inspected', required: false },
+        { id: 'f_elec', type: 'checkbox', label: 'Electrical Connections Inspected', required: false },
+        { id: 'f_safeties', type: 'checkbox', label: 'Safety Controls Tested', required: false },
+        { id: 'f_strainer', type: 'checkbox', label: 'Water Strainer Cleaned', required: false },
+        { id: 'f_photo', type: 'photo', label: 'Chiller Photo', required: false },
+        { id: 'f_log', type: 'photo', label: 'Operating Log Photo', required: false }
+      ]
+    },
+    {
+      id: 'tpl_general_equipment',
+      name: 'General Equipment Inspection',
+      fields: [
+        { id: 'f_condition', type: 'select', label: 'Overall Condition', required: true, options: ['Good', 'Fair', 'Poor', 'Needs Replacement'] },
+        { id: 'f_operational', type: 'select', label: 'Operational Status', required: true, options: ['Running Normal', 'Running with Issues', 'Not Running'] },
+        { id: 'f_clean', type: 'checkbox', label: 'Equipment Clean', required: false },
+        { id: 'f_access', type: 'checkbox', label: 'Accessible / Clear Surroundings', required: false },
+        { id: 'f_labels', type: 'checkbox', label: 'Labels/Tags Legible', required: false },
+        { id: 'f_noise', type: 'select', label: 'Unusual Noise/Vibration', required: false, options: ['None', 'Minor', 'Significant'] },
+        { id: 'f_leaks', type: 'select', label: 'Leaks Detected', required: false, options: ['None', 'Water', 'Oil', 'Refrigerant', 'Other'] },
+        { id: 'f_findings', type: 'text', label: 'Findings / Observations', required: false },
+        { id: 'f_action', type: 'text', label: 'Action Taken', required: false },
+        { id: 'f_photo1', type: 'photo', label: 'Equipment Photo', required: false },
+        { id: 'f_photo2', type: 'photo', label: 'Issue Photo', required: false }
+      ]
+    }
+  ];
+
+  for (const t of defaultTemplates) {
+    db.prepare('INSERT INTO form_templates (id,name,fields,createdAt,updatedAt) VALUES (?,?,?,?,?)')
+      .run(t.id, t.name, JSON.stringify(t.fields), now, now);
+  }
+  console.log(`Seeded ${defaultTemplates.length} default form templates`);
+}
+
 function genId() {
   return Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
 }

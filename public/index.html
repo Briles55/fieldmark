@@ -2016,8 +2016,16 @@ function openFormBuilder(templateId) {
   app.editingTemplateId = templateId || null;
   if (templateId) {
     const t = (db.formTemplates||[]).find(x=>x.id===templateId);
-    app.formBuilderFields = t ? JSON.parse(JSON.stringify(t.fields)) : [];
-    app.formBuilderName = t ? t.name : '';
+    if (t) {
+      let fields = t.fields;
+      if (typeof fields === 'string') { try { fields = JSON.parse(fields); } catch { fields = []; } }
+      if (!Array.isArray(fields)) fields = [];
+      app.formBuilderFields = JSON.parse(JSON.stringify(fields));
+      app.formBuilderName = t.name || '';
+    } else {
+      app.formBuilderFields = [];
+      app.formBuilderName = '';
+    }
   } else {
     app.formBuilderFields = [];
     app.formBuilderName = '';

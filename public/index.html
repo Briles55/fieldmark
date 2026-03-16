@@ -1968,30 +1968,40 @@ async function deleteServiceRequest(id) {
 }
 
 function renderFormTemplates() {
-  const list = db.formTemplates || [];
-  document.getElementById('templates-sub').textContent = `${list.length} template${list.length!==1?'s':''}`;
-  const tbody = document.getElementById('templates-tbody');
+  var list = db.formTemplates || [];
+  document.getElementById('templates-sub').textContent = list.length + ' template' + (list.length !== 1 ? 's' : '');
+  var tbody = document.getElementById('templates-tbody');
   if (list.length === 0) {
     tbody.innerHTML = '<tr><td colspan=”5”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCB</div><div class=”empty-title”>No templates yet</div><div class=”empty-desc”>Create a custom inspection form template</div><button class=”btn btn-primary” onclick=”openFormBuilder()”>New Template</button></div></td></tr>';
     return;
   }
-  // Store templates for button handlers
   window._tplList = list;
-  tbody.innerHTML = list.map((t, idx) => {
-    const fields = Array.isArray(t.fields) ? t.fields : [];
-    return `<tr>
-      <td><strong>${esc(t.name)}</strong></td>
-      <td><span class=”badge bgr”>${fields.length} field${fields.length!==1?'s':''}</span></td>
-      <td>${fmtDate(t.createdAt)}</td>
-      <td>${fmtDate(t.updatedAt)}</td>
-      <td><div style=”display:flex;gap:6px;”>
-        <button class=”btn btn-ghost btn-sm” onclick=”window._tplEdit(${idx})”>Edit</button>
-        <button class=”btn btn-danger btn-sm” onclick=”window._tplDel(${idx})”>Delete</button>
-      </div></td>
-    </tr>`;
-  }).join('');
-  window._tplEdit = function(idx) { openFormBuilder(window._tplList[idx]); };
-  window._tplDel = function(idx) { confirmDeleteTemplate(window._tplList[idx].id); };
+  var rows = '';
+  for (var i = 0; i < list.length; i++) {
+    var t = list[i];
+    var fields = Array.isArray(t.fields) ? t.fields : [];
+    var fc = fields.length;
+    rows += '<tr>';
+    rows += '<td><strong>' + esc(t.name) + '</strong></td>';
+    rows += '<td><span class=”badge bgr”>' + fc + ' field' + (fc !== 1 ? 's' : '') + '</span></td>';
+    rows += '<td>' + fmtDate(t.createdAt) + '</td>';
+    rows += '<td>' + fmtDate(t.updatedAt) + '</td>';
+    rows += '<td><div style=”display:flex;gap:6px;”>';
+    rows += '<button class=”btn btn-ghost btn-sm” data-idx=”' + i + '” data-act=”edit”>Edit</button>';
+    rows += '<button class=”btn btn-danger btn-sm” data-idx=”' + i + '” data-act=”del”>Delete</button>';
+    rows += '</div></td>';
+    rows += '</tr>';
+  }
+  tbody.innerHTML = rows;
+  tbody.onclick = function(e) {
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    var idx = parseInt(btn.getAttribute('data-idx'));
+    var tpl = window._tplList[idx];
+    if (!tpl) return;
+    if (btn.getAttribute('data-act') === 'edit') openFormBuilder(tpl);
+    if (btn.getAttribute('data-act') === 'del') confirmDeleteTemplate(tpl.id);
+  };
 }
 
 function confirmDeleteTemplate(id) {

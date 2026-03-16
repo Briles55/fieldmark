@@ -1975,7 +1975,7 @@ function renderFormTemplates() {
     tbody.innerHTML = '<tr><td colspan=”5”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCB</div><div class=”empty-title”>No templates yet</div><div class=”empty-desc”>Create a custom inspection form template</div><button class=”btn btn-primary” onclick=”openFormBuilder()”>New Template</button></div></td></tr>';
     return;
   }
-  tbody.innerHTML = list.map(t => {
+  tbody.innerHTML = list.map((t, idx) => {
     const fields = Array.isArray(t.fields) ? t.fields : [];
     return `<tr>
       <td><strong>${esc(t.name)}</strong></td>
@@ -1983,16 +1983,18 @@ function renderFormTemplates() {
       <td>${fmtDate(t.createdAt)}</td>
       <td>${fmtDate(t.updatedAt)}</td>
       <td><div style=”display:flex;gap:6px;”>
-        <button class=”btn btn-ghost btn-sm” data-edit-tpl=”${esc(t.id)}”>Edit</button>
-        <button class=”btn btn-danger btn-sm” data-del-tpl=”${esc(t.id)}”>Delete</button>
+        <button class=”btn btn-ghost btn-sm” data-tpl-idx=”${idx}” data-action=”edit”>Edit</button>
+        <button class=”btn btn-danger btn-sm” data-tpl-idx=”${idx}” data-action=”delete”>Delete</button>
       </div></td>
     </tr>`;
   }).join('');
-  tbody.querySelectorAll('[data-edit-tpl]').forEach(btn => {
-    btn.addEventListener('click', () => openFormBuilder(btn.dataset.editTpl));
+  tbody.querySelectorAll('[data-action=”edit”]').forEach(btn => {
+    const t = list[parseInt(btn.getAttribute('data-tpl-idx'))];
+    if (t) btn.addEventListener('click', () => openFormBuilder(t.id));
   });
-  tbody.querySelectorAll('[data-del-tpl]').forEach(btn => {
-    btn.addEventListener('click', () => confirmDeleteTemplate(btn.dataset.delTpl));
+  tbody.querySelectorAll('[data-action=”delete”]').forEach(btn => {
+    const t = list[parseInt(btn.getAttribute('data-tpl-idx'))];
+    if (t) btn.addEventListener('click', () => confirmDeleteTemplate(t.id));
   });
 }
 
@@ -2013,22 +2015,20 @@ function confirmDeleteTemplate(id) {
 }
 
 function openFormBuilder(templateId) {
-  console.log('openFormBuilder called with:', templateId, 'type:', typeof templateId);
-  console.log('db.formTemplates:', JSON.stringify((db.formTemplates||[]).map(t=>({id:t.id,fieldsType:typeof t.fields,isArr:Array.isArray(t.fields),len:Array.isArray(t.fields)?t.fields.length:0}))));
+  if (templateId) templateId = templateId.trim();
   app.editingTemplateId = templateId || null;
   if (templateId) {
-    const t = (db.formTemplates||[]).find(x=>x.id===templateId);
-    console.log('Found template:', t ? t.name : 'NOT FOUND', 'fields type:', t ? typeof t.fields : 'N/A');
+    const t = (db.formTemplates||[]).find(x => x.id === templateId || x.id.trim() === templateId);
     if (t) {
       let fields = t.fields;
       if (typeof fields === 'string') { try { fields = JSON.parse(fields); } catch { fields = []; } }
       if (!Array.isArray(fields)) fields = [];
       app.formBuilderFields = JSON.parse(JSON.stringify(fields));
       app.formBuilderName = t.name || '';
-      console.log('Loaded fields count:', app.formBuilderFields.length);
     } else {
       app.formBuilderFields = [];
       app.formBuilderName = '';
+      showToast('Template not found', 'error');
     }
   } else {
     app.formBuilderFields = [];

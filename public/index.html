@@ -366,6 +366,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       <span>Equipment</span>
     </button>
+    <button id="nav-portal-reports" class="nav-item" onclick="nav('portal-reports',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      <span>My Reports</span>
+    </button>
     <button id="nav-portal-request" class="nav-item" onclick="nav('portal-request',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
       <span>Request Service</span>
@@ -563,6 +567,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           </table>
         </div>
       </div>
+      <div class="card" style="margin-top:20px;">
+        <div class="card-hd"><span class="card-title">Recent Reports</span></div>
+        <div id="location-reports"></div>
+      </div>
     </div>
 
     <!-- EQUIPMENT DETAIL -->
@@ -718,6 +726,24 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
               </tr>
             </thead>
             <tbody id="portal-eq-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- MY REPORTS (client portal) -->
+    <div id="view-portal-reports" class="view">
+      <div class="ph">
+        <div><div class="ph-title">My Reports</div><div class="ph-sub" id="portal-rpt-sub">All service reports</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <input class="fc" type="text" placeholder="Search reports..." oninput="renderPortalReports(this.value)" style="width:200px;padding:5px 10px;font-size:12px;">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Equipment</th><th>Location</th><th>Technician</th><th>Status</th></tr></thead>
+            <tbody id="portal-rpt-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -1283,6 +1309,7 @@ function enterClientMode() {
   // Show client portal nav items
   document.getElementById('nav-portal-locations').style.display = '';
   document.getElementById('nav-portal-equipment').style.display = '';
+  document.getElementById('nav-portal-reports').style.display = '';
   document.getElementById('nav-portal-request').style.display = '';
   // Update sidebar branding
   document.querySelector('.sb-logo p').textContent = 'Client Portal';
@@ -1304,6 +1331,7 @@ function exitClientMode() {
   // Hide client portal nav items
   document.getElementById('nav-portal-locations').style.display = 'none';
   document.getElementById('nav-portal-equipment').style.display = 'none';
+  document.getElementById('nav-portal-reports').style.display = 'none';
   document.getElementById('nav-portal-request').style.display = 'none';
   // Restore staff nav visibility (will be re-set by applyRoleUI on next staff login)
   document.getElementById('nav-dashboard').style.display = '';
@@ -1408,7 +1436,7 @@ function nav(viewName, navEl) {
     showToast('Access restricted to administrators', 'error'); return;
   }
   if (isClient() && viewName === 'clients') { viewName = 'portal-locations'; }
-  if (isClient() && !['portal-locations','portal-equipment','portal-request','location','equipment','report-detail'].includes(viewName)) {
+  if (isClient() && !['portal-locations','portal-equipment','portal-reports','portal-request','location','equipment','report-detail'].includes(viewName)) {
     showToast('Access restricted', 'error'); return;
   }
   stopScanner();
@@ -1425,7 +1453,7 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-request':'nav-portal-request' };
+  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
   if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
 }
 
@@ -1527,6 +1555,11 @@ function renderView(name) {
       bc.innerHTML = '<span class="cur">My Equipment</span>';
       renderPortalEquipment('');
       break;
+    case 'portal-reports':
+      bc.innerHTML = '<span class="cur">My Reports</span>';
+      setNav('portal-reports');
+      renderPortalReports('');
+      break;
     case 'portal-request':
       bc.innerHTML = '<span class="cur">Request Service</span>';
       setNav('portal-request');
@@ -1581,6 +1614,42 @@ function renderPortalEquipment(search) {
 }
 
 // â”€â”€â”€ FORM TEMPLATES & BUILDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PORTAL REPORTS (Client Portal) ──────────────────────────────────────────
+function renderPortalReports(search) {
+  search = (search||'').toLowerCase();
+  let list = db.reports.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if (search) {
+    list = list.filter(r => {
+      const eq = db.equipment.find(e=>e.id===r.equipmentId);
+      const loc = eq ? db.locations.find(l=>l.id===eq.locationId) : null;
+      return (r.techName||'').toLowerCase().includes(search) ||
+        (r.type||'').toLowerCase().includes(search) ||
+        (eq?.name||'').toLowerCase().includes(search) ||
+        (loc?.buildingName||'').toLowerCase().includes(search) ||
+        (r.status||'').toLowerCase().includes(search) ||
+        (r.workPerformed||'').toLowerCase().includes(search);
+    });
+  }
+  document.getElementById('portal-rpt-sub').textContent = `${list.length} report${list.length!==1?'s':''}`;
+  const tbody = document.getElementById('portal-rpt-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-ico">\uD83D\uDCCB</div><div class="empty-title">No reports found</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(r => {
+    const eq = db.equipment.find(e=>e.id===r.equipmentId);
+    const loc = eq ? db.locations.find(l=>l.id===eq.locationId) : null;
+    return `<tr class="clickable" onclick="openReportDetail('${r.id}')">
+      <td>${fmtDate(r.date)}</td>
+      <td><span class="badge ${r.type==='service'?'bb':'bg'}">${r.type==='service'?'Service':'Maintenance'}</span></td>
+      <td>${esc(eq?.name||'\u2014')}</td>
+      <td>${esc(loc?.buildingName||'\u2014')}</td>
+      <td>${esc(r.techName||'\u2014')}</td>
+      <td>${r.status?`<span class="badge ${r.status==='Operational'?'bg':r.status==='Needs Attention'?'ba':'br'}">${esc(r.status)}</span>`:'\u2014'}</td>
+    </tr>`;
+  }).join('');
+}
+
 // ─── SERVICE REQUEST (Client Portal) ──────────────────────────────────────────
 function renderServiceRequest() {
   app.requestPhotos = [];
@@ -2029,6 +2098,32 @@ function renderLocationDetail() {
     ${loc.notes?`<div style="grid-column:1/-1"><div class="ii-lbl">Notes</div><div class="ii-val" style="font-weight:400;color:var(--muted)">${esc(loc.notes)}</div></div>`:''}
   `;
   renderEquipmentTable();
+  renderLocationReports();
+}
+
+function renderLocationReports() {
+  const eqs = db.equipment.filter(e=>e.locationId===app.locationId);
+  const eqIds = eqs.map(e=>e.id);
+  const reports = db.reports.filter(r=>eqIds.includes(r.equipmentId)).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const el = document.getElementById('location-reports');
+  if (reports.length === 0) {
+    el.innerHTML = '<div class="empty"><div class="empty-desc">No reports for this location yet</div></div>';
+    return;
+  }
+  el.innerHTML = `<div style="padding:16px;">`+reports.map(r => {
+    const eq = db.equipment.find(e=>e.id===r.equipmentId);
+    return `
+    <div class="report-card" onclick="openReportDetail('${r.id}')" style="cursor:pointer;">
+      <div class="rc-hd">
+        <span class="badge ${r.type==='service'?'bb':'bg'}">${r.type==='service'?'Service':'Maintenance'}</span>
+        <span style="font-size:12px;color:var(--muted);">${fmtDT(r.date)}</span>
+      </div>
+      <div style="font-size:13px;"><strong>Equipment:</strong> ${esc(eq?.name||'\u2014')}</div>
+      <div style="font-size:13px;"><strong>Tech:</strong> ${esc(r.techName||'\u2014')}</div>
+      ${r.status?`<div style="font-size:13px;margin-top:4px;"><strong>Status:</strong> <span class="badge ${r.status==='Operational'?'bg':r.status==='Needs Attention'?'ba':'br'}">${esc(r.status)}</span></div>`:''}
+      ${r.workPerformed?`<div style="font-size:12px;color:var(--muted);margin-top:6px;">${esc(r.workPerformed.substring(0,120))}${r.workPerformed.length>120?'\u2026':''}</div>`:''}
+    </div>`;
+  }).join('')+'</div>';
 }
 
 function renderEquipmentTable() {
@@ -2360,7 +2455,7 @@ async function submitReport(e) {
 
 // â”€â”€â”€ REPORT DETAIL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openReportDetail(id) { app.reportId = id; app.prevView = app.view; showView('report-detail'); }
-function goBackFromReportDetail() { if (app.prevView === 'equipment') openEquipmentView(app.equipmentId); else nav('reports'); }
+function goBackFromReportDetail() { if (app.prevView === 'equipment') openEquipmentView(app.equipmentId); else if (isClient()) nav('portal-reports'); else nav('reports'); }
 
 function renderReportDetail() {
   const r = db.reports.find(x=>x.id===app.reportId);

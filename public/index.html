@@ -1983,11 +1983,17 @@ function renderFormTemplates() {
       <td>${fmtDate(t.createdAt)}</td>
       <td>${fmtDate(t.updatedAt)}</td>
       <td><div style=”display:flex;gap:6px;”>
-        <button class=”btn btn-ghost btn-sm” onclick=”openFormBuilder('${t.id}')”>Edit</button>
-        <button class=”btn btn-danger btn-sm” onclick=”confirmDeleteTemplate('${t.id}')”>Delete</button>
+        <button class=”btn btn-ghost btn-sm” data-edit-tpl=”${esc(t.id)}”>Edit</button>
+        <button class=”btn btn-danger btn-sm” data-del-tpl=”${esc(t.id)}”>Delete</button>
       </div></td>
     </tr>`;
   }).join('');
+  tbody.querySelectorAll('[data-edit-tpl]').forEach(btn => {
+    btn.addEventListener('click', () => openFormBuilder(btn.dataset.editTpl));
+  });
+  tbody.querySelectorAll('[data-del-tpl]').forEach(btn => {
+    btn.addEventListener('click', () => confirmDeleteTemplate(btn.dataset.delTpl));
+  });
 }
 
 function confirmDeleteTemplate(id) {

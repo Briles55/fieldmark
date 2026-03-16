@@ -2013,15 +2013,19 @@ function confirmDeleteTemplate(id) {
 }
 
 function openFormBuilder(templateId) {
+  console.log('openFormBuilder called with:', templateId, 'type:', typeof templateId);
+  console.log('db.formTemplates:', JSON.stringify((db.formTemplates||[]).map(t=>({id:t.id,fieldsType:typeof t.fields,isArr:Array.isArray(t.fields),len:Array.isArray(t.fields)?t.fields.length:0}))));
   app.editingTemplateId = templateId || null;
   if (templateId) {
     const t = (db.formTemplates||[]).find(x=>x.id===templateId);
+    console.log('Found template:', t ? t.name : 'NOT FOUND', 'fields type:', t ? typeof t.fields : 'N/A');
     if (t) {
       let fields = t.fields;
       if (typeof fields === 'string') { try { fields = JSON.parse(fields); } catch { fields = []; } }
       if (!Array.isArray(fields)) fields = [];
       app.formBuilderFields = JSON.parse(JSON.stringify(fields));
       app.formBuilderName = t.name || '';
+      console.log('Loaded fields count:', app.formBuilderFields.length);
     } else {
       app.formBuilderFields = [];
       app.formBuilderName = '';

@@ -1976,35 +1976,22 @@ function renderFormTemplates() {
     return;
   }
   window._tplList = list;
-  var rows = '';
+  window._tplEdit = function(i) { openFormBuilder(window._tplList[i]); };
+  window._tplDel = function(i) { confirmDeleteTemplate(window._tplList[i].id); };
+  var rows = [];
   for (var i = 0; i < list.length; i++) {
     var t = list[i];
     var fields = Array.isArray(t.fields) ? t.fields : [];
     var fc = fields.length;
-    rows += '<tr>';
-    rows += '<td><strong>' + esc(t.name) + '</strong></td>';
-    rows += '<td><span class=”badge bgr”>' + fc + ' field' + (fc !== 1 ? 's' : '') + '</span></td>';
-    rows += '<td>' + fmtDate(t.createdAt) + '</td>';
-    rows += '<td>' + fmtDate(t.updatedAt) + '</td>';
-    rows += '<td><div style=”display:flex;gap:6px;”>';
-    rows += '<button class=”btn btn-ghost btn-sm tpl-edit”>Edit</button>';
-    rows += '<button class=”btn btn-danger btn-sm tpl-del”>Delete</button>';
-    rows += '</div></td>';
-    rows += '</tr>';
+    var r = '<tr><td><strong>' + esc(t.name) + '</strong></td>';
+    r += '<td><span class=badge>' + fc + ' field' + (fc !== 1 ? 's' : '') + '</span></td>';
+    r += '<td>' + fmtDate(t.createdAt) + '</td>';
+    r += '<td>' + fmtDate(t.updatedAt) + '</td>';
+    r += '<td><button onclick=window._tplEdit(' + i + ')>Edit</button> ';
+    r += '<button onclick=window._tplDel(' + i + ')>Delete</button></td></tr>';
+    rows.push(r);
   }
-  tbody.innerHTML = rows;
-  var editBtns = tbody.getElementsByClassName('tpl-edit');
-  var delBtns = tbody.getElementsByClassName('tpl-del');
-  for (var j = 0; j < editBtns.length; j++) {
-    (function(idx) {
-      editBtns[idx].onclick = function() { openFormBuilder(window._tplList[idx]); };
-    })(j);
-  }
-  for (var k = 0; k < delBtns.length; k++) {
-    (function(idx) {
-      delBtns[idx].onclick = function() { confirmDeleteTemplate(window._tplList[idx].id); };
-    })(k);
-  }
+  tbody.innerHTML = rows.join('');
 }
 
 function confirmDeleteTemplate(id) {

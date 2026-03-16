@@ -209,34 +209,40 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .fb-palette-icon.chk{background:rgba(34,197,94,.15);color:var(--green);}
 .fb-palette-icon.txt{background:rgba(59,130,246,.15);color:var(--accent);}
 .fb-palette-icon.sel{background:rgba(245,158,11,.15);color:var(--amber);}
-.fb-canvas{min-height:200px;border:2px dashed var(--border);border-radius:8px;padding:12px;transition:border-color .2s;}
-.fb-canvas.drag-over{border-color:var(--accent);background:rgba(59,130,246,.03);}
-.fb-canvas-empty{text-align:center;padding:48px 20px;color:var(--muted);}
-.fb-field{display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;transition:all .15s;}
-.fb-field:hover{border-color:var(--accent);}
-.fb-field.dragging{opacity:.4;border-style:dashed;}
-.fb-handle{cursor:grab;color:var(--muted);flex-shrink:0;padding:4px;}
+.fb-palette-icon.pho{background:rgba(168,85,247,.15);color:#a855f7;}
+.fb-canvas{min-height:200px;border:2px dashed var(--border);border-radius:12px;padding:16px;transition:all .25s ease;background:var(--surface);}
+.fb-canvas.drag-over{border-color:var(--accent);background:rgba(59,130,246,.04);box-shadow:0 0 0 4px rgba(59,130,246,.08);}
+.fb-canvas-empty{text-align:center;padding:60px 20px;color:var(--muted);}
+.fb-field{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;transition:all .2s ease;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+.fb-field:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(59,130,246,.08);transform:translateY(-1px);}
+.fb-field.dragging{opacity:.3;border-style:dashed;transform:scale(.97);}
+.fb-handle{cursor:grab;color:var(--muted);flex-shrink:0;padding:4px;transition:color .15s;}
+.fb-handle:hover{color:var(--text);}
 .fb-handle:active{cursor:grabbing;}
 .fb-field-body{flex:1;min-width:0;}
 .fb-field-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-.fb-field-type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 6px;border-radius:4px;}
+.fb-field-type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:5px;}
 .fb-field-type.chk{background:rgba(34,197,94,.15);color:var(--green);}
 .fb-field-type.txt{background:rgba(59,130,246,.15);color:var(--accent);}
 .fb-field-type.sel{background:rgba(245,158,11,.15);color:var(--amber);}
+.fb-field-type.pho{background:rgba(168,85,247,.15);color:#a855f7;}
 .fb-field-label{flex:1;}
-.fb-field-label input{width:100%;background:transparent;border:1px solid transparent;border-radius:4px;padding:4px 6px;color:var(--text);font-size:13px;font-family:inherit;}
-.fb-field-label input:focus{outline:none;border-color:var(--accent);background:var(--surface);}
-.fb-field-opts{margin-top:4px;}
-.fb-field-opts input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px;font-family:inherit;}
-.fb-field-opts input:focus{outline:none;border-color:var(--accent);}
-.fb-req-toggle{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer;flex-shrink:0;}
+.fb-field-label input{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;padding:6px 8px;color:var(--text);font-size:13px;font-family:inherit;transition:all .15s;}
+.fb-field-label input:hover{border-color:var(--border);}
+.fb-field-label input:focus{outline:none;border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px rgba(59,130,246,.1);}
+.fb-field-opts{margin-top:6px;}
+.fb-field-opts input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:inherit;transition:all .15s;}
+.fb-field-opts input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.1);}
+.fb-req-toggle{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer;flex-shrink:0;padding:4px 8px;border-radius:6px;transition:background .15s;}
+.fb-req-toggle:hover{background:var(--surface);}
 .fb-req-toggle input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;}
-.fb-del{background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:4px;flex-shrink:0;}
+.fb-del{background:none;border:none;color:var(--muted);cursor:pointer;padding:8px;border-radius:6px;flex-shrink:0;transition:all .15s;}
 .fb-del:hover{color:var(--red);background:rgba(239,68,68,.1);}
 .fb-drop-indicator{height:3px;background:var(--accent);border-radius:2px;margin:2px 0;transition:opacity .1s;}
-.fb-mobile-add{display:none;gap:8px;margin-bottom:12px;}
+.fb-mobile-add{display:none;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
 .fb-mobile-reorder{display:none;}
 .fb-field-required-star{color:var(--red);margin-left:2px;}
+.fb-photo-preview{font-size:11px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:6px;}
 @media(max-width:768px){
   .fb-layout{grid-template-columns:1fr;}
   .fb-palette{display:none;}
@@ -855,6 +861,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
                 <div class="fb-palette-icon sel"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/></svg></div>
                 <div><div style="font-weight:600;">Dropdown</div><div style="font-size:11px;color:var(--muted)">Select from options</div></div>
               </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'photo')">
+                <div class="fb-palette-icon pho"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg></div>
+                <div><div style="font-weight:600;">Photo</div><div style="font-size:11px;color:var(--muted)">Image upload field</div></div>
+              </div>
             </div>
           </div>
         </div>
@@ -863,6 +873,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('checkbox')">+ Checkbox</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('text')">+ Text</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('select')">+ Dropdown</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('photo')">+ Photo</button>
           </div>
           <div class="fb-canvas" id="fb-canvas"
                ondragover="fbCanvasDragOver(event)"
@@ -2022,8 +2033,13 @@ function renderFBCanvas() {
     return;
   }
   canvas.innerHTML = fields.map((f, i) => {
-    const typeCls = f.type === 'checkbox' ? 'chk' : f.type === 'text' ? 'txt' : 'sel';
-    const typeLabel = f.type === 'checkbox' ? 'Checkbox' : f.type === 'text' ? 'Text' : 'Dropdown';
+    const typeMap = { checkbox:'chk', text:'txt', select:'sel', photo:'pho' };
+    const labelMap = { checkbox:'Checkbox', text:'Text', select:'Dropdown', photo:'Photo' };
+    const typeCls = typeMap[f.type] || 'txt';
+    const typeLabel = labelMap[f.type] || f.type;
+    let extras = '';
+    if (f.type === 'select') extras = `<div class=”fb-field-opts”><input type=”text” value=”${esc((f.options||[]).join(', '))}” placeholder=”Options (comma separated, e.g. Pass, Fail, N/A)” onchange=”fbUpdateOptions(${i},this.value)”></div>`;
+    if (f.type === 'photo') extras = `<div class=”fb-photo-preview”><svg width=”14” height=”14” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z”/><circle cx=”12” cy=”13” r=”3”/></svg> Camera or photo library upload</div>`;
     return `<div class=”fb-field” draggable=”true” data-idx=”${i}”
                 ondragstart=”fbFieldDragStart(event,${i})”
                 ondragover=”fbFieldDragOver(event,${i})”
@@ -2042,7 +2058,7 @@ function renderFBCanvas() {
           <div class=”fb-field-label”><input type=”text” value=”${esc(f.label)}” placeholder=”Field label...” onchange=”fbUpdateLabel(${i},this.value)”></div>
           <label class=”fb-req-toggle”><input type=”checkbox” ${f.required?'checked':''} onchange=”fbToggleReq(${i},this.checked)”> Required</label>
         </div>
-        ${f.type==='select'?`<div class=”fb-field-opts”><input type=”text” value=”${esc((f.options||[]).join(', '))}” placeholder=”Options (comma separated, e.g. Pass, Fail, N/A)” onchange=”fbUpdateOptions(${i},this.value)”></div>`:''}
+        ${extras}
       </div>
       <button class=”fb-del” onclick=”fbRemoveField(${i})” title=”Remove field”>
         <svg width=”16” height=”16” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16”/></svg>
@@ -2083,7 +2099,7 @@ function fbFieldDragEnd(e) { e.target.classList.remove('dragging'); fbDragIdx = 
 
 function fbAddField(type) {
   const id = 'f_' + Date.now().toString(36);
-  const defaults = { checkbox: 'New Checkbox', text: 'New Text Field', select: 'New Dropdown' };
+  const defaults = { checkbox: 'New Checkbox', text: 'New Text Field', select: 'New Dropdown', photo: 'Photo' };
   const field = { id, type, label: defaults[type] || 'New Field', required: false };
   if (type === 'select') field.options = ['Pass', 'Fail', 'N/A'];
   app.formBuilderFields.push(field);
@@ -2440,7 +2456,7 @@ function renderReportsView() {
 }
 
 // â”€â”€â”€ REPORT FORM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function startReport(type) { app.reportType = type; app.prevView = 'equipment'; showView('report-form'); }
+function startReport(type) { app.reportType = type; app.prevView = 'equipment'; app.customFieldPhotos = {}; showView('report-form'); }
 function goBackFromReport() { openEquipmentView(app.equipmentId); }
 
 function getEquipmentTemplate(eq) {
@@ -2450,6 +2466,8 @@ function getEquipmentTemplate(eq) {
 
 function renderCustomChecklistFields(template) {
   if (!template || !template.fields) return '';
+  // Initialize photo storage for custom fields
+  if (!app.customFieldPhotos) app.customFieldPhotos = {};
   return template.fields.map((f, i) => {
     const reqStar = f.required ? '<span class="fb-field-required-star">*</span>' : '';
     if (f.type === 'checkbox') {
@@ -2459,9 +2477,45 @@ function renderCustomChecklistFields(template) {
     } else if (f.type === 'select') {
       const opts = (f.options||[]).map(o => `<option>${esc(o)}</option>`).join('');
       return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${esc(f.label)}${reqStar}</label><select class="fc" id="cf-${i}" data-cf-idx="${i}"><option value="">\u2014 Select \u2014</option>${opts}</select></div>`;
+    } else if (f.type === 'photo') {
+      app.customFieldPhotos[i] = null;
+      return `<div class="fg" style="margin-bottom:12px;">
+        <label class="flbl">${esc(f.label)}${reqStar}</label>
+        <div id="cf-photo-wrap-${i}" style="margin-top:6px;">
+          <div class="photo-drop" onclick="document.getElementById('cf-photo-${i}').click()" id="cf-photo-target-${i}" style="border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;">
+            <div style="font-size:24px;margin-bottom:4px;">\uD83D\uDCF7</div>
+            <div style="font-size:12px;color:var(--muted);">Tap to take or upload photo</div>
+          </div>
+          <input type="file" id="cf-photo-${i}" accept="image/*" style="display:none;" onchange="handleCustomFieldPhoto(${i},this)" data-cf-idx="${i}">
+          <div id="cf-photo-preview-${i}"></div>
+        </div>
+      </div>`;
     }
     return '';
   }).join('');
+}
+
+function handleCustomFieldPhoto(idx, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  compressImage(file).then(dataUrl => {
+    if (!app.customFieldPhotos) app.customFieldPhotos = {};
+    app.customFieldPhotos[idx] = dataUrl;
+    const preview = document.getElementById('cf-photo-preview-' + idx);
+    const target = document.getElementById('cf-photo-target-' + idx);
+    target.style.display = 'none';
+    preview.innerHTML = `<div style="position:relative;display:inline-block;margin-top:8px;">
+      <img src="${dataUrl}" style="max-width:200px;border-radius:8px;border:1px solid var(--border);" onclick="openPhotoLightbox(app.customFieldPhotos[${idx}])">
+      <button type="button" onclick="removeCustomFieldPhoto(${idx})" style="position:absolute;top:-8px;right:-8px;background:var(--red);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`;
+  }).catch(() => showToast('Failed to process image','error'));
+  inputEl.value = '';
+}
+
+function removeCustomFieldPhoto(idx) {
+  app.customFieldPhotos[idx] = null;
+  document.getElementById('cf-photo-preview-' + idx).innerHTML = '';
+  document.getElementById('cf-photo-target-' + idx).style.display = '';
 }
 
 function renderReportForm() {
@@ -2598,14 +2652,19 @@ async function submitReport(e) {
       const fieldValues = [];
       for (let i = 0; i < template.fields.length; i++) {
         const f = template.fields[i];
-        const el = document.getElementById('cf-'+i);
         let value;
-        if (f.type === 'checkbox') { value = el?.checked || false; }
-        else if (f.type === 'text') { value = el?.value?.trim() || ''; }
-        else if (f.type === 'select') { value = el?.value || ''; }
-        if (f.required) {
-          if (f.type === 'text' && !value) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
-          if (f.type === 'select' && !value) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
+        if (f.type === 'photo') {
+          value = (app.customFieldPhotos && app.customFieldPhotos[i]) || null;
+          if (f.required && !value) { showToast(`"${f.label}" photo is required`, 'error'); return; }
+        } else {
+          const el = document.getElementById('cf-'+i);
+          if (f.type === 'checkbox') { value = el?.checked || false; }
+          else if (f.type === 'text') { value = el?.value?.trim() || ''; }
+          else if (f.type === 'select') { value = el?.value || ''; }
+          if (f.required) {
+            if (f.type === 'text' && !value) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
+            if (f.type === 'select' && !value) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
+          }
         }
         fieldValues.push({ id: f.id, type: f.type, label: f.label, value });
       }
@@ -2684,6 +2743,11 @@ function renderReportDetail() {
             return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
               <span style="font-size:13.5px;">${esc(f.label)}</span>
               <span class="badge ${f.value==='Pass'?'bg':f.value==='Fail'?'br':'bgr'}">${esc(f.value||'N/A')}</span>
+            </div>`;
+          } else if (f.type === 'photo') {
+            return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;">${esc(f.label)}</div>
+              ${f.value ? `<img src="${f.value}" style="max-width:280px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="openPhotoLightbox(this.src)">` : '<div style="font-size:13px;color:var(--muted);">No photo</div>'}
             </div>`;
           }
           return '';

@@ -1975,26 +1975,22 @@ function renderFormTemplates() {
     tbody.innerHTML = '<tr><td colspan=”5”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCB</div><div class=”empty-title”>No templates yet</div><div class=”empty-desc”>Create a custom inspection form template</div><button class=”btn btn-primary” onclick=”openFormBuilder()”>New Template</button></div></td></tr>';
     return;
   }
-  tbody.innerHTML = list.map((t, idx) => {
+  tbody.innerHTML = '';
+  list.forEach((t, idx) => {
     const fields = Array.isArray(t.fields) ? t.fields : [];
-    return `<tr>
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
       <td><strong>${esc(t.name)}</strong></td>
       <td><span class=”badge bgr”>${fields.length} field${fields.length!==1?'s':''}</span></td>
       <td>${fmtDate(t.createdAt)}</td>
       <td>${fmtDate(t.updatedAt)}</td>
       <td><div style=”display:flex;gap:6px;”>
-        <button class=”btn btn-ghost btn-sm” data-tpl-idx=”${idx}” data-action=”edit”>Edit</button>
-        <button class=”btn btn-danger btn-sm” data-tpl-idx=”${idx}” data-action=”delete”>Delete</button>
-      </div></td>
-    </tr>`;
-  }).join('');
-  tbody.querySelectorAll('[data-action=”edit”]').forEach(btn => {
-    const t = list[parseInt(btn.getAttribute('data-tpl-idx'))];
-    if (t) btn.addEventListener('click', () => openFormBuilder(t.id));
-  });
-  tbody.querySelectorAll('[data-action=”delete”]').forEach(btn => {
-    const t = list[parseInt(btn.getAttribute('data-tpl-idx'))];
-    if (t) btn.addEventListener('click', () => confirmDeleteTemplate(t.id));
+        <button class=”btn btn-ghost btn-sm tpl-edit-btn”>Edit</button>
+        <button class=”btn btn-danger btn-sm tpl-del-btn”>Delete</button>
+      </div></td>`;
+    tr.querySelector('.tpl-edit-btn').addEventListener('click', function() { openFormBuilder(t); });
+    tr.querySelector('.tpl-del-btn').addEventListener('click', function() { confirmDeleteTemplate(t.id); });
+    tbody.appendChild(tr);
   });
 }
 
@@ -2014,25 +2010,28 @@ function confirmDeleteTemplate(id) {
   openModal('modal-delete');
 }
 
-function openFormBuilder(templateId) {
-  if (templateId) templateId = templateId.trim();
-  app.editingTemplateId = templateId || null;
-  if (templateId) {
-    const t = (db.formTemplates||[]).find(x => x.id === templateId || x.id.trim() === templateId);
+function openFormBuilder(templateIdOrObj) {
+  app.formBuilderFields = [];
+  app.formBuilderName = '';
+  app.editingTemplateId = null;
+  if (templateIdOrObj) {
+    let t = null;
+    if (typeof templateIdOrObj === 'object' && templateIdOrObj.id) {
+      t = templateIdOrObj;
+    } else {
+      const tid = String(templateIdOrObj).trim();
+      t = (db.formTemplates||[]).find(x => String(x.id).trim() === tid);
+    }
     if (t) {
+      app.editingTemplateId = t.id;
       let fields = t.fields;
       if (typeof fields === 'string') { try { fields = JSON.parse(fields); } catch { fields = []; } }
       if (!Array.isArray(fields)) fields = [];
       app.formBuilderFields = JSON.parse(JSON.stringify(fields));
       app.formBuilderName = t.name || '';
     } else {
-      app.formBuilderFields = [];
-      app.formBuilderName = '';
       showToast('Template not found', 'error');
     }
-  } else {
-    app.formBuilderFields = [];
-    app.formBuilderName = '';
   }
   showView('form-builder');
 }

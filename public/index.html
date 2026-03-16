@@ -1975,23 +1975,52 @@ function renderFormTemplates() {
     tbody.innerHTML = '<tr><td colspan=”5”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCB</div><div class=”empty-title”>No templates yet</div><div class=”empty-desc”>Create a custom inspection form template</div><button class=”btn btn-primary” onclick=”openFormBuilder()”>New Template</button></div></td></tr>';
     return;
   }
-  window._tplList = list;
-  window._tplEdit = function(i) { openFormBuilder(window._tplList[i]); };
-  window._tplDel = function(i) { confirmDeleteTemplate(window._tplList[i].id); };
-  var rows = [];
+  tbody.innerHTML = '';
   for (var i = 0; i < list.length; i++) {
     var t = list[i];
     var fields = Array.isArray(t.fields) ? t.fields : [];
     var fc = fields.length;
-    var r = '<tr><td><strong>' + esc(t.name) + '</strong></td>';
-    r += '<td><span class=badge>' + fc + ' field' + (fc !== 1 ? 's' : '') + '</span></td>';
-    r += '<td>' + fmtDate(t.createdAt) + '</td>';
-    r += '<td>' + fmtDate(t.updatedAt) + '</td>';
-    r += '<td><button onclick=window._tplEdit(' + i + ')>Edit</button> ';
-    r += '<button onclick=window._tplDel(' + i + ')>Delete</button></td></tr>';
-    rows.push(r);
+    var tr = document.createElement('tr');
+
+    var td1 = document.createElement('td');
+    var strong = document.createElement('strong');
+    strong.textContent = t.name;
+    td1.appendChild(strong);
+    tr.appendChild(td1);
+
+    var td2 = document.createElement('td');
+    var badge = document.createElement('span');
+    badge.className = 'badge bgr';
+    badge.textContent = fc + ' field' + (fc !== 1 ? 's' : '');
+    td2.appendChild(badge);
+    tr.appendChild(td2);
+
+    var td3 = document.createElement('td');
+    td3.textContent = fmtDate(t.createdAt);
+    tr.appendChild(td3);
+
+    var td4 = document.createElement('td');
+    td4.textContent = fmtDate(t.updatedAt);
+    tr.appendChild(td4);
+
+    var td5 = document.createElement('td');
+    var btnDiv = document.createElement('div');
+    btnDiv.style.cssText = 'display:flex;gap:6px';
+    var editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-ghost btn-sm';
+    editBtn.textContent = 'Edit';
+    (function(tpl) { editBtn.onclick = function() { openFormBuilder(tpl); }; })(t);
+    var delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-danger btn-sm';
+    delBtn.textContent = 'Delete';
+    (function(tpl) { delBtn.onclick = function() { confirmDeleteTemplate(tpl.id); }; })(t);
+    btnDiv.appendChild(editBtn);
+    btnDiv.appendChild(delBtn);
+    td5.appendChild(btnDiv);
+    tr.appendChild(td5);
+
+    tbody.appendChild(tr);
   }
-  tbody.innerHTML = rows.join('');
 }
 
 function confirmDeleteTemplate(id) {
@@ -2043,45 +2072,118 @@ function renderFormBuilder() {
 }
 
 function renderFBCanvas() {
-  const canvas = document.getElementById('fb-canvas');
-  const fields = app.formBuilderFields;
+  var canvas = document.getElementById('fb-canvas');
+  var fields = app.formBuilderFields;
   if (!fields || fields.length === 0) {
-    canvas.innerHTML = '<div class=”fb-canvas-empty”><div style=”font-size:32px;margin-bottom:8px;opacity:.4;”>\uD83D\uDCCB</div><div style=”font-size:14px;font-weight:500;margin-bottom:4px;”>No fields yet</div><div style=”font-size:12px;”>Drag fields from the palette or use the buttons above on mobile</div></div>';
+    canvas.innerHTML = '<div class=fb-canvas-empty><div style=font-size:32px;margin-bottom:8px;opacity:.4>\uD83D\uDCCB</div><div style=font-size:14px;font-weight:500;margin-bottom:4px>No fields yet</div><div style=font-size:12px>Drag fields from the palette or use the buttons above on mobile</div></div>';
     return;
   }
-  canvas.innerHTML = fields.map((f, i) => {
-    const typeMap = { checkbox:'chk', text:'txt', select:'sel', photo:'pho' };
-    const labelMap = { checkbox:'Checkbox', text:'Text', select:'Dropdown', photo:'Photo' };
-    const typeCls = typeMap[f.type] || 'txt';
-    const typeLabel = labelMap[f.type] || f.type;
-    let extras = '';
-    if (f.type === 'select') extras = `<div class=”fb-field-opts”><input type=”text” value=”${esc((f.options||[]).join(', '))}” placeholder=”Options (comma separated, e.g. Pass, Fail, N/A)” onchange=”fbUpdateOptions(${i},this.value)”></div>`;
-    if (f.type === 'photo') extras = `<div class=”fb-photo-preview”><svg width=”14” height=”14” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z”/><circle cx=”12” cy=”13” r=”3”/></svg> Camera or photo library upload</div>`;
-    return `<div class=”fb-field” draggable=”true” data-idx=”${i}”
-                ondragstart=”fbFieldDragStart(event,${i})”
-                ondragover=”fbFieldDragOver(event,${i})”
-                ondragend=”fbFieldDragEnd(event)”
-                ondrop=”fbFieldDrop(event,${i})”>
-      <div class=”fb-handle” title=”Drag to reorder”>
-        <svg width=”14” height=”14” fill=”currentColor” viewBox=”0 0 24 24”><circle cx=”9” cy=”5” r=”1.5”/><circle cx=”15” cy=”5” r=”1.5”/><circle cx=”9” cy=”12” r=”1.5”/><circle cx=”15” cy=”12” r=”1.5”/><circle cx=”9” cy=”19” r=”1.5”/><circle cx=”15” cy=”19” r=”1.5”/></svg>
-      </div>
-      <div class=”fb-mobile-reorder”>
-        <button onclick=”fbMoveField(${i},-1)” ${i===0?'disabled':''}>&#9650;</button>
-        <button onclick=”fbMoveField(${i},1)” ${i===fields.length-1?'disabled':''}>&#9660;</button>
-      </div>
-      <div class=”fb-field-body”>
-        <div class=”fb-field-top”>
-          <span class=”fb-field-type ${typeCls}”>${typeLabel}</span>
-          <div class=”fb-field-label”><input type=”text” value=”${esc(f.label)}” placeholder=”Field label...” onchange=”fbUpdateLabel(${i},this.value)”></div>
-          <label class=”fb-req-toggle”><input type=”checkbox” ${f.required?'checked':''} onchange=”fbToggleReq(${i},this.checked)”> Required</label>
-        </div>
-        ${extras}
-      </div>
-      <button class=”fb-del” onclick=”fbRemoveField(${i})” title=”Remove field”>
-        <svg width=”16” height=”16” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16”/></svg>
-      </button>
-    </div>`;
-  }).join('');
+  var typeMap = { checkbox:'chk', text:'txt', select:'sel', photo:'pho' };
+  var labelMap = { checkbox:'Checkbox', text:'Text', select:'Dropdown', photo:'Photo' };
+  canvas.innerHTML = '';
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i];
+    var typeCls = typeMap[f.type] || 'txt';
+    var typeLabel = labelMap[f.type] || f.type;
+    var div = document.createElement('div');
+    div.className = 'fb-field';
+    div.draggable = true;
+    div.setAttribute('data-idx', i);
+    (function(idx) {
+      div.ondragstart = function(e) { fbFieldDragStart(e, idx); };
+      div.ondragover = function(e) { fbFieldDragOver(e, idx); };
+      div.ondragend = function(e) { fbFieldDragEnd(e); };
+      div.ondrop = function(e) { fbFieldDrop(e, idx); };
+    })(i);
+
+    // Handle (drag grip)
+    var handle = document.createElement('div');
+    handle.className = 'fb-handle';
+    handle.title = 'Drag to reorder';
+    handle.innerHTML = '<svg width=14 height=14 fill=currentColor viewBox=”0 0 24 24”><circle cx=9 cy=5 r=1.5/><circle cx=15 cy=5 r=1.5/><circle cx=9 cy=12 r=1.5/><circle cx=15 cy=12 r=1.5/><circle cx=9 cy=19 r=1.5/><circle cx=15 cy=19 r=1.5/></svg>';
+    div.appendChild(handle);
+
+    // Mobile reorder
+    var mob = document.createElement('div');
+    mob.className = 'fb-mobile-reorder';
+    var upBtn = document.createElement('button');
+    upBtn.innerHTML = '&#9650;';
+    if (i === 0) upBtn.disabled = true;
+    (function(idx) { upBtn.onclick = function() { fbMoveField(idx, -1); }; })(i);
+    var dnBtn = document.createElement('button');
+    dnBtn.innerHTML = '&#9660;';
+    if (i === fields.length - 1) dnBtn.disabled = true;
+    (function(idx) { dnBtn.onclick = function() { fbMoveField(idx, 1); }; })(i);
+    mob.appendChild(upBtn);
+    mob.appendChild(dnBtn);
+    div.appendChild(mob);
+
+    // Field body
+    var body = document.createElement('div');
+    body.className = 'fb-field-body';
+
+    // Top row: type badge + label input + required toggle
+    var top = document.createElement('div');
+    top.className = 'fb-field-top';
+
+    var typeSpan = document.createElement('span');
+    typeSpan.className = 'fb-field-type ' + typeCls;
+    typeSpan.textContent = typeLabel;
+    top.appendChild(typeSpan);
+
+    var labelDiv = document.createElement('div');
+    labelDiv.className = 'fb-field-label';
+    var labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.value = f.label || '';
+    labelInput.placeholder = 'Field label...';
+    (function(idx) { labelInput.onchange = function() { fbUpdateLabel(idx, this.value); }; })(i);
+    labelDiv.appendChild(labelInput);
+    top.appendChild(labelDiv);
+
+    var reqLabel = document.createElement('label');
+    reqLabel.className = 'fb-req-toggle';
+    var reqCb = document.createElement('input');
+    reqCb.type = 'checkbox';
+    reqCb.checked = !!f.required;
+    (function(idx) { reqCb.onchange = function() { fbToggleReq(idx, this.checked); }; })(i);
+    reqLabel.appendChild(reqCb);
+    reqLabel.appendChild(document.createTextNode(' Required'));
+    top.appendChild(reqLabel);
+
+    body.appendChild(top);
+
+    // Extras: dropdown options or photo preview
+    if (f.type === 'select') {
+      var optsDiv = document.createElement('div');
+      optsDiv.className = 'fb-field-opts';
+      var optsInput = document.createElement('input');
+      optsInput.type = 'text';
+      optsInput.value = (f.options || []).join(', ');
+      optsInput.placeholder = 'Options (comma separated, e.g. Pass, Fail, N/A)';
+      (function(idx) { optsInput.onchange = function() { fbUpdateOptions(idx, this.value); }; })(i);
+      optsDiv.appendChild(optsInput);
+      body.appendChild(optsDiv);
+    }
+    if (f.type === 'photo') {
+      var photoDiv = document.createElement('div');
+      photoDiv.className = 'fb-photo-preview';
+      photoDiv.innerHTML = '<svg width=14 height=14 fill=none stroke=currentColor viewBox=”0 0 24 24”><path stroke-linecap=round stroke-linejoin=round stroke-width=2 d=”M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z”/><circle cx=12 cy=13 r=3/></svg> Camera or photo library upload';
+      body.appendChild(photoDiv);
+    }
+
+    div.appendChild(body);
+
+    // Delete button
+    var delBtn = document.createElement('button');
+    delBtn.className = 'fb-del';
+    delBtn.title = 'Remove field';
+    delBtn.innerHTML = '<svg width=16 height=16 fill=none stroke=currentColor viewBox=”0 0 24 24”><path stroke-linecap=round stroke-linejoin=round stroke-width=2 d=”M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16”/></svg>';
+    (function(idx) { delBtn.onclick = function() { fbRemoveField(idx); }; })(i);
+    div.appendChild(delBtn);
+
+    canvas.appendChild(div);
+  }
 }
 
 function fbDragPalette(e, type) { e.dataTransfer.setData('fb-type', type); e.dataTransfer.effectAllowed = 'copy'; }

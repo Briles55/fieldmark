@@ -92,6 +92,18 @@ db.exec(`
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS service_requests (
+    id          TEXT PRIMARY KEY,
+    clientId    TEXT NOT NULL,
+    locationId  TEXT NOT NULL,
+    equipmentId TEXT DEFAULT '',
+    urgency     TEXT NOT NULL,
+    description TEXT NOT NULL,
+    photos      TEXT DEFAULT '[]',
+    status      TEXT DEFAULT 'New',
+    notes       TEXT DEFAULT '',
+    createdAt   TEXT NOT NULL
+  );
 `);
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
@@ -291,7 +303,9 @@ app.get('/api/data', requireAuth, (req, res) => {
   // Parse checklist JSON for each report
   reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
   formTemplates.forEach(t => { try { t.fields = JSON.parse(t.fields); } catch { t.fields = []; } });
-  res.json({ clients, locations, equipment, reports, formTemplates });
+  const serviceRequests = db.prepare('SELECT * FROM service_requests ORDER BY createdAt DESC').all();
+  serviceRequests.forEach(sr => { try { sr.photos = JSON.parse(sr.photos); } catch { sr.photos = []; } });
+  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests });
 });
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
@@ -465,11 +479,14 @@ app.get('/api/reports/:id/photos', requireAuth, (req, res) => {
 // ─── SERVICE REQUESTS ─────────────────────────────────────────────────────────
 app.post('/api/service-requests', requireClientAuth, async (req, res) => {
   const cfg = getEmailSettings();
-  if (!cfg.enabled || !cfg.smtpUser || !cfg.smtpPass) {
-    return res.status(400).json({ error: 'Email is not configured. Please contact your service provider.' });
-  }
   const { locationId, equipmentId, urgency, description, photos } = req.body;
   if (!locationId || !urgency || !description) return res.status(400).json({ error: 'Location, urgency, and description are required' });
+
+  // Store in database
+  const srId = genId();
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO service_requests (id,clientId,locationId,equipmentId,urgency,description,photos,status,createdAt) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(srId, req.session.client.id, locationId, equipmentId||'', urgency, description, JSON.stringify(photos||[]), 'New', now);
 
   const client = db.prepare('SELECT * FROM clients WHERE id=?').get(req.session.client.id);
   const loc = db.prepare('SELECT * FROM locations WHERE id=?').get(locationId);
@@ -527,24 +544,41 @@ app.post('/api/service-requests', requireClientAuth, async (req, res) => {
       </div>
     </div>`;
 
-  try {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com', port: 587, secure: false,
-      auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
-    });
-    await transporter.sendMail({
-      from: `"${fromName}" <${cfg.smtpUser}>`,
-      to: cfg.smtpUser,
-      replyTo: client?.email || undefined,
-      subject: `Service Request — ${client?.name || 'Client'} — ${loc?.buildingName || 'Location'}${equip ? ' — ' + equip.name : ''}`,
-      html,
-    });
-    console.log(`Service request email sent from client ${client?.name}`);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('Service request email error:', err.message);
-    res.status(500).json({ error: 'Failed to send service request. Please try again.' });
+  // Send email if configured
+  if (cfg.enabled && cfg.smtpUser && cfg.smtpPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com', port: 587, secure: false,
+        auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
+      });
+      await transporter.sendMail({
+        from: `"${fromName}" <${cfg.smtpUser}>`,
+        to: cfg.smtpUser,
+        replyTo: client?.email || undefined,
+        subject: `Service Request — ${client?.name || 'Client'} — ${loc?.buildingName || 'Location'}${equip ? ' — ' + equip.name : ''}`,
+        html,
+      });
+      console.log(`Service request email sent from client ${client?.name}`);
+    } catch (err) {
+      console.error('Service request email error:', err.message);
+    }
   }
+  res.json({ ok: true, id: srId });
+});
+
+// ─── SERVICE REQUESTS (admin) ─────────────────────────────────────────────────
+app.put('/api/service-requests/:id', requireAdmin, (req, res) => {
+  const { status, notes } = req.body;
+  const sr = db.prepare('SELECT * FROM service_requests WHERE id=?').get(req.params.id);
+  if (!sr) return res.status(404).json({ error: 'Service request not found' });
+  db.prepare('UPDATE service_requests SET status=?, notes=? WHERE id=?')
+    .run(status || sr.status, notes !== undefined ? notes : sr.notes, req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/service-requests/:id', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM service_requests WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
 });
 
 // ─── USERS ────────────────────────────────────────────────────────────────────

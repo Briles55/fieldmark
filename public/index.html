@@ -382,6 +382,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
       All Reports
     </button>
+    <button id="nav-service-requests" class="nav-item" onclick="nav('service-requests',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+      Service Requests
+    </button>
     <button id="nav-form-templates" class="nav-item" onclick="nav('form-templates',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
       Form Templates
@@ -755,6 +759,42 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div><div class="ph-title">Request Service</div><div class="ph-sub">Submit a service request to our team</div></div>
       </div>
       <div id="sr-form-content"></div>
+    </div>
+
+    <!-- SERVICE REQUESTS (admin) -->
+    <div id="view-service-requests" class="view">
+      <div class="ph">
+        <div><div class="ph-title">Service Requests</div><div class="ph-sub" id="sr-list-sub">Client service requests</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <input class="fc" type="text" placeholder="Search requests..." oninput="renderServiceRequests(this.value)" style="width:200px;padding:5px 10px;font-size:12px;">
+          <select class="fc" id="sr-filter-status" onchange="renderServiceRequests()" style="width:140px;padding:5px 10px;font-size:12px;">
+            <option value="">All Statuses</option>
+            <option value="New">New</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Client</th><th>Location</th><th>Equipment</th><th>Urgency</th><th>Status</th><th></th></tr></thead>
+            <tbody id="sr-list-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVICE REQUEST DETAIL (admin) -->
+    <div id="view-service-request-detail" class="view">
+      <div class="back-link" onclick="nav('service-requests')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back to Service Requests
+      </div>
+      <div class="ph">
+        <div><div class="ph-title" id="srd-title">Service Request</div><div class="ph-sub" id="srd-sub"></div></div>
+      </div>
+      <div id="srd-content"></div>
     </div>
 
     <!-- FORM TEMPLATES (admin only) -->
@@ -1143,7 +1183,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 <div id="toasts"></div>
 <script>
 // â”€â”€â”€ DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-let db = { clients: [], locations: [], equipment: [], reports: [], formTemplates: [] };
+let db = { clients: [], locations: [], equipment: [], reports: [], formTemplates: [], serviceRequests: [] };
 let currentUser = null;
 
 async function apiGet(url) {
@@ -1303,6 +1343,7 @@ function enterClientMode() {
   document.getElementById('nav-clients').style.display = 'none';
   document.getElementById('nav-scanner').style.display = 'none';
   document.getElementById('nav-reports').style.display = 'none';
+  document.getElementById('nav-service-requests').style.display = 'none';
   document.getElementById('nav-form-templates').style.display = 'none';
   document.getElementById('nav-users').style.display = 'none';
   document.getElementById('nav-settings').style.display = 'none';
@@ -1338,6 +1379,7 @@ function exitClientMode() {
   document.getElementById('nav-clients').style.display = '';
   document.getElementById('nav-scanner').style.display = '';
   document.getElementById('nav-reports').style.display = '';
+  document.getElementById('nav-service-requests').style.display = '';
   document.getElementById('nav-form-templates').style.display = '';
 }
 
@@ -1370,6 +1412,7 @@ function applyRoleUI() {
   if (isClient()) return; // client portal mode manages its own nav visibility
   const admin = isAdmin();
   document.getElementById('nav-clients').style.display = '';
+  document.getElementById('nav-service-requests').style.display = admin ? '' : 'none';
   document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';
   document.getElementById('nav-settings').style.display = admin ? '' : 'none';
@@ -1432,7 +1475,7 @@ const app = {
 
 // â”€â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function nav(viewName, navEl) {
-  if ((viewName === 'users' || viewName === 'form-templates' || viewName === 'form-builder') && !isAdmin()) {
+  if ((viewName === 'users' || viewName === 'form-templates' || viewName === 'form-builder' || viewName === 'service-requests' || viewName === 'service-request-detail') && !isAdmin()) {
     showToast('Access restricted to administrators', 'error'); return;
   }
   if (isClient() && viewName === 'clients') { viewName = 'portal-locations'; }
@@ -1453,7 +1496,7 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
+  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
   if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
 }
 
@@ -1536,6 +1579,16 @@ function renderView(name) {
       bc.innerHTML = '<span class="cur">Settings</span>';
       setNav('settings');
       renderSettingsView();
+      break;
+    case 'service-requests':
+      bc.innerHTML = '<span class="cur">Service Requests</span>';
+      setNav('service-requests');
+      renderServiceRequests('');
+      break;
+    case 'service-request-detail':
+      bc.innerHTML = `<span onclick="nav('service-requests')">Service Requests</span><span class="bc-sep">/</span><span class="cur">Request Detail</span>`;
+      setNav('service-requests');
+      renderServiceRequestDetail();
       break;
     case 'form-templates':
       bc.innerHTML = '<span class="cur">Form Templates</span>';
@@ -1760,6 +1813,147 @@ async function submitServiceRequest(e) {
   } finally {
     btn.disabled = false; btn.textContent = 'Submit Request';
   }
+}
+
+// ─── SERVICE REQUESTS (Admin View) ──────────────────────────────────────────
+function renderServiceRequests(search) {
+  search = (search||'').toLowerCase();
+  const statusFilter = document.getElementById('sr-filter-status')?.value || '';
+  let list = (db.serviceRequests||[]).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  if (statusFilter) list = list.filter(sr => sr.status === statusFilter);
+  if (search) {
+    list = list.filter(sr => {
+      const cl = db.clients.find(c=>c.id===sr.clientId);
+      const loc = db.locations.find(l=>l.id===sr.locationId);
+      const eq = sr.equipmentId ? db.equipment.find(e=>e.id===sr.equipmentId) : null;
+      return (cl?.name||'').toLowerCase().includes(search) ||
+        (loc?.buildingName||'').toLowerCase().includes(search) ||
+        (eq?.name||'').toLowerCase().includes(search) ||
+        (sr.description||'').toLowerCase().includes(search) ||
+        (sr.urgency||'').toLowerCase().includes(search);
+    });
+  }
+  const newCount = (db.serviceRequests||[]).filter(sr=>sr.status==='New').length;
+  document.getElementById('sr-list-sub').textContent = `${list.length} request${list.length!==1?'s':''}${newCount?` \u2022 ${newCount} new`:''}`;
+  const tbody = document.getElementById('sr-list-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-ico">\uD83D\uDCE8</div><div class="empty-title">No service requests found</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(sr => {
+    const cl = db.clients.find(c=>c.id===sr.clientId);
+    const loc = db.locations.find(l=>l.id===sr.locationId);
+    const eq = sr.equipmentId ? db.equipment.find(e=>e.id===sr.equipmentId) : null;
+    const urgBadge = sr.urgency==='Emergency'?'br':sr.urgency==='Urgent'?'ba':'bg';
+    const statusBadge = sr.status==='New'?'bb':sr.status==='In Progress'?'ba':'bg';
+    return `<tr class="clickable" onclick="openServiceRequestDetail('${sr.id}')">
+      <td>${fmtDT(sr.createdAt)}</td>
+      <td>${esc(cl?.name||'\u2014')}</td>
+      <td>${esc(loc?.buildingName||'\u2014')}</td>
+      <td>${esc(eq?.name||'\u2014')}</td>
+      <td><span class="badge ${urgBadge}">${esc(sr.urgency)}</span></td>
+      <td><span class="badge ${statusBadge}">${esc(sr.status)}</span></td>
+      <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="openServiceRequestDetail('${sr.id}')">View</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function openServiceRequestDetail(id) {
+  app.serviceRequestId = id;
+  showView('service-request-detail');
+}
+
+function renderServiceRequestDetail() {
+  const sr = (db.serviceRequests||[]).find(s=>s.id===app.serviceRequestId);
+  if (!sr) { nav('service-requests'); return; }
+  const cl = db.clients.find(c=>c.id===sr.clientId);
+  const loc = db.locations.find(l=>l.id===sr.locationId);
+  const eq = sr.equipmentId ? db.equipment.find(e=>e.id===sr.equipmentId) : null;
+  const urgBadge = sr.urgency==='Emergency'?'br':sr.urgency==='Urgent'?'ba':'bg';
+  const statusBadge = sr.status==='New'?'bb':sr.status==='In Progress'?'ba':'bg';
+
+  document.getElementById('srd-title').textContent = `Service Request — ${cl?.name||'Client'}`;
+  document.getElementById('srd-sub').textContent = fmtDT(sr.createdAt);
+
+  const photos = (sr.photos&&sr.photos.length) ? `
+    <div class="card" style="margin-top:16px;">
+      <div class="card-hd"><span class="card-title">Photos</span><span class="badge bgr">${sr.photos.length}</span></div>
+      <div class="card-body">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${sr.photos.map((p,i) => `<img src="${p}" alt="Photo ${i+1}" style="max-width:240px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="openPhotoLightbox(this.src)">`).join('')}
+        </div>
+      </div>
+    </div>` : '';
+
+  document.getElementById('srd-content').innerHTML = `
+    <div class="card">
+      <div class="card-hd"><span class="card-title">Request Details</span><span class="badge ${statusBadge}">${esc(sr.status)}</span></div>
+      <div class="card-body">
+        <div class="ig3">
+          <div><div class="ii-lbl">Client</div><div class="ii-val">${esc(cl?.name||'\u2014')}</div></div>
+          <div><div class="ii-lbl">Contact Email</div><div class="ii-val">${esc(cl?.email||'\u2014')}</div></div>
+          <div><div class="ii-lbl">Phone</div><div class="ii-val">${esc(cl?.phone||'\u2014')}</div></div>
+          <div><div class="ii-lbl">Location</div><div class="ii-val">${esc(loc?.buildingName||'\u2014')}${loc?.address?' \u2022 '+esc(loc.address):''}</div></div>
+          <div><div class="ii-lbl">Equipment</div><div class="ii-val">${eq?esc(eq.name)+(eq.model?' \u2014 '+esc(eq.model):''):'\u2014'}</div></div>
+          <div><div class="ii-lbl">Urgency</div><div class="ii-val"><span class="badge ${urgBadge}">${esc(sr.urgency)}</span></div></div>
+        </div>
+        <hr class="div">
+        <div class="ii-lbl">Description</div>
+        <div style="font-size:14px;margin-top:6px;white-space:pre-wrap;">${esc(sr.description)}</div>
+      </div>
+    </div>
+    ${photos}
+    <div class="card" style="margin-top:16px;">
+      <div class="card-hd"><span class="card-title">Update Status</span></div>
+      <div class="card-body">
+        <div class="fr">
+          <div class="fg">
+            <label class="flbl">Status</label>
+            <select class="fc" id="srd-status">
+              <option${sr.status==='New'?' selected':''}>New</option>
+              <option${sr.status==='In Progress'?' selected':''}>In Progress</option>
+              <option${sr.status==='Completed'?' selected':''}>Completed</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flbl">Admin Notes</label>
+            <textarea class="fc" id="srd-notes" placeholder="Internal notes..." style="min-height:60px;">${esc(sr.notes||'')}</textarea>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn btn-primary" onclick="updateServiceRequest()">Update</button>
+          <button class="btn btn-danger" onclick="confirmDeleteServiceRequest('${sr.id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function updateServiceRequest() {
+  const status = document.getElementById('srd-status').value;
+  const notes = document.getElementById('srd-notes').value;
+  try {
+    await apiPost('/api/service-requests/'+app.serviceRequestId, { status, notes }, 'PUT');
+    const sr = (db.serviceRequests||[]).find(s=>s.id===app.serviceRequestId);
+    if (sr) { sr.status = status; sr.notes = notes; }
+    showToast('Service request updated','success');
+    renderServiceRequestDetail();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+function confirmDeleteServiceRequest(id) {
+  if (confirm('Delete this service request? This cannot be undone.')) {
+    deleteServiceRequest(id);
+  }
+}
+
+async function deleteServiceRequest(id) {
+  try {
+    await apiPost('/api/service-requests/'+id, {}, 'DELETE');
+    db.serviceRequests = (db.serviceRequests||[]).filter(sr=>sr.id!==id);
+    showToast('Service request deleted','success');
+    nav('service-requests');
+  } catch(e) { showToast(e.message,'error'); }
 }
 
 function renderFormTemplates() {

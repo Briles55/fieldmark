@@ -388,6 +388,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
       All Reports
     </button>
+    <button id="nav-work-orders" class="nav-item" onclick="nav('work-orders',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+      Work Orders
+    </button>
     <button id="nav-service-requests" class="nav-item" onclick="nav('service-requests',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
       Service Requests
@@ -799,6 +803,55 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div id="srd-content"></div>
     </div>
 
+    <!-- WORK ORDERS -->
+    <div id="view-work-orders" class="view">
+      <div class="ph">
+        <div><div class="ph-title">Work Orders</div><div class="ph-sub" id="wo-list-sub">Manage work orders</div></div>
+        <button class="btn btn-primary" onclick="openWorkOrderModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          New Work Order
+        </button>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <input class="fc" type="text" placeholder="Search work orders..." oninput="renderWorkOrders(this.value)" style="width:200px;padding:5px 10px;font-size:12px;">
+          <select class="fc" id="wo-filter-status" onchange="renderWorkOrders()" style="width:140px;padding:5px 10px;font-size:12px;">
+            <option value="">All Statuses</option>
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="On Hold">On Hold</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+          <select class="fc" id="wo-filter-priority" onchange="renderWorkOrders()" style="width:120px;padding:5px 10px;font-size:12px;">
+            <option value="">All Priorities</option>
+            <option value="Low">Low</option>
+            <option value="Normal">Normal</option>
+            <option value="High">High</option>
+            <option value="Emergency">Emergency</option>
+          </select>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>WO #</th><th>Client</th><th>Location</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Created</th></tr></thead>
+            <tbody id="wo-list-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORK ORDER DETAIL -->
+    <div id="view-work-order-detail" class="view">
+      <div class="back-link" onclick="nav('work-orders')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back to Work Orders
+      </div>
+      <div class="ph">
+        <div><div class="ph-title" id="wod-title">Work Order</div><div class="ph-sub" id="wod-sub"></div></div>
+      </div>
+      <div id="wod-content"></div>
+    </div>
+
     <!-- FORM TEMPLATES (admin only) -->
     <div id="view-form-templates" class="view">
       <div class="ph">
@@ -1190,7 +1243,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 <div id="toasts"></div>
 <script>
 // â”€â”€â”€ DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-let db = { clients: [], locations: [], equipment: [], reports: [], formTemplates: [], serviceRequests: [] };
+let db = { clients: [], locations: [], equipment: [], reports: [], formTemplates: [], serviceRequests: [], workOrders: [], users: [] };
 let currentUser = null;
 
 async function apiGet(url) {
@@ -1350,6 +1403,7 @@ function enterClientMode() {
   document.getElementById('nav-clients').style.display = 'none';
   document.getElementById('nav-scanner').style.display = 'none';
   document.getElementById('nav-reports').style.display = 'none';
+  document.getElementById('nav-work-orders').style.display = 'none';
   document.getElementById('nav-service-requests').style.display = 'none';
   document.getElementById('nav-form-templates').style.display = 'none';
   document.getElementById('nav-users').style.display = 'none';
@@ -1385,6 +1439,7 @@ function exitClientMode() {
   document.getElementById('nav-dashboard').style.display = '';
   document.getElementById('nav-clients').style.display = '';
   document.getElementById('nav-reports').style.display = '';
+  document.getElementById('nav-work-orders').style.display = '';
   document.getElementById('nav-service-requests').style.display = '';
   document.getElementById('nav-form-templates').style.display = '';
 }
@@ -1418,6 +1473,7 @@ function applyRoleUI() {
   if (isClient()) return; // client portal mode manages its own nav visibility
   const admin = isAdmin();
   document.getElementById('nav-clients').style.display = '';
+  document.getElementById('nav-work-orders').style.display = '';
   document.getElementById('nav-service-requests').style.display = admin ? '' : 'none';
   document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';
@@ -1482,6 +1538,7 @@ const app = {
 // â”€â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function nav(viewName, navEl) {
   if ((viewName === 'users' || viewName === 'form-templates' || viewName === 'form-builder' || viewName === 'service-requests' || viewName === 'service-request-detail') && !isAdmin()) {
+    // work-orders and work-order-detail are allowed for all staff
     showToast('Access restricted to administrators', 'error'); return;
   }
   if (isClient() && viewName === 'clients') { viewName = 'portal-locations'; }
@@ -1502,7 +1559,7 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
+  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'work-orders':'nav-work-orders', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
   if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
 }
 
@@ -1585,6 +1642,16 @@ function renderView(name) {
       bc.innerHTML = '<span class="cur">Settings</span>';
       setNav('settings');
       renderSettingsView();
+      break;
+    case 'work-orders':
+      bc.innerHTML = '<span class="cur">Work Orders</span>';
+      setNav('work-orders');
+      renderWorkOrders('');
+      break;
+    case 'work-order-detail':
+      bc.innerHTML = `<span onclick="nav('work-orders')">Work Orders</span><span class="bc-sep">/</span><span class="cur">Work Order Detail</span>`;
+      setNav('work-orders');
+      renderWorkOrderDetail();
       break;
     case 'service-requests':
       bc.innerHTML = '<span class="cur">Service Requests</span>';
@@ -1928,6 +1995,7 @@ function renderServiceRequestDetail() {
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button class="btn btn-primary" onclick="updateServiceRequest()">Update</button>
+          <button class="btn btn-secondary" onclick="convertSRtoWorkOrder('${sr.id}')">Convert to Work Order</button>
           <button class="btn btn-danger" onclick="confirmDeleteServiceRequest('${sr.id}')">Delete</button>
         </div>
       </div>
@@ -1960,6 +2028,368 @@ async function deleteServiceRequest(id) {
     showToast('Service request deleted','success');
     nav('service-requests');
   } catch(e) { showToast(e.message,'error'); }
+}
+
+// ─── WORK ORDERS ──────────────────────────────────────────────────────────────
+function renderWorkOrders(search) {
+  search = (search||'').toLowerCase();
+  const statusFilter = document.getElementById('wo-filter-status')?.value || '';
+  const priorityFilter = document.getElementById('wo-filter-priority')?.value || '';
+  let list = (db.workOrders||[]).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  if (statusFilter) list = list.filter(wo => wo.status === statusFilter);
+  if (priorityFilter) list = list.filter(wo => wo.priority === priorityFilter);
+  if (search) {
+    list = list.filter(wo => {
+      const cl = db.clients.find(c=>c.id===wo.clientId);
+      const loc = db.locations.find(l=>l.id===wo.locationId);
+      const assignee = (db.users||[]).find(u=>u.id===wo.assignedTo);
+      return (wo.woNumber||'').toLowerCase().includes(search) ||
+        (cl?.name||'').toLowerCase().includes(search) ||
+        (loc?.buildingName||'').toLowerCase().includes(search) ||
+        (assignee?.name||'').toLowerCase().includes(search) ||
+        (wo.description||'').toLowerCase().includes(search);
+    });
+  }
+  const openCount = (db.workOrders||[]).filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
+  document.getElementById('wo-list-sub').textContent = list.length + ' work order' + (list.length!==1?'s':'') + (openCount ? ' \u2022 ' + openCount + ' open' : '');
+  var tbody = document.getElementById('wo-list-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-ico">\uD83D\uDCCB</div><div class="empty-title">No work orders found</div><div class="empty-desc">Create a work order to track service assignments</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  for (var i = 0; i < list.length; i++) {
+    var wo = list[i];
+    var cl = db.clients.find(function(c){return c.id===wo.clientId;});
+    var loc = db.locations.find(function(l){return l.id===wo.locationId;});
+    var assignee = (db.users||[]).find(function(u){return u.id===wo.assignedTo;});
+    var statusBadge = wo.status==='Open'?'bb':wo.status==='In Progress'?'ba':wo.status==='Completed'?'bg':wo.status==='On Hold'?'bgr':'br';
+    var priBadge = wo.priority==='Emergency'?'br':wo.priority==='High'?'ba':wo.priority==='Normal'?'bb':'bgr';
+    var tr = document.createElement('tr');
+    tr.className = 'clickable';
+    (function(woId) { tr.onclick = function() { openWorkOrderDetail(woId); }; })(wo.id);
+    var td1 = document.createElement('td');
+    var strong = document.createElement('strong');
+    strong.textContent = wo.woNumber;
+    td1.appendChild(strong);
+    var td2 = document.createElement('td');
+    td2.textContent = cl ? cl.name : '\u2014';
+    var td3 = document.createElement('td');
+    td3.textContent = loc ? loc.buildingName : '\u2014';
+    var td4 = document.createElement('td');
+    var sBadge = document.createElement('span');
+    sBadge.className = 'badge ' + statusBadge;
+    sBadge.textContent = wo.status;
+    td4.appendChild(sBadge);
+    var td5 = document.createElement('td');
+    var pBadge = document.createElement('span');
+    pBadge.className = 'badge ' + priBadge;
+    pBadge.textContent = wo.priority;
+    td5.appendChild(pBadge);
+    var td6 = document.createElement('td');
+    td6.textContent = assignee ? assignee.name : '\u2014';
+    var td7 = document.createElement('td');
+    td7.textContent = fmtDT(wo.createdAt);
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+    tr.appendChild(td5); tr.appendChild(td6); tr.appendChild(td7);
+    tbody.appendChild(tr);
+  }
+}
+
+function openWorkOrderDetail(id) {
+  app.workOrderId = id;
+  showView('work-order-detail');
+}
+
+function renderWorkOrderDetail() {
+  var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
+  if (!wo) { nav('work-orders'); return; }
+  var cl = db.clients.find(function(c){return c.id===wo.clientId;});
+  var loc = db.locations.find(function(l){return l.id===wo.locationId;});
+  var eq = wo.equipmentId ? db.equipment.find(function(e){return e.id===wo.equipmentId;}) : null;
+  var assignee = (db.users||[]).find(function(u){return u.id===wo.assignedTo;});
+  var sr = wo.serviceRequestId ? (db.serviceRequests||[]).find(function(s){return s.id===wo.serviceRequestId;}) : null;
+  var statusBadge = wo.status==='Open'?'bb':wo.status==='In Progress'?'ba':wo.status==='Completed'?'bg':wo.status==='On Hold'?'bgr':'br';
+  var priBadge = wo.priority==='Emergency'?'br':wo.priority==='High'?'ba':wo.priority==='Normal'?'bb':'bgr';
+
+  document.getElementById('wod-title').textContent = wo.woNumber;
+  document.getElementById('wod-sub').textContent = cl ? cl.name : '';
+
+  // Linked reports
+  var linkedReports = (db.reports||[]).filter(function(r){return r.workOrderNumber===wo.woNumber;});
+  var reportsHtml = '';
+  if (linkedReports.length > 0) {
+    reportsHtml = linkedReports.map(function(r) {
+      var reqEq = db.equipment.find(function(e){return e.id===r.equipmentId;});
+      return '<div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="openReportDetail(\'' + r.id + '\')">' +
+        '<div><div style="font-size:13px;font-weight:500;">' + esc(reqEq?.name||'Equipment') + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);">' + esc(r.type) + ' \u2022 ' + fmtDate(r.date) + '</div></div>' +
+        '<span class="badge ' + (r.type==='service'?'bb':'bg') + '">' + esc(r.type) + '</span></div>';
+    }).join('');
+  } else {
+    reportsHtml = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px;">No reports linked to this work order</div>';
+  }
+
+  // Labor entries
+  var labor = wo.laborEntries || [];
+  var laborHtml = '';
+  if (labor.length > 0) {
+    laborHtml = '<table><thead><tr><th>Technician</th><th>Date</th><th>Hours</th><th>Description</th></tr></thead><tbody>' +
+      labor.map(function(l) {
+        return '<tr><td>' + esc(l.tech||'') + '</td><td>' + esc(l.date||'') + '</td><td>' + esc(String(l.hours||'')) + '</td><td>' + esc(l.desc||'') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  } else {
+    laborHtml = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px;">No labor entries yet</div>';
+  }
+
+  // Tech options for assign dropdown
+  var techOpts = (db.users||[]).map(function(u) {
+    return '<option value="' + u.id + '"' + (wo.assignedTo===u.id?' selected':'') + '>' + esc(u.name) + ' (' + u.role + ')</option>';
+  }).join('');
+
+  var content = document.getElementById('wod-content');
+  content.innerHTML = '';
+
+  // Info card
+  content.innerHTML += '<div class="card"><div class="card-hd"><span class="card-title">Work Order Details</span><span class="badge ' + statusBadge + '">' + esc(wo.status) + '</span></div>' +
+    '<div class="card-body"><div class="ig3">' +
+    '<div><div class="ii-lbl">WO Number</div><div class="ii-val"><strong>' + esc(wo.woNumber) + '</strong></div></div>' +
+    '<div><div class="ii-lbl">Client</div><div class="ii-val">' + esc(cl?.name||'\u2014') + '</div></div>' +
+    '<div><div class="ii-lbl">Location</div><div class="ii-val">' + esc(loc?.buildingName||'\u2014') + (loc?.address?' \u2022 '+esc(loc.address):'') + '</div></div>' +
+    '<div><div class="ii-lbl">Equipment</div><div class="ii-val">' + (eq?esc(eq.name)+(eq.model?' \u2014 '+esc(eq.model):''):'\u2014') + '</div></div>' +
+    '<div><div class="ii-lbl">Priority</div><div class="ii-val"><span class="badge ' + priBadge + '">' + esc(wo.priority) + '</span></div></div>' +
+    '<div><div class="ii-lbl">Assigned To</div><div class="ii-val">' + esc(assignee?.name||'Unassigned') + '</div></div>' +
+    '<div><div class="ii-lbl">Created</div><div class="ii-val">' + fmtDT(wo.createdAt) + '</div></div>' +
+    '<div><div class="ii-lbl">Updated</div><div class="ii-val">' + fmtDT(wo.updatedAt) + '</div></div>' +
+    (sr ? '<div><div class="ii-lbl">Service Request</div><div class="ii-val"><a href="#" onclick="event.preventDefault();openServiceRequestDetail(\'' + sr.id + '\')">View Request</a></div></div>' : '') +
+    '</div>' +
+    (wo.description ? '<hr class="div"><div class="ii-lbl">Description</div><div style="font-size:14px;margin-top:6px;white-space:pre-wrap;">' + esc(wo.description) + '</div>' : '') +
+    '</div></div>';
+
+  // Linked Reports card
+  content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Linked Reports</span><span class="badge bgr">' + linkedReports.length + '</span></div>' + reportsHtml + '</div>';
+
+  // Labor Entries card
+  content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Labor Entries</span><span class="badge bgr">' + labor.length + '</span>' +
+    '<button class="btn btn-ghost btn-sm" onclick="addLaborEntry()" style="margin-left:auto;">+ Add Entry</button></div><div class="tbl-wrap">' + laborHtml + '</div></div>';
+
+  // Edit section (admin only)
+  if (isAdmin()) {
+    content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Update Work Order</span></div>' +
+      '<div class="card-body"><div class="fr">' +
+      '<div class="fg"><label class="flbl">Status</label><select class="fc" id="wod-status">' +
+      '<option' + (wo.status==='Open'?' selected':'') + '>Open</option>' +
+      '<option' + (wo.status==='In Progress'?' selected':'') + '>In Progress</option>' +
+      '<option' + (wo.status==='On Hold'?' selected':'') + '>On Hold</option>' +
+      '<option' + (wo.status==='Completed'?' selected':'') + '>Completed</option>' +
+      '<option' + (wo.status==='Cancelled'?' selected':'') + '>Cancelled</option>' +
+      '</select></div>' +
+      '<div class="fg"><label class="flbl">Priority</label><select class="fc" id="wod-priority">' +
+      '<option' + (wo.priority==='Low'?' selected':'') + '>Low</option>' +
+      '<option' + (wo.priority==='Normal'?' selected':'') + '>Normal</option>' +
+      '<option' + (wo.priority==='High'?' selected':'') + '>High</option>' +
+      '<option' + (wo.priority==='Emergency'?' selected':'') + '>Emergency</option>' +
+      '</select></div>' +
+      '<div class="fg"><label class="flbl">Assigned To</label><select class="fc" id="wod-assigned"><option value="">Unassigned</option>' + techOpts + '</select></div>' +
+      '</div>' +
+      '<div class="fg"><label class="flbl">Notes</label><textarea class="fc" id="wod-notes" placeholder="Internal notes..." style="min-height:60px;">' + esc(wo.notes||'') + '</textarea></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+      '<button class="btn btn-primary" onclick="updateWorkOrder()">Update</button>' +
+      '<button class="btn btn-danger" onclick="confirmDeleteWorkOrder()">Delete</button>' +
+      '</div></div></div>';
+  }
+}
+
+function addLaborEntry() {
+  var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
+  if (!wo) return;
+  var tech = prompt('Technician name:');
+  if (!tech) return;
+  var date = prompt('Date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+  if (!date) return;
+  var hours = prompt('Hours worked:');
+  if (!hours) return;
+  var desc = prompt('Work description:');
+  var labor = wo.laborEntries || [];
+  labor.push({ tech: tech, date: date, hours: parseFloat(hours)||0, desc: desc||'' });
+  apiPost('/api/work-orders/'+wo.id, { laborEntries: labor }, 'PUT').then(function(updated) {
+    var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
+    if (idx>=0) db.workOrders[idx] = updated;
+    renderWorkOrderDetail();
+    showToast('Labor entry added','success');
+  }).catch(function(e) { showToast(e.message,'error'); });
+}
+
+async function updateWorkOrder() {
+  var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
+  if (!wo) return;
+  var data = {
+    status: document.getElementById('wod-status').value,
+    priority: document.getElementById('wod-priority').value,
+    assignedTo: document.getElementById('wod-assigned').value,
+    notes: document.getElementById('wod-notes').value
+  };
+  try {
+    var updated = await apiPost('/api/work-orders/'+wo.id, data, 'PUT');
+    var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
+    if (idx>=0) db.workOrders[idx] = updated;
+    showToast('Work order updated','success');
+    renderWorkOrderDetail();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+function confirmDeleteWorkOrder() {
+  if (confirm('Delete this work order? This cannot be undone.')) {
+    deleteWorkOrder();
+  }
+}
+
+async function deleteWorkOrder() {
+  try {
+    await apiPost('/api/work-orders/'+app.workOrderId, {}, 'DELETE');
+    db.workOrders = (db.workOrders||[]).filter(function(w){return w.id!==app.workOrderId;});
+    showToast('Work order deleted','success');
+    nav('work-orders');
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+// ─── WORK ORDER MODAL ────────────────────────────────────────────────────────
+function openWorkOrderModal(prefill) {
+  prefill = prefill || {};
+  var clientOpts = db.clients.map(function(c) {
+    return '<option value="' + c.id + '"' + (prefill.clientId===c.id?' selected':'') + '>' + esc(c.name) + '</option>';
+  }).join('');
+  var techOpts = (db.users||[]).map(function(u) {
+    return '<option value="' + u.id + '">' + esc(u.name) + ' (' + u.role + ')</option>';
+  }).join('');
+
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = 'New Work Order';
+  modal.querySelector('.modal-body').innerHTML =
+    '<div class="fg"><label class="flbl">Client *</label><select class="fc" id="wo-m-client" onchange="woModalClientChange()"><option value="">— Select Client —</option>' + clientOpts + '</select></div>' +
+    '<div class="fg"><label class="flbl">Location *</label><select class="fc" id="wo-m-location"><option value="">— Select Location —</option></select></div>' +
+    '<div class="fg"><label class="flbl">Equipment</label><select class="fc" id="wo-m-equipment"><option value="">— None —</option></select></div>' +
+    '<div class="fg"><label class="flbl">Description</label><textarea class="fc" id="wo-m-desc" placeholder="Describe the work needed..." style="min-height:80px;">' + esc(prefill.description||'') + '</textarea></div>' +
+    '<div class="fr"><div class="fg"><label class="flbl">Priority</label><select class="fc" id="wo-m-priority">' +
+    '<option' + (prefill.priority==='Low'?' selected':'') + '>Low</option>' +
+    '<option' + ((prefill.priority||'Normal')==='Normal'?' selected':'') + '>Normal</option>' +
+    '<option' + (prefill.priority==='High'?' selected':'') + '>High</option>' +
+    '<option' + (prefill.priority==='Emergency'?' selected':'') + '>Emergency</option>' +
+    '</select></div>' +
+    '<div class="fg"><label class="flbl">Assigned To</label><select class="fc" id="wo-m-assigned"><option value="">Unassigned</option>' + techOpts + '</select></div></div>' +
+    '<input type="hidden" id="wo-m-sr-id" value="' + (prefill.serviceRequestId||'') + '">';
+
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="submitWorkOrder()">Create Work Order</button>';
+
+  modal.style.display = 'flex';
+
+  // If prefill has clientId, trigger cascading
+  if (prefill.clientId) {
+    setTimeout(function() {
+      woModalClientChange();
+      if (prefill.locationId) {
+        setTimeout(function() {
+          document.getElementById('wo-m-location').value = prefill.locationId;
+          woModalLocationChange();
+          if (prefill.equipmentId) {
+            setTimeout(function() {
+              document.getElementById('wo-m-equipment').value = prefill.equipmentId;
+            }, 50);
+          }
+        }, 50);
+      }
+    }, 50);
+  }
+}
+
+function createGenericModal() {
+  var overlay = document.createElement('div');
+  overlay.id = 'generic-modal';
+  overlay.className = 'modal-overlay';
+  overlay.style.display = 'none';
+  overlay.innerHTML = '<div class="modal" style="max-width:560px;">' +
+    '<div class="modal-hd"><h3 class="modal-title"></h3><button class="modal-x" onclick="closeGenericModal()">&times;</button></div>' +
+    '<div class="modal-body" style="padding:20px;"></div>' +
+    '<div class="modal-footer" style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);"></div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function closeGenericModal() {
+  var modal = document.getElementById('generic-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function woModalClientChange() {
+  var clientId = document.getElementById('wo-m-client').value;
+  var locSelect = document.getElementById('wo-m-location');
+  var eqSelect = document.getElementById('wo-m-equipment');
+  locSelect.innerHTML = '<option value="">— Select Location —</option>';
+  eqSelect.innerHTML = '<option value="">— None —</option>';
+  if (!clientId) return;
+  var locs = db.locations.filter(function(l){return l.clientId===clientId;});
+  locs.forEach(function(l) {
+    var opt = document.createElement('option');
+    opt.value = l.id;
+    opt.textContent = l.buildingName + (l.address ? ' — ' + l.address : '');
+    locSelect.appendChild(opt);
+  });
+  locSelect.onchange = woModalLocationChange;
+}
+
+function woModalLocationChange() {
+  var locId = document.getElementById('wo-m-location').value;
+  var eqSelect = document.getElementById('wo-m-equipment');
+  eqSelect.innerHTML = '<option value="">— None —</option>';
+  if (!locId) return;
+  var eqs = db.equipment.filter(function(e){return e.locationId===locId;});
+  eqs.forEach(function(e) {
+    var opt = document.createElement('option');
+    opt.value = e.id;
+    opt.textContent = e.name + (e.model ? ' — ' + e.model : '');
+    eqSelect.appendChild(opt);
+  });
+}
+
+async function submitWorkOrder() {
+  var clientId = document.getElementById('wo-m-client').value;
+  var locationId = document.getElementById('wo-m-location').value;
+  if (!clientId || !locationId) { showToast('Client and location are required','error'); return; }
+  var data = {
+    clientId: clientId,
+    locationId: locationId,
+    equipmentId: document.getElementById('wo-m-equipment').value || '',
+    description: document.getElementById('wo-m-desc').value.trim(),
+    priority: document.getElementById('wo-m-priority').value,
+    assignedTo: document.getElementById('wo-m-assigned').value,
+    serviceRequestId: document.getElementById('wo-m-sr-id').value || ''
+  };
+  try {
+    var created = await apiPost('/api/work-orders', data);
+    db.workOrders = db.workOrders || [];
+    db.workOrders.unshift(created);
+    closeGenericModal();
+    showToast('Work order ' + created.woNumber + ' created','success');
+    openWorkOrderDetail(created.id);
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+// ─── SERVICE REQUEST → WORK ORDER CONVERSION ─────────────────────────────────
+function convertSRtoWorkOrder(srId) {
+  var sr = (db.serviceRequests||[]).find(function(s){return s.id===srId;});
+  if (!sr) { showToast('Service request not found','error'); return; }
+  var priorityMap = { 'Emergency': 'Emergency', 'Urgent': 'High', 'Normal': 'Normal', 'Low': 'Low' };
+  openWorkOrderModal({
+    clientId: sr.clientId,
+    locationId: sr.locationId,
+    equipmentId: sr.equipmentId || '',
+    description: sr.description || '',
+    priority: priorityMap[sr.urgency] || 'Normal',
+    serviceRequestId: sr.id
+  });
 }
 
 function renderFormTemplates() {
@@ -2262,10 +2692,12 @@ function renderDashboard() {
   const totalLocs = db.locations.length;
   const totalEq = db.equipment.length;
   const totalRpts = db.reports.length;
+  const openWOs = (db.workOrders||[]).filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${totalClients}</div><div class="stat-lbl">Clients</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--green)">${totalLocs}</div><div class="stat-lbl">Locations</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--amber)">${totalEq}</div><div class="stat-lbl">Equipment</div></div>
+    <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${openWOs}</div><div class="stat-lbl">Open Work Orders</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--muted)">${totalRpts}</div><div class="stat-lbl">Reports</div></div>
   `;
   const recent = [...db.reports].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
@@ -2695,6 +3127,7 @@ function renderReportForm() {
           <div class="card-hd"><span class="card-title">Report Details</span></div>
           <div class="card-body">
             <div class="fg"><label class="flbl">Technician Name *</label><input class="fc" type="text" id="rf-tech" placeholder="Your name" value="${esc(currentUser?.name||'')}" required></div>
+            <div class="fg"><label class="flbl">Work Order #</label><input class="fc" type="text" id="rf-wo-number" placeholder="WO-2026-0001 (optional)" list="wo-numbers-list"><datalist id="wo-numbers-list">${(db.workOrders||[]).filter(function(w){return w.status==='Open'||w.status==='In Progress';}).map(function(w){return '<option value="'+esc(w.woNumber)+'">';}).join('')}</datalist></div>
             <div class="fr">
               <div class="fg"><label class="flbl">Date *</label><input class="fc" type="date" id="rf-date" value="${today}" required></div>
               <div class="fg"><label class="flbl">Time</label><input class="fc" type="time" id="rf-time" value="${new Date().toTimeString().slice(0,5)}"></div>
@@ -2812,6 +3245,7 @@ async function submitReport(e) {
     photoBefore: app.reportPhotos.before,
     photoAfter: app.reportPhotos.after,
     photoNameplate: app.reportPhotos.nameplate,
+    workOrderNumber: document.getElementById('rf-wo-number')?.value.trim()||'',
   };
   try {
     const created = await apiPost('/api/reports', reportData);
@@ -2895,6 +3329,7 @@ function renderReportDetail() {
             <div><div class="ii-lbl">Technician</div><div class="ii-val">${esc(r.techName||'\u2014')}</div></div>
             <div><div class="ii-lbl">Date & Time</div><div class="ii-val">${fmtDT(r.date)}</div></div>
             ${r.nextDate?`<div><div class="ii-lbl">Next Service</div><div class="ii-val">${fmtDate(r.nextDate)}</div></div>`:''}
+            ${r.workOrderNumber?`<div><div class="ii-lbl">Work Order</div><div class="ii-val"><a href="#" onclick="event.preventDefault();var wo=(db.workOrders||[]).find(function(w){return w.woNumber==='${esc(r.workOrderNumber)}';});if(wo)openWorkOrderDetail(wo.id);else showToast('Work order not found','error');">${esc(r.workOrderNumber)}</a></div></div>`:''}
           </div>
           ${r.workPerformed?`<hr class="div"><div class="ii-lbl">Work Performed</div><div style="margin-top:6px;font-size:13.5px;">${esc(r.workPerformed)}</div>`:''}
           ${r.cause?`<hr class="div"><div class="ii-lbl">Cause / Finding</div><div style="margin-top:6px;font-size:13.5px;">${esc(r.cause)}</div>`:''}

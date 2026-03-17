@@ -392,6 +392,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
       Work Orders
     </button>
+    <button id="nav-time-cards" class="nav-item" onclick="nav('time-cards',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Time Cards
+    </button>
     <button id="nav-service-requests" class="nav-item" onclick="nav('service-requests',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
       Service Requests
@@ -852,6 +856,16 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div id="wod-content"></div>
     </div>
 
+    <!-- TIME CARDS -->
+    <div id="view-time-cards" class="view">
+      <div class="ph">
+        <div><div class="ph-title" id="tc-title">Time Cards</div><div class="ph-sub" id="tc-sub"></div></div>
+        <div style="display:flex;gap:8px;" id="tc-actions"></div>
+      </div>
+      <div id="tc-toolbar" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;"></div>
+      <div id="tc-content"></div>
+    </div>
+
     <!-- FORM TEMPLATES (admin only) -->
     <div id="view-form-templates" class="view">
       <div class="ph">
@@ -1243,7 +1257,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 <div id="toasts"></div>
 <script>
 // â”€â”€â”€ DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-let db = { clients: [], locations: [], equipment: [], reports: [], formTemplates: [], serviceRequests: [], workOrders: [], users: [] };
+let db = { clients: [], locations: [], equipment: [], reports: [], formTemplates: [], serviceRequests: [], workOrders: [], users: [], timeCards: [] };
 let currentUser = null;
 
 async function apiGet(url) {
@@ -1404,6 +1418,7 @@ function enterClientMode() {
   document.getElementById('nav-scanner').style.display = 'none';
   document.getElementById('nav-reports').style.display = 'none';
   document.getElementById('nav-work-orders').style.display = 'none';
+  document.getElementById('nav-time-cards').style.display = 'none';
   document.getElementById('nav-service-requests').style.display = 'none';
   document.getElementById('nav-form-templates').style.display = 'none';
   document.getElementById('nav-users').style.display = 'none';
@@ -1440,6 +1455,7 @@ function exitClientMode() {
   document.getElementById('nav-clients').style.display = '';
   document.getElementById('nav-reports').style.display = '';
   document.getElementById('nav-work-orders').style.display = '';
+  document.getElementById('nav-time-cards').style.display = '';
   document.getElementById('nav-service-requests').style.display = '';
   document.getElementById('nav-form-templates').style.display = '';
 }
@@ -1474,6 +1490,7 @@ function applyRoleUI() {
   const admin = isAdmin();
   document.getElementById('nav-clients').style.display = '';
   document.getElementById('nav-work-orders').style.display = '';
+  document.getElementById('nav-time-cards').style.display = '';
   document.getElementById('nav-service-requests').style.display = admin ? '' : 'none';
   document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';
@@ -1533,6 +1550,7 @@ const app = {
   formBuilderName: '',
   reportPhotos: { before: null, after: null, nameplate: null },
   requestPhotos: [],
+  tcWeekStart: null,
 };
 
 // â”€â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1559,7 +1577,7 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'work-orders':'nav-work-orders', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
+  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'work-orders':'nav-work-orders', 'time-cards':'nav-time-cards', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
   if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
 }
 
@@ -1652,6 +1670,12 @@ function renderView(name) {
       bc.innerHTML = `<span onclick="nav('work-orders')">Work Orders</span><span class="bc-sep">/</span><span class="cur">Work Order Detail</span>`;
       setNav('work-orders');
       renderWorkOrderDetail();
+      break;
+    case 'time-cards':
+      bc.innerHTML = '<span class="cur">Time Cards</span>';
+      setNav('time-cards');
+      if (isAdmin()) renderTimeCardsAdmin();
+      else renderMyTimeCard();
       break;
     case 'service-requests':
       bc.innerHTML = '<span class="cur">Service Requests</span>';
@@ -2136,9 +2160,17 @@ function renderWorkOrderDetail() {
   var labor = wo.laborEntries || [];
   var laborHtml = '';
   if (labor.length > 0) {
-    laborHtml = '<table><thead><tr><th>Technician</th><th>Date</th><th>Hours</th><th>Description</th></tr></thead><tbody>' +
+    var canEdit = isAdmin() || labor.some(function(l) { return l.userId === currentUser?.id; });
+    laborHtml = '<table><thead><tr><th>Technician</th><th>Date</th><th>Hours</th><th>Description</th>' + (canEdit ? '<th></th>' : '') + '</tr></thead><tbody>' +
       labor.map(function(l) {
-        return '<tr><td>' + esc(l.tech||'') + '</td><td>' + esc(l.date||'') + '</td><td>' + esc(String(l.hours||'')) + '</td><td>' + esc(l.desc||'') + '</td></tr>';
+        var actions = '';
+        if (l.id && (isAdmin() || l.userId === currentUser?.id)) {
+          actions = '<td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="openEditTimeEntryModal(\'' + wo.id + '\',\'' + l.id + '\')">Edit</button> ' +
+            '<button class="btn btn-danger btn-sm" onclick="deleteTimeEntry(\'' + wo.id + '\',\'' + l.id + '\')">Del</button></td>';
+        } else if (canEdit) {
+          actions = '<td></td>';
+        }
+        return '<tr><td>' + esc(l.tech||'') + '</td><td>' + esc(l.date||'') + '</td><td>' + esc(String(l.hours||'')) + '</td><td>' + esc(l.desc||'') + '</td>' + actions + '</tr>';
       }).join('') + '</tbody></table>';
   } else {
     laborHtml = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px;">No labor entries yet</div>';
@@ -2205,21 +2237,18 @@ function renderWorkOrderDetail() {
 function addLaborEntry() {
   var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
   if (!wo) return;
-  var tech = prompt('Technician name:');
-  if (!tech) return;
-  var date = prompt('Date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-  if (!date) return;
-  var hours = prompt('Hours worked:');
-  if (!hours) return;
-  var desc = prompt('Work description:');
-  var labor = wo.laborEntries || [];
-  labor.push({ tech: tech, date: date, hours: parseFloat(hours)||0, desc: desc||'' });
-  apiPost('/api/work-orders/'+wo.id, { laborEntries: labor }, 'PUT').then(function(updated) {
-    var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
-    if (idx>=0) db.workOrders[idx] = updated;
-    renderWorkOrderDetail();
-    showToast('Labor entry added','success');
-  }).catch(function(e) { showToast(e.message,'error'); });
+  var today = new Date().toISOString().split('T')[0];
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = 'Add Labor Entry — ' + wo.woNumber;
+  modal.querySelector('.modal-body').innerHTML =
+    '<input type="hidden" id="te-wo" value="' + wo.id + '">' +
+    '<div class="fr"><div class="fg"><label class="flbl">Date *</label><input class="fc" type="date" id="te-date" value="' + today + '"></div>' +
+    '<div class="fg"><label class="flbl">Hours *</label><input class="fc" type="number" id="te-hours" step="0.25" min="0.25" max="24" placeholder="8"></div></div>' +
+    '<div class="fg"><label class="flbl">Description</label><input class="fc" type="text" id="te-desc" placeholder="Work description..."></div>';
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="saveTimeEntry()">Add Entry</button>';
+  modal.style.display = 'flex';
 }
 
 async function updateWorkOrder() {
@@ -2392,6 +2421,424 @@ function convertSRtoWorkOrder(srId) {
     priority: priorityMap[sr.urgency] || 'Normal',
     serviceRequestId: sr.id
   });
+}
+
+// ─── TIME CARD HELPERS ────────────────────────────────────────────────────────
+function getWeekStart(d) {
+  d = new Date(d);
+  var day = d.getDay();
+  var diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  var mon = new Date(d);
+  mon.setDate(diff);
+  return mon.toISOString().split('T')[0];
+}
+function getWeekEnd(ws) {
+  var d = new Date(ws + 'T00:00:00');
+  d.setDate(d.getDate() + 6);
+  return d.toISOString().split('T')[0];
+}
+function formatWeekRange(ws) {
+  var s = new Date(ws + 'T00:00:00');
+  var e = new Date(s); e.setDate(e.getDate() + 6);
+  var opts = { month: 'short', day: 'numeric' };
+  return s.toLocaleDateString('en-US', opts) + ' \u2013 ' + e.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function getDayName(dateStr) {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+}
+var STAT_HOLIDAYS = [
+  '2025-01-01','2025-02-17','2025-04-18','2025-05-19','2025-07-01','2025-09-01','2025-10-13','2025-12-25','2025-12-26',
+  '2026-01-01','2026-02-16','2026-04-03','2026-05-18','2026-07-01','2026-09-07','2026-10-12','2026-12-25','2026-12-26',
+  '2027-01-01','2027-02-15','2027-03-26','2027-05-24','2027-07-01','2027-09-06','2027-10-11','2027-12-25','2027-12-26'
+];
+function isStatHoliday(dateStr) { return STAT_HOLIDAYS.indexOf(dateStr) >= 0; }
+function classifyHours(entries) {
+  var reg = 0, ot = 0, dt = 0;
+  var weekdayHours = 0;
+  // Sort entries by date
+  var sorted = entries.slice().sort(function(a,b) { return a.date < b.date ? -1 : 1; });
+  sorted.forEach(function(e) {
+    var h = e.hours || 0;
+    if (isStatHoliday(e.date)) {
+      dt += h;
+    } else {
+      var day = new Date(e.date + 'T00:00:00').getDay();
+      if (day === 0 || day === 6) {
+        ot += h;
+      } else {
+        // Weekday — first 40h regular, rest OT
+        if (weekdayHours + h <= 40) {
+          reg += h;
+        } else if (weekdayHours >= 40) {
+          ot += h;
+        } else {
+          var regPart = 40 - weekdayHours;
+          reg += regPart;
+          ot += (h - regPart);
+        }
+        weekdayHours += h;
+      }
+    }
+  });
+  return { regular: Math.round(reg * 100) / 100, overtime: Math.round(ot * 100) / 100, doubleTime: Math.round(dt * 100) / 100, total: Math.round((reg + ot + dt) * 100) / 100 };
+}
+
+// ─── TECH TIME CARD VIEW ──────────────────────────────────────────────────────
+async function renderMyTimeCard() {
+  if (!app.tcWeekStart) app.tcWeekStart = getWeekStart(new Date());
+  var ws = app.tcWeekStart;
+  document.getElementById('tc-title').textContent = 'My Time Card';
+  document.getElementById('tc-sub').textContent = formatWeekRange(ws);
+  // Week nav toolbar
+  document.getElementById('tc-toolbar').innerHTML =
+    '<button class="btn btn-ghost btn-sm" onclick="tcPrevWeek()">&larr; Prev Week</button>' +
+    '<strong style="font-size:14px;">' + formatWeekRange(ws) + '</strong>' +
+    '<button class="btn btn-ghost btn-sm" onclick="tcNextWeek()">Next Week &rarr;</button>';
+  try {
+    var data = await apiGet('/api/time-cards?weekStart=' + ws);
+    renderTimeCardContent(data, false);
+  } catch(e) { document.getElementById('tc-content').innerHTML = '<div class="card"><div class="card-body" style="padding:20px;color:var(--red);">Error loading time card: ' + esc(e.message) + '</div></div>'; }
+}
+function tcPrevWeek() {
+  var d = new Date(app.tcWeekStart + 'T00:00:00');
+  d.setDate(d.getDate() - 7);
+  app.tcWeekStart = d.toISOString().split('T')[0];
+  renderMyTimeCard();
+}
+function tcNextWeek() {
+  var d = new Date(app.tcWeekStart + 'T00:00:00');
+  d.setDate(d.getDate() + 7);
+  app.tcWeekStart = d.toISOString().split('T')[0];
+  renderMyTimeCard();
+}
+
+function tcAdminPrev() {
+  var d = new Date(app.tcWeekStart + 'T00:00:00');
+  d.setDate(d.getDate() - 7);
+  app.tcWeekStart = d.toISOString().split('T')[0];
+  renderTimeCardsAdmin();
+}
+function tcAdminNext() {
+  var d = new Date(app.tcWeekStart + 'T00:00:00');
+  d.setDate(d.getDate() + 7);
+  app.tcWeekStart = d.toISOString().split('T')[0];
+  renderTimeCardsAdmin();
+}
+
+function renderTimeCardContent(data, readOnly) {
+  var tc = data.timeCard;
+  var entries = data.entries || [];
+  var user = data.user || {};
+  var isDraft = tc.status === 'Draft';
+  var statusBadge = tc.status === 'Draft' ? 'bgr' : tc.status === 'Submitted' ? 'ba' : 'bg';
+  var classified = classifyHours(entries);
+
+  // Actions bar
+  var actionsEl = document.getElementById('tc-actions');
+  if (actionsEl && !readOnly) {
+    if (isDraft && entries.length > 0) {
+      actionsEl.innerHTML = '<button class="btn btn-primary" onclick="submitTimeCard()">Submit Time Card</button>';
+    } else if (tc.status === 'Submitted') {
+      actionsEl.innerHTML = '<span class="badge ba" style="font-size:13px;padding:6px 12px;">Submitted ' + fmtDT(tc.submittedAt) + '</span>';
+    } else if (tc.status === 'Approved') {
+      var approver = (db.users||[]).find(function(u){return u.id===tc.approvedBy;});
+      actionsEl.innerHTML = '<span class="badge bg" style="font-size:13px;padding:6px 12px;">Approved by ' + esc(approver?.name||'Admin') + ' ' + fmtDT(tc.approvedAt) + '</span>';
+    } else {
+      actionsEl.innerHTML = '';
+    }
+  }
+
+  var content = document.getElementById('tc-content');
+  var html = '';
+
+  // Header card
+  html += '<div class="card"><div class="card-hd"><span class="card-title">' + esc(user.name || 'Technician') + '</span><span class="badge ' + statusBadge + '">' + esc(tc.status) + '</span></div>' +
+    '<div class="card-body"><div class="ig3">' +
+    '<div><div class="ii-lbl">Week</div><div class="ii-val">' + formatWeekRange(tc.weekStart) + '</div></div>' +
+    '<div><div class="ii-lbl">Total Hours</div><div class="ii-val"><strong>' + classified.total + '</strong></div></div>' +
+    '<div><div class="ii-lbl">Regular</div><div class="ii-val">' + classified.regular + ' hrs</div></div>' +
+    '<div><div class="ii-lbl">Overtime</div><div class="ii-val" style="color:var(--amber)">' + classified.overtime + ' hrs</div></div>' +
+    '<div><div class="ii-lbl">Double Time</div><div class="ii-val" style="color:var(--red)">' + classified.doubleTime + ' hrs</div></div>' +
+    '</div></div></div>';
+
+  // Group entries by day (Mon-Sun)
+  var ws = tc.weekStart;
+  var days = [];
+  for (var i = 0; i < 7; i++) {
+    var dd = new Date(ws + 'T00:00:00');
+    dd.setDate(dd.getDate() + i);
+    var ds = dd.toISOString().split('T')[0];
+    var dayEntries = entries.filter(function(e) { return e.date === ds; });
+    var dayTotal = dayEntries.reduce(function(s, e) { return s + (e.hours || 0); }, 0);
+    days.push({ date: ds, name: getDayName(ds), entries: dayEntries, total: dayTotal });
+  }
+
+  html += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Daily Entries</span></div>';
+
+  days.forEach(function(day) {
+    var isHoliday = isStatHoliday(day.date);
+    var isWeekend = new Date(day.date + 'T00:00:00').getDay() === 0 || new Date(day.date + 'T00:00:00').getDay() === 6;
+    var dayLabel = day.name + ' \u2022 ' + fmtDate(day.date);
+    if (isHoliday) dayLabel += ' <span class="badge br" style="font-size:10px;">Stat Holiday</span>';
+    else if (isWeekend) dayLabel += ' <span class="badge ba" style="font-size:10px;">Weekend</span>';
+
+    html += '<div style="border-bottom:1px solid var(--border);">';
+    html += '<div style="padding:10px 20px;background:var(--bg);display:flex;align-items:center;justify-content:space-between;">';
+    html += '<div style="font-size:13px;font-weight:600;">' + dayLabel + '</div>';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<span style="font-size:12px;color:var(--muted);">' + day.total + ' hrs</span>';
+    if (isDraft && !readOnly) {
+      html += '<button class="btn btn-ghost btn-sm" onclick="openAddTimeEntryModal(\'' + day.date + '\')">+ Add</button>';
+    }
+    html += '</div></div>';
+
+    if (day.entries.length > 0) {
+      html += '<div class="tbl-wrap"><table><thead><tr><th>WO #</th><th>Location</th><th>Hours</th><th>Description</th>';
+      if (isDraft && !readOnly) html += '<th></th>';
+      html += '</tr></thead><tbody>';
+      day.entries.forEach(function(e) {
+        html += '<tr><td><strong>' + esc(e.woNumber || '') + '</strong></td>';
+        html += '<td>' + esc(e.location || '') + '</td>';
+        html += '<td>' + e.hours + '</td>';
+        html += '<td>' + esc(e.desc || '') + '</td>';
+        if (isDraft && !readOnly) {
+          html += '<td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="openEditTimeEntryModal(\'' + e.woId + '\',\'' + e.id + '\')">Edit</button> ';
+          html += '<button class="btn btn-danger btn-sm" onclick="deleteTimeEntry(\'' + e.woId + '\',\'' + e.id + '\')">Del</button></td>';
+        }
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+  });
+
+  html += '</div>';
+  content.innerHTML = html;
+}
+
+// ─── ADMIN TIME CARDS VIEW ───────────────────────────────────────────────────
+async function renderTimeCardsAdmin() {
+  if (!app.tcWeekStart) app.tcWeekStart = getWeekStart(new Date());
+  var ws = app.tcWeekStart;
+  document.getElementById('tc-title').textContent = 'All Time Cards';
+  document.getElementById('tc-sub').textContent = formatWeekRange(ws);
+  document.getElementById('tc-actions').innerHTML = '';
+  document.getElementById('tc-toolbar').innerHTML =
+    '<button class="btn btn-ghost btn-sm" onclick="tcAdminPrev()">&larr; Prev Week</button>' +
+    '<strong style="font-size:14px;">' + formatWeekRange(ws) + '</strong>' +
+    '<button class="btn btn-ghost btn-sm" onclick="tcAdminNext()">Next Week &rarr;</button>';
+  try {
+    var results = await apiGet('/api/time-cards/all?weekStart=' + ws);
+    var content = document.getElementById('tc-content');
+    if (!results || results.length === 0) {
+      content.innerHTML = '<div class="card"><div class="card-body" style="padding:20px;text-align:center;color:var(--muted);">No technicians found</div></div>';
+      return;
+    }
+    var submitted = results.filter(function(r) { return r.timeCard.status === 'Submitted'; }).length;
+    var approved = results.filter(function(r) { return r.timeCard.status === 'Approved'; }).length;
+    var draft = results.length - submitted - approved;
+
+    var html = '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:12px 20px;"><div class="ig3">' +
+      '<div><div class="ii-lbl">Total Technicians</div><div class="ii-val"><strong>' + results.length + '</strong></div></div>' +
+      '<div><div class="ii-lbl">Draft</div><div class="ii-val"><span class="badge bgr">' + draft + '</span></div></div>' +
+      '<div><div class="ii-lbl">Submitted</div><div class="ii-val"><span class="badge ba">' + submitted + '</span></div></div>' +
+      '<div><div class="ii-lbl">Approved</div><div class="ii-val"><span class="badge bg">' + approved + '</span></div></div>' +
+      '</div></div></div>';
+
+    results.forEach(function(r) {
+      var tc = r.timeCard;
+      var entries = r.entries || [];
+      var user = r.user;
+      var classified = classifyHours(entries);
+      var statusBadge = tc.status === 'Draft' ? 'bgr' : tc.status === 'Submitted' ? 'ba' : 'bg';
+      var cardId = 'tca-' + user.id;
+
+      html += '<div class="card" style="margin-bottom:12px;">';
+      html += '<div class="card-hd" style="cursor:pointer;" onclick="var el=document.getElementById(\'' + cardId + '\');el.style.display=el.style.display===\'none\'?\'\':\' none\';">';
+      html += '<span class="card-title">' + esc(user.name) + '</span>';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<span style="font-size:12px;color:var(--muted);">' + classified.total + ' hrs (R:' + classified.regular + ' OT:' + classified.overtime + ' DT:' + classified.doubleTime + ')</span>';
+      html += '<span class="badge ' + statusBadge + '">' + esc(tc.status) + '</span>';
+      html += '</div></div>';
+
+      html += '<div id="' + cardId + '" style="display:none;">';
+
+      // Daily breakdown
+      var wsDate = tc.weekStart;
+      for (var i = 0; i < 7; i++) {
+        var dd = new Date(wsDate + 'T00:00:00');
+        dd.setDate(dd.getDate() + i);
+        var ds = dd.toISOString().split('T')[0];
+        var dayEntries = entries.filter(function(e) { return e.date === ds; });
+        if (dayEntries.length === 0) continue;
+        var dayTotal = dayEntries.reduce(function(s, e) { return s + (e.hours || 0); }, 0);
+        var isHoliday = isStatHoliday(ds);
+        var isWeekend = new Date(ds + 'T00:00:00').getDay() === 0 || new Date(ds + 'T00:00:00').getDay() === 6;
+        var dayLabel = getDayName(ds) + ' \u2022 ' + fmtDate(ds);
+        if (isHoliday) dayLabel += ' <span class="badge br" style="font-size:10px;">Stat Holiday</span>';
+        else if (isWeekend) dayLabel += ' <span class="badge ba" style="font-size:10px;">Weekend</span>';
+
+        html += '<div style="border-bottom:1px solid var(--border);">';
+        html += '<div style="padding:8px 20px;background:var(--bg);display:flex;align-items:center;justify-content:space-between;">';
+        html += '<div style="font-size:12px;font-weight:600;">' + dayLabel + '</div>';
+        html += '<span style="font-size:11px;color:var(--muted);">' + dayTotal + ' hrs</span>';
+        html += '</div>';
+        html += '<div class="tbl-wrap"><table><thead><tr><th>WO #</th><th>Location</th><th>Hours</th><th>Description</th></tr></thead><tbody>';
+        dayEntries.forEach(function(e) {
+          html += '<tr><td><strong>' + esc(e.woNumber || '') + '</strong></td><td>' + esc(e.location || '') + '</td><td>' + e.hours + '</td><td>' + esc(e.desc || '') + '</td></tr>';
+        });
+        html += '</tbody></table></div></div>';
+      }
+
+      // Actions
+      html += '<div style="padding:12px 20px;display:flex;gap:8px;">';
+      if (tc.status === 'Submitted') {
+        html += '<button class="btn btn-primary btn-sm" onclick="approveTimeCard(\'' + user.id + '\',\'' + ws + '\')">Approve</button>';
+        html += '<button class="btn btn-secondary btn-sm" onclick="reopenTimeCard(\'' + user.id + '\',\'' + ws + '\')">Reopen</button>';
+      } else if (tc.status === 'Approved') {
+        html += '<button class="btn btn-secondary btn-sm" onclick="reopenTimeCard(\'' + user.id + '\',\'' + ws + '\')">Reopen</button>';
+        var approver = (db.users||[]).find(function(u){return u.id===tc.approvedBy;});
+        html += '<span style="font-size:11px;color:var(--muted);align-self:center;">Approved by ' + esc(approver?.name||'Admin') + ' ' + fmtDT(tc.approvedAt) + '</span>';
+      } else {
+        html += '<span style="font-size:11px;color:var(--muted);align-self:center;">Not yet submitted</span>';
+      }
+      html += '</div></div></div>';
+    });
+
+    content.innerHTML = html;
+  } catch(e) { document.getElementById('tc-content').innerHTML = '<div class="card"><div class="card-body" style="padding:20px;color:var(--red);">Error: ' + esc(e.message) + '</div></div>'; }
+}
+
+async function approveTimeCard(userId, weekStart) {
+  try {
+    await apiPost('/api/time-cards/approve', { userId, weekStart });
+    showToast('Time card approved', 'success');
+    renderTimeCardsAdmin();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function reopenTimeCard(userId, weekStart) {
+  try {
+    await apiPost('/api/time-cards/reopen', { userId, weekStart });
+    showToast('Time card reopened', 'success');
+    if (isAdmin()) renderTimeCardsAdmin();
+    else renderMyTimeCard();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function submitTimeCard() {
+  if (!confirm('Submit your time card for ' + formatWeekRange(app.tcWeekStart) + '? Once submitted, you cannot edit entries until an admin reopens it.')) return;
+  try {
+    await apiPost('/api/time-cards/submit', { weekStart: app.tcWeekStart });
+    showToast('Time card submitted', 'success');
+    renderMyTimeCard();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ─── TIME ENTRY MODAL ────────────────────────────────────────────────────────
+function openAddTimeEntryModal(dateStr) {
+  var woList = (db.workOrders||[]).filter(function(wo) {
+    return wo.status === 'Open' || wo.status === 'In Progress';
+  });
+  // For techs, only show their assigned WOs
+  if (!isAdmin() && currentUser) {
+    woList = woList.filter(function(wo) { return wo.assignedTo === currentUser.id; });
+  }
+  var woOpts = woList.map(function(wo) {
+    var loc = db.locations.find(function(l) { return l.id === wo.locationId; });
+    return '<option value="' + wo.id + '">' + esc(wo.woNumber) + ' \u2014 ' + esc(loc ? loc.buildingName : '') + '</option>';
+  }).join('');
+
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = 'Add Time Entry';
+  modal.querySelector('.modal-body').innerHTML =
+    '<div class="fg"><label class="flbl">Work Order *</label><select class="fc" id="te-wo">' +
+    '<option value="">\u2014 Select Work Order \u2014</option>' + woOpts + '</select></div>' +
+    '<div class="fr"><div class="fg"><label class="flbl">Date *</label><input class="fc" type="date" id="te-date" value="' + dateStr + '"></div>' +
+    '<div class="fg"><label class="flbl">Hours *</label><input class="fc" type="number" id="te-hours" step="0.25" min="0.25" max="24" placeholder="8"></div></div>' +
+    '<div class="fg"><label class="flbl">Description</label><input class="fc" type="text" id="te-desc" placeholder="Work description..."></div>';
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="saveTimeEntry()">Add Entry</button>';
+  modal.style.display = 'flex';
+}
+
+function openEditTimeEntryModal(woId, entryId) {
+  var wo = (db.workOrders||[]).find(function(w) { return w.id === woId; });
+  if (!wo) { showToast('Work order not found', 'error'); return; }
+  var entry = (wo.laborEntries||[]).find(function(e) { return e.id === entryId; });
+  if (!entry) { showToast('Entry not found', 'error'); return; }
+
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = 'Edit Time Entry';
+  modal.querySelector('.modal-body').innerHTML =
+    '<div class="fg"><label class="flbl">Work Order</label><input class="fc" type="text" value="' + esc(wo.woNumber) + '" disabled></div>' +
+    '<input type="hidden" id="te-edit-woid" value="' + woId + '">' +
+    '<input type="hidden" id="te-edit-entryid" value="' + entryId + '">' +
+    '<div class="fr"><div class="fg"><label class="flbl">Date *</label><input class="fc" type="date" id="te-date" value="' + (entry.date || '') + '"></div>' +
+    '<div class="fg"><label class="flbl">Hours *</label><input class="fc" type="number" id="te-hours" step="0.25" min="0.25" max="24" value="' + (entry.hours || '') + '"></div></div>' +
+    '<div class="fg"><label class="flbl">Description</label><input class="fc" type="text" id="te-desc" value="' + esc(entry.desc || '') + '"></div>';
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="updateTimeEntry()">Save Changes</button>';
+  modal.style.display = 'flex';
+}
+
+async function saveTimeEntry() {
+  var woId = document.getElementById('te-wo').value;
+  var date = document.getElementById('te-date').value;
+  var hours = document.getElementById('te-hours').value;
+  var desc = document.getElementById('te-desc').value;
+  if (!woId) { showToast('Please select a work order', 'error'); return; }
+  if (!date || !hours) { showToast('Date and hours are required', 'error'); return; }
+  try {
+    var updated = await apiPost('/api/work-orders/' + woId + '/labor', { date, hours: parseFloat(hours), desc });
+    var idx = (db.workOrders||[]).findIndex(function(w) { return w.id === woId; });
+    if (idx >= 0) db.workOrders[idx] = updated;
+    closeGenericModal();
+    showToast('Time entry added', 'success');
+    if (app.view === 'time-cards') {
+      if (isAdmin()) renderTimeCardsAdmin(); else renderMyTimeCard();
+    } else {
+      renderWorkOrderDetail();
+    }
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function updateTimeEntry() {
+  var woId = document.getElementById('te-edit-woid').value;
+  var entryId = document.getElementById('te-edit-entryid').value;
+  var date = document.getElementById('te-date').value;
+  var hours = document.getElementById('te-hours').value;
+  var desc = document.getElementById('te-desc').value;
+  if (!date || !hours) { showToast('Date and hours are required', 'error'); return; }
+  try {
+    var updated = await apiPost('/api/work-orders/' + woId + '/labor/' + entryId, { date, hours: parseFloat(hours), desc }, 'PUT');
+    var idx = (db.workOrders||[]).findIndex(function(w) { return w.id === woId; });
+    if (idx >= 0) db.workOrders[idx] = updated;
+    closeGenericModal();
+    showToast('Time entry updated', 'success');
+    if (app.view === 'time-cards') {
+      if (isAdmin()) renderTimeCardsAdmin(); else renderMyTimeCard();
+    } else {
+      renderWorkOrderDetail();
+    }
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteTimeEntry(woId, entryId) {
+  if (!confirm('Delete this time entry?')) return;
+  try {
+    var updated = await apiPost('/api/work-orders/' + woId + '/labor/' + entryId, {}, 'DELETE');
+    var idx = (db.workOrders||[]).findIndex(function(w) { return w.id === woId; });
+    if (idx >= 0) db.workOrders[idx] = updated;
+    showToast('Time entry deleted', 'success');
+    if (app.view === 'time-cards') {
+      if (isAdmin()) renderTimeCardsAdmin(); else renderMyTimeCard();
+    } else {
+      renderWorkOrderDetail();
+    }
+  } catch(e) { showToast(e.message, 'error'); }
 }
 
 function renderFormTemplates() {

@@ -120,6 +120,17 @@ db.exec(`
     createdAt        TEXT NOT NULL,
     updatedAt        TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS time_cards (
+    id         TEXT PRIMARY KEY,
+    userId     TEXT NOT NULL,
+    weekStart  TEXT NOT NULL,
+    status     TEXT DEFAULT 'Draft',
+    submittedAt TEXT DEFAULT '',
+    approvedAt  TEXT DEFAULT '',
+    approvedBy  TEXT DEFAULT '',
+    createdAt   TEXT NOT NULL,
+    UNIQUE(userId, weekStart)
+  );
 `);
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
@@ -297,6 +308,15 @@ function nextWONumber() {
     seq = parseInt(parts[2], 10) + 1;
   }
   return prefix + String(seq).padStart(4, '0');
+}
+
+function getWeekStartServer(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const mon = new Date(d);
+  mon.setDate(diff);
+  return mon.toISOString().split('T')[0];
 }
 
 // ─── EMAIL ────────────────────────────────────────────────────────────────────
@@ -480,7 +500,8 @@ app.get('/api/data', requireAuth, (req, res) => {
   const workOrders = db.prepare('SELECT * FROM work_orders ORDER BY createdAt DESC').all();
   workOrders.forEach(wo => { try { wo.laborEntries = JSON.parse(wo.laborEntries); } catch { wo.laborEntries = []; } });
   const users = db.prepare('SELECT id,username,name,role,createdAt FROM users ORDER BY name').all();
-  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users });
+  const timeCards = db.prepare('SELECT * FROM time_cards ORDER BY weekStart DESC').all();
+  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users, timeCards });
 });
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
@@ -798,6 +819,174 @@ app.delete('/api/work-orders/:id', requireAdmin, (req, res) => {
     db.prepare("UPDATE reports SET workOrderNumber='' WHERE workOrderNumber=?").run(wo.woNumber);
   }
   db.prepare('DELETE FROM work_orders WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ─── LABOR ENTRIES (any staff) ─────────────────────────────────────────────────
+app.post('/api/work-orders/:id/labor', requireAuth, (req, res) => {
+  const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
+  if (!wo) return res.status(404).json({ error: 'Work order not found' });
+  const { date, hours, desc } = req.body;
+  if (!date || !hours) return res.status(400).json({ error: 'Date and hours required' });
+  // Check time card lock
+  const weekStart = getWeekStartServer(date);
+  const tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(req.session.user.id, weekStart);
+  if (tc && (tc.status === 'Submitted' || tc.status === 'Approved') && req.session.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Time card for this week is ' + tc.status + '. Cannot add entries.' });
+  }
+  let labor = []; try { labor = JSON.parse(wo.laborEntries); } catch { labor = []; }
+  const entry = { id: genId(), userId: req.session.user.id, tech: req.session.user.name, date, hours: parseFloat(hours), desc: desc || '' };
+  labor.push(entry);
+  const now = new Date().toISOString();
+  db.prepare('UPDATE work_orders SET laborEntries=?, updatedAt=? WHERE id=?').run(JSON.stringify(labor), now, req.params.id);
+  const updated = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
+  try { updated.laborEntries = JSON.parse(updated.laborEntries); } catch { updated.laborEntries = []; }
+  res.json(updated);
+});
+
+app.put('/api/work-orders/:id/labor/:entryId', requireAuth, (req, res) => {
+  const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
+  if (!wo) return res.status(404).json({ error: 'Work order not found' });
+  let labor = []; try { labor = JSON.parse(wo.laborEntries); } catch { labor = []; }
+  const idx = labor.findIndex(e => e.id === req.params.entryId);
+  if (idx === -1) return res.status(404).json({ error: 'Labor entry not found' });
+  // Ownership check
+  if (labor[idx].userId !== req.session.user.id && req.session.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Can only edit your own entries' });
+  }
+  // Time card lock check
+  const dateToCheck = req.body.date || labor[idx].date;
+  const weekStart = getWeekStartServer(dateToCheck);
+  const tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(labor[idx].userId, weekStart);
+  if (tc && (tc.status === 'Submitted' || tc.status === 'Approved') && req.session.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Time card for this week is ' + tc.status });
+  }
+  const { date, hours, desc } = req.body;
+  if (date !== undefined) labor[idx].date = date;
+  if (hours !== undefined) labor[idx].hours = parseFloat(hours);
+  if (desc !== undefined) labor[idx].desc = desc;
+  const now = new Date().toISOString();
+  db.prepare('UPDATE work_orders SET laborEntries=?, updatedAt=? WHERE id=?').run(JSON.stringify(labor), now, req.params.id);
+  const updated = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
+  try { updated.laborEntries = JSON.parse(updated.laborEntries); } catch { updated.laborEntries = []; }
+  res.json(updated);
+});
+
+app.delete('/api/work-orders/:id/labor/:entryId', requireAuth, (req, res) => {
+  const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
+  if (!wo) return res.status(404).json({ error: 'Work order not found' });
+  let labor = []; try { labor = JSON.parse(wo.laborEntries); } catch { labor = []; }
+  const entry = labor.find(e => e.id === req.params.entryId);
+  if (!entry) return res.status(404).json({ error: 'Labor entry not found' });
+  if (entry.userId !== req.session.user.id && req.session.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Can only delete your own entries' });
+  }
+  const weekStart = getWeekStartServer(entry.date);
+  const tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(entry.userId, weekStart);
+  if (tc && (tc.status === 'Submitted' || tc.status === 'Approved') && req.session.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Time card for this week is ' + tc.status });
+  }
+  labor = labor.filter(e => e.id !== req.params.entryId);
+  const now = new Date().toISOString();
+  db.prepare('UPDATE work_orders SET laborEntries=?, updatedAt=? WHERE id=?').run(JSON.stringify(labor), now, req.params.id);
+  const updated = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
+  try { updated.laborEntries = JSON.parse(updated.laborEntries); } catch { updated.laborEntries = []; }
+  res.json(updated);
+});
+
+// ─── TIME CARDS ───────────────────────────────────────────────────────────────
+app.get('/api/time-cards', requireAuth, (req, res) => {
+  const weekStart = req.query.weekStart;
+  if (!weekStart) return res.status(400).json({ error: 'weekStart required' });
+  let userId = req.query.userId || req.session.user.id;
+  if (req.session.user.role !== 'admin') userId = req.session.user.id;
+  // Get or create virtual time card
+  let tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(userId, weekStart);
+  if (!tc) tc = { id: null, userId, weekStart, status: 'Draft', submittedAt: '', approvedAt: '', approvedBy: '' };
+  // Compute week end (Sunday)
+  const ws = new Date(weekStart + 'T00:00:00');
+  const we = new Date(ws); we.setDate(we.getDate() + 6);
+  const weekEnd = we.toISOString().split('T')[0];
+  // Aggregate labor entries from all work orders
+  const allWOs = db.prepare('SELECT * FROM work_orders').all();
+  const entries = [];
+  allWOs.forEach(wo => {
+    let labor = []; try { labor = JSON.parse(wo.laborEntries); } catch { labor = []; }
+    labor.forEach(e => {
+      if (e.userId === userId && e.date >= weekStart && e.date <= weekEnd) {
+        const loc = db.prepare('SELECT buildingName,address FROM locations WHERE id=?').get(wo.locationId);
+        entries.push({ ...e, woId: wo.id, woNumber: wo.woNumber, location: loc ? (loc.buildingName + (loc.address ? ' — ' + loc.address : '')) : '' });
+      }
+    });
+  });
+  const user = db.prepare('SELECT id,name,role FROM users WHERE id=?').get(userId);
+  res.json({ timeCard: tc, entries, user: user || { id: userId, name: 'Unknown' } });
+});
+
+app.get('/api/time-cards/all', requireAdmin, (req, res) => {
+  const weekStart = req.query.weekStart;
+  if (!weekStart) return res.status(400).json({ error: 'weekStart required' });
+  const ws = new Date(weekStart + 'T00:00:00');
+  const we = new Date(ws); we.setDate(we.getDate() + 6);
+  const weekEnd = we.toISOString().split('T')[0];
+  // Get all non-client users
+  const users = db.prepare("SELECT id,name,role FROM users WHERE role != 'client' ORDER BY name").all();
+  const allWOs = db.prepare('SELECT * FROM work_orders').all();
+  const results = [];
+  users.forEach(user => {
+    let tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(user.id, weekStart);
+    if (!tc) tc = { id: null, userId: user.id, weekStart, status: 'Draft', submittedAt: '', approvedAt: '', approvedBy: '' };
+    const entries = [];
+    allWOs.forEach(wo => {
+      let labor = []; try { labor = JSON.parse(wo.laborEntries); } catch { labor = []; }
+      labor.forEach(e => {
+        if (e.userId === user.id && e.date >= weekStart && e.date <= weekEnd) {
+          const loc = db.prepare('SELECT buildingName,address FROM locations WHERE id=?').get(wo.locationId);
+          entries.push({ ...e, woId: wo.id, woNumber: wo.woNumber, location: loc ? (loc.buildingName + (loc.address ? ' — ' + loc.address : '')) : '' });
+        }
+      });
+    });
+    results.push({ timeCard: tc, entries, user });
+  });
+  res.json(results);
+});
+
+app.post('/api/time-cards/submit', requireAuth, (req, res) => {
+  const { weekStart } = req.body;
+  if (!weekStart) return res.status(400).json({ error: 'weekStart required' });
+  const userId = req.session.user.id;
+  const now = new Date().toISOString();
+  let tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(userId, weekStart);
+  if (tc) {
+    db.prepare('UPDATE time_cards SET status=?, submittedAt=? WHERE id=?').run('Submitted', now, tc.id);
+  } else {
+    const id = genId();
+    db.prepare('INSERT INTO time_cards (id,userId,weekStart,status,submittedAt,createdAt) VALUES (?,?,?,?,?,?)').run(id, userId, weekStart, 'Submitted', now, now);
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/time-cards/approve', requireAdmin, (req, res) => {
+  const { userId, weekStart } = req.body;
+  if (!userId || !weekStart) return res.status(400).json({ error: 'userId and weekStart required' });
+  const now = new Date().toISOString();
+  let tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(userId, weekStart);
+  if (tc) {
+    db.prepare('UPDATE time_cards SET status=?, approvedAt=?, approvedBy=? WHERE id=?').run('Approved', now, req.session.user.id, tc.id);
+  } else {
+    const id = genId();
+    db.prepare('INSERT INTO time_cards (id,userId,weekStart,status,approvedAt,approvedBy,createdAt) VALUES (?,?,?,?,?,?,?)').run(id, userId, weekStart, 'Approved', now, req.session.user.id, now);
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/time-cards/reopen', requireAdmin, (req, res) => {
+  const { userId, weekStart } = req.body;
+  if (!userId || !weekStart) return res.status(400).json({ error: 'userId and weekStart required' });
+  let tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(userId, weekStart);
+  if (tc) {
+    db.prepare("UPDATE time_cards SET status='Draft', submittedAt='', approvedAt='', approvedBy='' WHERE id=?").run(tc.id);
+  }
   res.json({ ok: true });
 });
 

@@ -3193,7 +3193,7 @@ function renderClientsTable(search='') {
   document.getElementById('clients-sub').textContent = `${db.clients.length} client${db.clients.length!==1?'s':''}`;
   const tbody = document.getElementById('clients-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-ico">\uD83C\uDFE2</div><div class="empty-title">No clients yet</div><div class="empty-desc">Add your first client to get started</div><button class="btn btn-primary" onclick="openClientModal()">Add Client</button></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-ico">\uD83C\uDFE2</div><div class="empty-title">No clients yet</div><div class="empty-desc">Add your first client to get started</div>${isAdmin()?'<button class="btn btn-primary" onclick="openClientModal()">Add Client</button>':''}</div></td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(c => {
@@ -3247,7 +3247,7 @@ function renderLocationsTable() {
   updateLocSortBtns();
   const tbody = document.getElementById('locations-tbody');
   if (list.length === 0) {
-    const addBtn = isClient() ? '' : '<button class="btn btn-primary" onclick="openLocationModal()">Add Location</button>';
+    const addBtn = isAdmin() ? '<button class="btn btn-primary" onclick="openLocationModal()">Add Location</button>' : '';
     tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-ico">\uD83D\uDCCD</div><div class="empty-title">No locations yet</div><div class="empty-desc">${isClient()?'No locations have been added to your account yet.':'Add a location for this client'}</div>${addBtn}</div></td></tr>`;
     return;
   }
@@ -3336,7 +3336,7 @@ function renderEquipmentTable() {
   const list = db.equipment.filter(e=>e.locationId===app.locationId);
   const tbody = document.getElementById('equipment-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-ico">\u2699\uFE0F</div><div class="empty-title">No equipment yet</div><div class="empty-desc">Add equipment for this location</div><button class="btn btn-primary" onclick="openEquipmentModal()">Add Equipment</button></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-ico">\u2699\uFE0F</div><div class="empty-title">No equipment yet</div><div class="empty-desc">Add equipment for this location</div>${isAdmin()?'<button class="btn btn-primary" onclick="openEquipmentModal()">Add Equipment</button>':''}</div></td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(e => {

@@ -2036,6 +2036,8 @@ function renderWorkOrders(search) {
   const statusFilter = document.getElementById('wo-filter-status')?.value || '';
   const priorityFilter = document.getElementById('wo-filter-priority')?.value || '';
   let list = (db.workOrders||[]).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  // Techs only see work orders assigned to them
+  if (!isAdmin() && currentUser) list = list.filter(wo => wo.assignedTo === currentUser.id);
   if (statusFilter) list = list.filter(wo => wo.status === statusFilter);
   if (priorityFilter) list = list.filter(wo => wo.priority === priorityFilter);
   if (search) {
@@ -2692,12 +2694,13 @@ function renderDashboard() {
   const totalLocs = db.locations.length;
   const totalEq = db.equipment.length;
   const totalRpts = db.reports.length;
-  const openWOs = (db.workOrders||[]).filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
+  const myWOs = isAdmin() ? (db.workOrders||[]) : (db.workOrders||[]).filter(wo=>wo.assignedTo===currentUser?.id);
+  const openWOs = myWOs.filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${totalClients}</div><div class="stat-lbl">Clients</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--green)">${totalLocs}</div><div class="stat-lbl">Locations</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--amber)">${totalEq}</div><div class="stat-lbl">Equipment</div></div>
-    <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${openWOs}</div><div class="stat-lbl">Open Work Orders</div></div>
+    <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${openWOs}</div><div class="stat-lbl">${isAdmin()?'Open Work Orders':'My Work Orders'}</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--muted)">${totalRpts}</div><div class="stat-lbl">Reports</div></div>
   `;
   const recent = [...db.reports].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);

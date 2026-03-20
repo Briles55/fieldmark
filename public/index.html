@@ -1298,16 +1298,6 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div class="fg"><label class="flbl">Cause / Finding</label><textarea class="fc" id="er-cause" rows="2"></textarea></div>
       <div class="fg"><label class="flbl">Parts Used</label><textarea class="fc" id="er-parts" rows="2"></textarea></div>
       <div class="fg"><label class="flbl">Recommendations</label><textarea class="fc" id="er-recs" rows="2"></textarea></div>
-      <div class="fg"><label class="flbl">Next Service Date</label><input class="fc" type="date" id="er-next"></div>
-      <div id="er-readings-section">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="fg"><label class="flbl">Refrigerant Type</label><input class="fc" id="er-reftype"></div>
-          <div class="fg"><label class="flbl">Suction PSI</label><input class="fc" id="er-suction"></div>
-          <div class="fg"><label class="flbl">Discharge PSI</label><input class="fc" id="er-discharge"></div>
-          <div class="fg"><label class="flbl">Supply Temp</label><input class="fc" id="er-supply"></div>
-          <div class="fg"><label class="flbl">Return Temp</label><input class="fc" id="er-return"></div>
-        </div>
-      </div>
     </div>
     <div class="modal-ft">
       <button class="btn btn-secondary" onclick="closeModal('modal-edit-report')">Cancel</button>
@@ -3649,12 +3639,6 @@ function openEditReport(id) {
   document.getElementById('er-cause').value = r.cause || '';
   document.getElementById('er-parts').value = r.parts || '';
   document.getElementById('er-recs').value = r.recommendations || '';
-  document.getElementById('er-next').value = r.nextDate || '';
-  document.getElementById('er-reftype').value = r.refrigerantType || '';
-  document.getElementById('er-suction').value = r.suctionPressure || '';
-  document.getElementById('er-discharge').value = r.dischargePressure || '';
-  document.getElementById('er-supply').value = r.supplyTemp || '';
-  document.getElementById('er-return').value = r.returnTemp || '';
   openModal('modal-edit-report');
 }
 
@@ -3671,13 +3655,7 @@ async function saveEditReport() {
     workPerformed: work,
     cause: document.getElementById('er-cause').value.trim(),
     parts: document.getElementById('er-parts').value.trim(),
-    recommendations: document.getElementById('er-recs').value.trim(),
-    nextDate: document.getElementById('er-next').value,
-    refrigerantType: document.getElementById('er-reftype').value.trim(),
-    suctionPressure: document.getElementById('er-suction').value.trim(),
-    dischargePressure: document.getElementById('er-discharge').value.trim(),
-    supplyTemp: document.getElementById('er-supply').value.trim(),
-    returnTemp: document.getElementById('er-return').value.trim()
+    recommendations: document.getElementById('er-recs').value.trim()
   };
   try {
     var updated = await apiPost('/api/reports/' + app.editingReportId, body, 'PUT');
@@ -3765,7 +3743,6 @@ function exportReportPDF(id) {
   html += '<div class=”row”><div class=”lbl”>Technician</div><div class=”val”>' + esc(r.techName || '\u2014') + '</div></div>';
   html += '<div class=”row”><div class=”lbl”>Date & Time</div><div class=”val”>' + fmtDT(r.date) + '</div></div>';
   if (r.workOrderNumber) html += '<div class=”row”><div class=”lbl”>Work Order</div><div class=”val”>' + esc(r.workOrderNumber) + '</div></div>';
-  if (r.nextDate) html += '<div class=”row”><div class=”lbl”>Next Service</div><div class=”val”>' + fmtDate(r.nextDate) + '</div></div>';
   html += '</div></div>';
 
   html += '<div class=”section”><div class=”section-hd”>Equipment Info</div><div class=”section-body”>';
@@ -3781,16 +3758,6 @@ function exportReportPDF(id) {
   if (r.cause) { html += '<div class=”section”><div class=”section-hd”>Cause / Finding</div><div class=”section-body”>' + esc(r.cause) + '</div></div>'; }
   if (r.parts) { html += '<div class=”section”><div class=”section-hd”>Parts Used</div><div class=”section-body”>' + esc(r.parts) + '</div></div>'; }
   if (r.recommendations) { html += '<div class=”section”><div class=”section-hd”>Recommendations</div><div class=”section-body”>' + esc(r.recommendations) + '</div></div>'; }
-
-  if (r.refrigerantType || r.suctionPressure || r.dischargePressure || r.supplyTemp || r.returnTemp) {
-    html += '<div class=”section”><div class=”section-hd”>Readings</div><div class=”section-body”>';
-    if (r.refrigerantType) html += '<div class=”row”><div class=”lbl”>Refrigerant</div><div class=”val”>' + esc(r.refrigerantType) + '</div></div>';
-    if (r.suctionPressure) html += '<div class=”row”><div class=”lbl”>Suction PSI</div><div class=”val”>' + esc(r.suctionPressure) + '</div></div>';
-    if (r.dischargePressure) html += '<div class=”row”><div class=”lbl”>Discharge PSI</div><div class=”val”>' + esc(r.dischargePressure) + '</div></div>';
-    if (r.supplyTemp) html += '<div class=”row”><div class=”lbl”>Supply Temp</div><div class=”val”>' + esc(r.supplyTemp) + '°F</div></div>';
-    if (r.returnTemp) html += '<div class=”row”><div class=”lbl”>Return Temp</div><div class=”val”>' + esc(r.returnTemp) + '°F</div></div>';
-    html += '</div></div>';
-  }
 
   html += '</body></html>';
   var win = window.open('', '_blank');
@@ -3902,16 +3869,6 @@ function renderReportForm() {
           <div><div class="ii-lbl">Year</div><div class="ii-val">${eq?.yearInstalled||'\u2014'}</div></div>
           <div><div class="ii-lbl">Client</div><div class="ii-val">${esc(cl?.name||'\u2014')}</div></div>
         </div>
-        <hr class="div">
-        <div class="fg"><label class="flbl">Refrigerant Type</label><input class="fc" type="text" id="rf-reftype" placeholder="R-410A, R-22, etc."></div>
-        <div class="fr">
-          <div class="fg"><label class="flbl">Suction Pressure (PSI)</label><input class="fc" type="text" id="rf-suction" placeholder="\u2014"></div>
-          <div class="fg"><label class="flbl">Discharge Pressure (PSI)</label><input class="fc" type="text" id="rf-discharge" placeholder="\u2014"></div>
-        </div>
-        <div class="fr">
-          <div class="fg"><label class="flbl">Supply Air Temp (\u00B0F)</label><input class="fc" type="text" id="rf-supply" placeholder="\u2014"></div>
-          <div class="fg"><label class="flbl">Return Air Temp (\u00B0F)</label><input class="fc" type="text" id="rf-return" placeholder="\u2014"></div>
-        </div>
       </div>
     </div>`;
   }
@@ -3945,7 +3902,6 @@ function renderReportForm() {
             `:``}
             <div class="fg"><label class="flbl">Parts Used / Replaced</label><textarea class="fc" id="rf-parts" placeholder="List any parts used or replaced\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Recommendations</label><textarea class="fc" id="rf-recs" placeholder="Recommendations for follow-up or future work\u2026"></textarea></div>
-            <div class="fg"><label class="flbl">Next Service Date</label><input class="fc" type="date" id="rf-next"></div>
           </div>
         </div>
         <div class="card">
@@ -4033,13 +3989,7 @@ async function submitReport(e) {
     cause: document.getElementById('rf-cause')?.value.trim()||'',
     parts: document.getElementById('rf-parts')?.value.trim()||'',
     recommendations: document.getElementById('rf-recs')?.value.trim()||'',
-    nextDate: document.getElementById('rf-next')?.value||'',
     checklist,
-    refrigerantType: document.getElementById('rf-reftype')?.value||'',
-    suctionPressure: document.getElementById('rf-suction')?.value||'',
-    dischargePressure: document.getElementById('rf-discharge')?.value||'',
-    supplyTemp: document.getElementById('rf-supply')?.value||'',
-    returnTemp: document.getElementById('rf-return')?.value||'',
     photoBefore: app.reportPhotos.before,
     photoAfter: app.reportPhotos.after,
     photoNameplate: app.reportPhotos.nameplate,
@@ -4126,7 +4076,6 @@ function renderReportDetail() {
             <div><div class="ii-lbl">Status</div><div class="ii-val"><span class="badge ${statusCls}">${esc(r.status||'\u2014')}</span></div></div>
             <div><div class="ii-lbl">Technician</div><div class="ii-val">${esc(r.techName||'\u2014')}</div></div>
             <div><div class="ii-lbl">Date & Time</div><div class="ii-val">${fmtDT(r.date)}</div></div>
-            ${r.nextDate?`<div><div class="ii-lbl">Next Service</div><div class="ii-val">${fmtDate(r.nextDate)}</div></div>`:''}
             ${r.workOrderNumber?`<div><div class="ii-lbl">Work Order</div><div class="ii-val"><a href="#" onclick="event.preventDefault();var wo=(db.workOrders||[]).find(function(w){return w.woNumber==='${esc(r.workOrderNumber)}';});if(wo)openWorkOrderDetail(wo.id);else showToast('Work order not found','error');">${esc(r.workOrderNumber)}</a></div></div>`:''}
           </div>
           ${r.workPerformed?`<hr class="div"><div class="ii-lbl">Work Performed</div><div style="margin-top:6px;font-size:13.5px;">${esc(r.workPerformed)}</div>`:''}
@@ -4149,19 +4098,6 @@ function renderReportDetail() {
             </div>
           </div>
         </div>
-        ${(r.refrigerantType||r.suctionPressure||r.dischargePressure||r.supplyTemp||r.returnTemp)?`
-        <div class="card" style="margin-top:16px;">
-          <div class="card-hd"><span class="card-title">Readings</span></div>
-          <div class="card-body">
-            <div class="ig">
-              ${r.refrigerantType?`<div><div class="ii-lbl">Refrigerant</div><div class="ii-val">${esc(r.refrigerantType)}</div></div>`:''}
-              ${r.suctionPressure?`<div><div class="ii-lbl">Suction PSI</div><div class="ii-val">${esc(r.suctionPressure)}</div></div>`:''}
-              ${r.dischargePressure?`<div><div class="ii-lbl">Discharge PSI</div><div class="ii-val">${esc(r.dischargePressure)}</div></div>`:''}
-              ${r.supplyTemp?`<div><div class="ii-lbl">Supply Temp</div><div class="ii-val">${esc(r.supplyTemp)}\u00B0F</div></div>`:''}
-              ${r.returnTemp?`<div><div class="ii-lbl">Return Temp</div><div class="ii-val">${esc(r.returnTemp)}\u00B0F</div></div>`:''}
-            </div>
-          </div>
-        </div>`:''}
       </div>
     </div>
     ${checklistHtml}

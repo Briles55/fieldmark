@@ -3710,60 +3710,215 @@ function csvCell(val) {
 }
 
 // ─── EXPORT PDF ─────────────────────────────────────────────────────────────
-function exportReportPDF(id) {
+async function exportReportPDF(id) {
   var r = db.reports.find(function(x) { return x.id === id; });
   if (!r) { showToast('Report not found', 'error'); return; }
   var eq = db.equipment.find(function(e) { return e.id === r.equipmentId; });
   var loc = eq ? db.locations.find(function(l) { return l.id === eq.locationId; }) : null;
   var cl = loc ? db.clients.find(function(c) { return c.id === loc.clientId; }) : null;
 
-  var html = '<!DOCTYPE html><html><head><title>Report - ' + (eq ? eq.name : 'Unknown') + '</title>';
+  // Load photos
+  var photos = {};
+  try { photos = await apiGet('/api/reports/' + id + '/photos'); } catch(e) {}
+
+  var reportTitle = (r.type === 'service' ? 'Service' : 'Maintenance') + ' Report';
+  var dateStr = fmtDT(r.date);
+  var statusLabel = r.status || 'N/A';
+  var statusColor = r.status === 'Operational' ? '#166534' : r.status === 'Needs Attention' ? '#92400e' : '#991b1b';
+  var statusBg = r.status === 'Operational' ? '#dcfce7' : r.status === 'Needs Attention' ? '#fef3c7' : '#fee2e2';
+  var locLine = esc(loc?.buildingName || '');
+  if (loc?.address) locLine += ', ' + esc(loc.address);
+  if (loc?.city) locLine += ', ' + esc(loc.city);
+  if (loc?.state) locLine += ' ' + esc(loc.state);
+
+  var html = '<!DOCTYPE html><html><head><title>' + esc(reportTitle) + '</title>';
   html += '<style>';
-  html += 'body{font-family:-apple-system,BlinkMacSystemFont,”Segoe UI”,sans-serif;padding:40px;max-width:800px;margin:0 auto;font-size:14px;color:#1a1a1a;}';
-  html += 'h1{font-size:22px;margin-bottom:4px;}';
-  html += '.sub{color:#666;font-size:13px;margin-bottom:24px;}';
-  html += '.section{margin-bottom:20px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;}';
-  html += '.section-hd{background:#f5f5f5;padding:10px 16px;font-weight:600;font-size:13px;border-bottom:1px solid #e0e0e0;}';
-  html += '.section-body{padding:12px 16px;}';
-  html += '.row{display:flex;padding:6px 0;border-bottom:1px solid #f0f0f0;}';
-  html += '.row:last-child{border:none;}';
-  html += '.lbl{width:160px;color:#666;font-size:12px;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}';
-  html += '.val{flex:1;}';
-  html += '.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;}';
-  html += '.bg{background:#dcfce7;color:#166534;}.bb{background:#dbeafe;color:#1e40af;}.ba{background:#fef3c7;color:#92400e;}.br{background:#fee2e2;color:#991b1b;}';
-  html += '@media print{body{padding:20px;}}';
-  html += '</style></head><body>';
-  html += '<h1>' + (r.type === 'service' ? 'Service' : 'Maintenance') + ' Report</h1>';
-  html += '<div class=”sub”>' + (eq ? eq.name : '') + ' &mdash; ' + fmtDT(r.date) + '</div>';
+  html += '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }';
+  html += 'body { font-family: -apple-system, BlinkMacSystemFont, “Segoe UI”, Roboto, sans-serif; color: #1a1a2e; font-size: 13px; line-height: 1.5; }';
+  html += '.page { max-width: 800px; margin: 0 auto; padding: 0 32px 40px; }';
 
-  html += '<div class=”section”><div class=”section-hd”>Report Details</div><div class=”section-body”>';
-  var statusCls = r.status === 'Operational' ? 'bg' : r.status === 'Needs Attention' ? 'ba' : 'br';
-  html += '<div class=”row”><div class=”lbl”>Type</div><div class=”val”><span class=”badge ' + (r.type === 'service' ? 'bb' : 'bg') + '”>' + r.type + '</span></div></div>';
-  html += '<div class=”row”><div class=”lbl”>Status</div><div class=”val”><span class=”badge ' + statusCls + '”>' + (r.status || '\u2014') + '</span></div></div>';
-  html += '<div class=”row”><div class=”lbl”>Technician</div><div class=”val”>' + esc(r.techName || '\u2014') + '</div></div>';
-  html += '<div class=”row”><div class=”lbl”>Date & Time</div><div class=”val”>' + fmtDT(r.date) + '</div></div>';
-  if (r.workOrderNumber) html += '<div class=”row”><div class=”lbl”>Work Order</div><div class=”val”>' + esc(r.workOrderNumber) + '</div></div>';
+  // Header
+  html += '.header { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; padding: 28px 32px; margin: 0 -32px 0; }';
+  html += '.header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }';
+  html += '.header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin: 0; }';
+  html += '.header .brand { font-size: 11px; opacity: 0.7; margin-top: 2px; }';
+  html += '.header .date-badge { background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; }';
+
+  // Info bar
+  html += '.info-bar { display: grid; grid-template-columns: repeat(4, 1fr); background: #f0f4f8; margin: 0 -32px; padding: 14px 32px; border-bottom: 2px solid #e2e8f0; }';
+  html += '.info-bar .ib-item { }';
+  html += '.info-bar .ib-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 600; margin-bottom: 2px; }';
+  html += '.info-bar .ib-value { font-size: 13px; font-weight: 600; color: #1e293b; }';
+
+  // Sections
+  html += '.section { margin-top: 24px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; page-break-inside: avoid; }';
+  html += '.section-hd { background: #f8fafc; padding: 12px 20px; font-weight: 700; font-size: 13px; color: #1e293b; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.3px; }';
+  html += '.section-body { padding: 16px 20px; }';
+
+  // Info grid
+  html += '.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }';
+  html += '.info-row { display: flex; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }';
+  html += '.info-row:last-child { border-bottom: none; }';
+  html += '.info-lbl { width: 140px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: #64748b; font-weight: 600; flex-shrink: 0; padding-top: 1px; }';
+  html += '.info-val { flex: 1; font-size: 13px; color: #1e293b; }';
+  html += '.info-val code { font-family: “SF Mono”, “Consolas”, monospace; font-size: 12px; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; }';
+
+  // Status badge
+  html += '.status-badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.2px; }';
+
+  // Work text
+  html += '.work-text { font-size: 13.5px; line-height: 1.7; color: #334155; white-space: pre-wrap; }';
+
+  // Photos
+  html += '.photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }';
+  html += '.photo-item { text-align: center; }';
+  html += '.photo-item img { max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #e2e8f0; object-fit: contain; }';
+  html += '.photo-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: #64748b; margin-bottom: 8px; }';
+
+  // Checklist
+  html += '.chk-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; }';
+  html += '.chk-row:last-child { border: none; }';
+  html += '.chk-box { width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }';
+  html += '.chk-done { background: #22c55e; }';
+  html += '.chk-undone { background: #e2e8f0; }';
+  html += '.chk-label { font-size: 13px; }';
+  html += '.chk-val { font-size: 13px; color: #334155; }';
+
+  // Footer
+  html += '.footer { margin-top: 32px; padding-top: 16px; border-top: 2px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 11px; }';
+
+  // Print
+  html += '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .section { break-inside: avoid; } }';
+  html += '@page { margin: 0; size: letter; }';
+  html += '</style></head><body><div class=”page”>';
+
+  // === HEADER ===
+  html += '<div class=”header”>';
+  html += '<div class=”header-top”>';
+  html += '<div><h1>' + esc(reportTitle) + '</h1><div class=”brand”>FieldMark &mdash; Service Management</div></div>';
+  html += '<div class=”date-badge”>' + dateStr + '</div>';
+  html += '</div>';
+  // Client & location in header
+  html += '<div style=”display:flex;justify-content:space-between;align-items:flex-end;”>';
+  html += '<div><div style=”font-size:16px;font-weight:600;”>' + esc(cl?.name || '') + '</div>';
+  if (locLine) html += '<div style=”font-size:12px;opacity:0.8;margin-top:2px;”>' + locLine + '</div>';
+  html += '</div>';
+  html += '<div style=”text-align:right;”><div style=”font-size:11px;opacity:0.7;”>EQUIPMENT STATUS</div><div style=”margin-top:4px;”><span class=”status-badge” style=”background:' + statusBg + ';color:' + statusColor + ';”>' + esc(statusLabel) + '</span></div></div>';
   html += '</div></div>';
 
-  html += '<div class=”section”><div class=”section-hd”>Equipment Info</div><div class=”section-body”>';
-  html += '<div class=”row”><div class=”lbl”>Equipment</div><div class=”val”>' + esc(eq?.name || '\u2014') + '</div></div>';
-  html += '<div class=”row”><div class=”lbl”>Type</div><div class=”val”>' + esc(eq?.type || '\u2014') + '</div></div>';
-  html += '<div class=”row”><div class=”lbl”>Model</div><div class=”val”>' + esc(eq?.model || '\u2014') + '</div></div>';
-  html += '<div class=”row”><div class=”lbl”>Serial</div><div class=”val”>' + esc(eq?.serial || '\u2014') + '</div></div>';
-  html += '<div class=”row”><div class=”lbl”>Location</div><div class=”val”>' + esc(loc?.buildingName || '\u2014') + (loc?.address ? ' — ' + esc(loc.address) : '') + '</div></div>';
-  html += '<div class=”row”><div class=”lbl”>Client</div><div class=”val”>' + esc(cl?.name || '\u2014') + '</div></div>';
-  html += '</div></div>';
+  // === INFO BAR ===
+  html += '<div class=”info-bar”>';
+  html += '<div class=”ib-item”><div class=”ib-label”>Technician</div><div class=”ib-value”>' + esc(r.techName || '\u2014') + '</div></div>';
+  html += '<div class=”ib-item”><div class=”ib-label”>Report Type</div><div class=”ib-value”>' + (r.type === 'service' ? 'Service' : 'Maintenance') + '</div></div>';
+  html += '<div class=”ib-item”><div class=”ib-label”>Work Order</div><div class=”ib-value”>' + esc(r.workOrderNumber || 'N/A') + '</div></div>';
+  html += '<div class=”ib-item”><div class=”ib-label”>Equipment</div><div class=”ib-value”>' + esc(eq?.name || '\u2014') + '</div></div>';
+  html += '</div>';
 
-  if (r.workPerformed) { html += '<div class=”section”><div class=”section-hd”>Work Performed</div><div class=”section-body”>' + esc(r.workPerformed) + '</div></div>'; }
-  if (r.cause) { html += '<div class=”section”><div class=”section-hd”>Cause / Finding</div><div class=”section-body”>' + esc(r.cause) + '</div></div>'; }
-  if (r.parts) { html += '<div class=”section”><div class=”section-hd”>Parts Used</div><div class=”section-body”>' + esc(r.parts) + '</div></div>'; }
-  if (r.recommendations) { html += '<div class=”section”><div class=”section-hd”>Recommendations</div><div class=”section-body”>' + esc(r.recommendations) + '</div></div>'; }
+  // === EQUIPMENT INFO ===
+  html += '<div class=”section”><div class=”section-hd”>Equipment Information</div><div class=”section-body”>';
+  html += '<div class=”info-grid”>';
+  html += '<div class=”info-row”><div class=”info-lbl”>Equipment</div><div class=”info-val”>' + esc(eq?.name || '\u2014') + '</div></div>';
+  html += '<div class=”info-row”><div class=”info-lbl”>Type</div><div class=”info-val”>' + esc(eq?.type || '\u2014') + '</div></div>';
+  html += '<div class=”info-row”><div class=”info-lbl”>Manufacturer</div><div class=”info-val”>' + esc(eq?.manufacturer || eq?.type || '\u2014') + '</div></div>';
+  html += '<div class=”info-row”><div class=”info-lbl”>Model</div><div class=”info-val”><code>' + esc(eq?.model || '\u2014') + '</code></div></div>';
+  html += '<div class=”info-row”><div class=”info-lbl”>Serial #</div><div class=”info-val”><code>' + esc(eq?.serial || '\u2014') + '</code></div></div>';
+  if (eq?.yearInstalled) html += '<div class=”info-row”><div class=”info-lbl”>Year Installed</div><div class=”info-val”>' + esc(eq.yearInstalled) + '</div></div>';
+  html += '<div class=”info-row”><div class=”info-lbl”>Location</div><div class=”info-val”>' + esc(loc?.buildingName || '\u2014') + '</div></div>';
+  html += '<div class=”info-row”><div class=”info-lbl”>Client</div><div class=”info-val”>' + esc(cl?.name || '\u2014') + '</div></div>';
+  html += '</div></div></div>';
 
-  html += '</body></html>';
+  // === PHOTOS FROM SERVICE CALL ===
+  if (photos.photoBefore || photos.photoAfter || photos.photoNameplate) {
+    html += '<div class=”section”><div class=”section-hd”>Photos from Service Call</div><div class=”section-body”>';
+    html += '<div class=”photo-grid”>';
+    if (photos.photoBefore) {
+      html += '<div class=”photo-item”><div class=”photo-label”>Before Work</div><img src=”' + photos.photoBefore + '”></div>';
+    }
+    if (photos.photoAfter) {
+      html += '<div class=”photo-item”><div class=”photo-label”>After Completion</div><img src=”' + photos.photoAfter + '”></div>';
+    }
+    html += '</div>';
+    if (photos.photoNameplate) {
+      html += '<div style=”margin-top:16px;”><div class=”photo-item”><div class=”photo-label”>Nameplate</div><img src=”' + photos.photoNameplate + '” style=”max-height:200px;”></div></div>';
+    }
+    html += '</div></div>';
+  }
+
+  // === DESCRIPTION OF WORK PERFORMED ===
+  if (r.workPerformed) {
+    html += '<div class=”section”><div class=”section-hd”>Description of Work Performed</div><div class=”section-body”>';
+    html += '<div class=”work-text”>' + esc(r.workPerformed) + '</div>';
+    html += '</div></div>';
+  }
+
+  // === CAUSE / FINDING ===
+  if (r.cause) {
+    html += '<div class=”section”><div class=”section-hd”>Cause / Finding</div><div class=”section-body”>';
+    html += '<div class=”work-text”>' + esc(r.cause) + '</div>';
+    html += '</div></div>';
+  }
+
+  // === PARTS USED ===
+  if (r.parts) {
+    html += '<div class=”section”><div class=”section-hd”>Parts Used / Replaced</div><div class=”section-body”>';
+    html += '<div class=”work-text”>' + esc(r.parts) + '</div>';
+    html += '</div></div>';
+  }
+
+  // === RECOMMENDATIONS ===
+  if (r.recommendations) {
+    html += '<div class=”section”><div class=”section-hd”>Recommendations</div><div class=”section-body”>';
+    html += '<div class=”work-text”>' + esc(r.recommendations) + '</div>';
+    html += '</div></div>';
+  }
+
+  // === CHECKLIST ===
+  if (r.checklist) {
+    var cl2 = r.checklist;
+    if (typeof cl2 === 'string') { try { cl2 = JSON.parse(cl2); } catch(e) { cl2 = null; } }
+    if (cl2 && cl2.templateId && cl2.fields) {
+      // Custom template checklist
+      html += '<div class=”section”><div class=”section-hd”>' + esc(cl2.templateName || 'Checklist') + '</div><div class=”section-body”>';
+      (cl2.fields || []).forEach(function(f) {
+        if (f.type === 'checkbox') {
+          html += '<div class=”chk-row”>';
+          html += '<div class=”chk-box ' + (f.value ? 'chk-done' : 'chk-undone') + '”>' + (f.value ? '<svg width=”12” height=”12” fill=”none” stroke=”#fff” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”3” d=”M5 13l4 4L19 7”/></svg>' : '') + '</div>';
+          html += '<div class=”chk-label”>' + esc(f.label) + '</div>';
+          html += '</div>';
+        } else if (f.type === 'text') {
+          html += '<div class=”info-row”><div class=”info-lbl”>' + esc(f.label) + '</div><div class=”info-val”>' + esc(f.value || 'N/A') + '</div></div>';
+        } else if (f.type === 'select') {
+          html += '<div class=”info-row”><div class=”info-lbl”>' + esc(f.label) + '</div><div class=”info-val”>' + esc(f.value || 'N/A') + '</div></div>';
+        } else if (f.type === 'photo' && f.value) {
+          html += '<div style=”margin:12px 0;”><div class=”photo-label”>' + esc(f.label) + '</div><img src=”' + f.value + '” style=”max-width:280px;border-radius:8px;border:1px solid #e2e8f0;”></div>';
+        }
+      });
+      html += '</div></div>';
+    } else if (Array.isArray(cl2) && cl2.length > 0) {
+      // Legacy checklist
+      var doneCount = cl2.filter(function(c) { return c.done; }).length;
+      html += '<div class=”section”><div class=”section-hd”>Maintenance Checklist <span style=”float:right;font-weight:400;color:#64748b;”>' + doneCount + '/' + cl2.length + ' complete</span></div><div class=”section-body”>';
+      cl2.forEach(function(c) {
+        html += '<div class=”chk-row”>';
+        html += '<div class=”chk-box ' + (c.done ? 'chk-done' : 'chk-undone') + '”>' + (c.done ? '<svg width=”12” height=”12” fill=”none” stroke=”#fff” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”3” d=”M5 13l4 4L19 7”/></svg>' : '') + '</div>';
+        html += '<div class=”chk-label” style=”' + (c.done ? '' : 'color:#94a3b8;') + '”>' + esc(c.item) + '</div>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    }
+  }
+
+  // === FOOTER ===
+  html += '<div class=”footer”>';
+  html += '<div style=”font-weight:600;color:#64748b;margin-bottom:4px;”>Thank you for choosing us &mdash; we truly appreciate your trust.</div>';
+  html += '<div>Generated by FieldMark &bull; www.field-mark.app &bull; ' + new Date().toLocaleDateString() + '</div>';
+  html += '</div>';
+
+  html += '</div></body></html>';
   var win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
-  setTimeout(function() { win.print(); }, 500);
+  setTimeout(function() { win.print(); }, 800);
 }
 
 // ─── REPORT FORM ────────────────────────────────────────────────────────────

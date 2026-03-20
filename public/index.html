@@ -659,17 +659,46 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <div id="view-reports" class="view">
       <div class="ph">
         <div><div class="ph-title">All Reports</div><div class="ph-sub" id="reports-sub"></div></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="exportReportsCSV()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3"/></svg>
+            Export CSV
+          </button>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-hd">
-          <span class="card-title">Report History</span>
-          <div style="display:flex;gap:8px;align-items:center;">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="padding:12px 16px;">
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <input class="fc" type="text" id="rpt-filter-search" placeholder="Search reports..." oninput="renderReportsView()" style="width:200px;padding:5px 10px;font-size:12px;">
             <select class="fc" id="rpt-filter-type" onchange="renderReportsView()" style="width:auto;padding:5px 10px;font-size:12px;">
               <option value="">All Types</option>
               <option value="service">Service</option>
               <option value="maintenance">Maintenance</option>
             </select>
+            <select class="fc" id="rpt-filter-client" onchange="renderReportsView()" style="width:auto;padding:5px 10px;font-size:12px;">
+              <option value="">All Clients</option>
+            </select>
+            <select class="fc" id="rpt-filter-location" onchange="renderReportsView()" style="width:auto;padding:5px 10px;font-size:12px;">
+              <option value="">All Locations</option>
+            </select>
+            <select class="fc" id="rpt-filter-tech" onchange="renderReportsView()" style="width:auto;padding:5px 10px;font-size:12px;">
+              <option value="">All Technicians</option>
+            </select>
+            <select class="fc" id="rpt-filter-status" onchange="renderReportsView()" style="width:auto;padding:5px 10px;font-size:12px;">
+              <option value="">All Statuses</option>
+              <option value="Operational">Operational</option>
+              <option value="Needs Attention">Needs Attention</option>
+              <option value="Non-Operational">Non-Operational</option>
+            </select>
+            <input class="fc" type="date" id="rpt-filter-from" onchange="renderReportsView()" style="width:auto;padding:5px 10px;font-size:12px;" title="From date">
+            <input class="fc" type="date" id="rpt-filter-to" onchange="renderReportsView()" style="width:auto;padding:5px 10px;font-size:12px;" title="To date">
+            <button class="btn btn-ghost btn-sm" onclick="clearReportFilters()" style="font-size:11px;">Clear</button>
           </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">Report History</span>
         </div>
         <div class="tbl-wrap">
           <table>
@@ -681,6 +710,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
                 <th>Location</th>
                 <th>Client</th>
                 <th>Technician</th>
+                <th>WO#</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -1069,7 +1099,14 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
       <div class="ph">
         <div><div class="ph-title" id="rpt-detail-title">Report</div><div class="ph-sub" id="rpt-detail-sub"></div></div>
-        <button class="btn btn-danger btn-sm admin-only" onclick="deleteReport(app.reportId)">Delete Report</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="exportReportPDF(app.reportId)">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3"/></svg>
+            Export PDF
+          </button>
+          <button class="btn btn-sm admin-only" onclick="openEditReport(app.reportId)">Edit Report</button>
+          <button class="btn btn-danger btn-sm admin-only" onclick="deleteReport(app.reportId)">Delete Report</button>
+        </div>
       </div>
       <div id="rpt-detail-content"></div>
     </div>
@@ -1230,6 +1267,51 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <div class="modal-ft">
       <button class="btn btn-secondary" onclick="closeModal('modal-user')">Cancel</button>
       <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Report Modal -->
+<div class="overlay" id="modal-edit-report">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-hd">
+      <span class="modal-title">Edit Report</span>
+      <button class="modal-x" onclick="closeModal('modal-edit-report')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+      <div class="fg"><label class="flbl">Technician</label><input class="fc" id="er-tech"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="fg"><label class="flbl">Date</label><input class="fc" type="date" id="er-date"></div>
+        <div class="fg"><label class="flbl">Time</label><input class="fc" type="time" id="er-time"></div>
+      </div>
+      <div class="fg"><label class="flbl">Status</label>
+        <select class="fc" id="er-status">
+          <option value="Operational">Operational</option>
+          <option value="Needs Attention">Needs Attention</option>
+          <option value="Non-Operational">Non-Operational</option>
+        </select>
+      </div>
+      <div class="fg"><label class="flbl">Work Order #</label><input class="fc" id="er-wo" placeholder="e.g. WO-2026-0001"></div>
+      <div class="fg"><label class="flbl">Work Performed *</label><textarea class="fc" id="er-work" rows="3"></textarea></div>
+      <div class="fg"><label class="flbl">Cause / Finding</label><textarea class="fc" id="er-cause" rows="2"></textarea></div>
+      <div class="fg"><label class="flbl">Parts Used</label><textarea class="fc" id="er-parts" rows="2"></textarea></div>
+      <div class="fg"><label class="flbl">Recommendations</label><textarea class="fc" id="er-recs" rows="2"></textarea></div>
+      <div class="fg"><label class="flbl">Next Service Date</label><input class="fc" type="date" id="er-next"></div>
+      <div id="er-readings-section">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="fg"><label class="flbl">Refrigerant Type</label><input class="fc" id="er-reftype"></div>
+          <div class="fg"><label class="flbl">Suction PSI</label><input class="fc" id="er-suction"></div>
+          <div class="fg"><label class="flbl">Discharge PSI</label><input class="fc" id="er-discharge"></div>
+          <div class="fg"><label class="flbl">Supply Temp</label><input class="fc" id="er-supply"></div>
+          <div class="fg"><label class="flbl">Return Temp</label><input class="fc" id="er-return"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-report')">Cancel</button>
+      <button class="btn" onclick="saveEditReport()">Save Changes</button>
     </div>
   </div>
 </div>
@@ -3426,32 +3508,298 @@ function downloadQR() {
 
 // â”€â”€â”€ REPORTS VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderReportsView() {
-  const filter = document.getElementById('rpt-filter-type')?.value || '';
-  let list = db.reports.filter(r=>!filter||r.type===filter).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  document.getElementById('reports-sub').textContent = `${list.length} report${list.length!==1?'s':''}`;
+  // Populate filter dropdowns
+  populateReportFilters();
+  // Get filter values
+  const filterType = document.getElementById('rpt-filter-type')?.value || '';
+  const filterClient = document.getElementById('rpt-filter-client')?.value || '';
+  const filterLocation = document.getElementById('rpt-filter-location')?.value || '';
+  const filterTech = document.getElementById('rpt-filter-tech')?.value || '';
+  const filterStatus = document.getElementById('rpt-filter-status')?.value || '';
+  const filterFrom = document.getElementById('rpt-filter-from')?.value || '';
+  const filterTo = document.getElementById('rpt-filter-to')?.value || '';
+  const search = (document.getElementById('rpt-filter-search')?.value || '').toLowerCase().trim();
+
+  let list = (db.reports || []).slice().sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  // Enrich with equipment/location/client info for filtering
+  list = list.map(r => {
+    const eq = db.equipment.find(e => e.id === r.equipmentId);
+    const loc = eq ? db.locations.find(l => l.id === eq.locationId) : null;
+    const cl = loc ? db.clients.find(c => c.id === loc.clientId) : null;
+    return { ...r, _eq: eq, _loc: loc, _cl: cl };
+  });
+
+  // Apply filters
+  if (filterType) list = list.filter(r => r.type === filterType);
+  if (filterClient) list = list.filter(r => r._cl && r._cl.id === filterClient);
+  if (filterLocation) list = list.filter(r => r._loc && r._loc.id === filterLocation);
+  if (filterTech) list = list.filter(r => (r.techName || '') === filterTech);
+  if (filterStatus) list = list.filter(r => r.status === filterStatus);
+  if (filterFrom) list = list.filter(r => r.date && r.date.slice(0,10) >= filterFrom);
+  if (filterTo) list = list.filter(r => r.date && r.date.slice(0,10) <= filterTo);
+  if (search) {
+    list = list.filter(r => {
+      const hay = [r.techName, r.type, r.status, r.workPerformed, r.workOrderNumber,
+                   r._eq?.name, r._loc?.buildingName, r._loc?.address, r._cl?.name].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(search);
+    });
+  }
+
+  document.getElementById('reports-sub').textContent = list.length + ' report' + (list.length !== 1 ? 's' : '');
   const tbody = document.getElementById('reports-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-title">No reports found</div></div></td></tr>`;
+    tbody.innerHTML = '<tr><td colspan=”9”><div class=”empty”><div class=”empty-title”>No reports found</div></div></td></tr>';
     return;
   }
-  tbody.innerHTML = list.map(r => {
-    const eq = db.equipment.find(e=>e.id===r.equipmentId);
-    const loc = eq ? db.locations.find(l=>l.id===eq.locationId) : null;
-    const cl = loc ? db.clients.find(c=>c.id===loc.clientId) : null;
-    return `<tr class="clickable" onclick="openReportDetail('${r.id}')">
-      <td>${fmtDate(r.date)}</td>
-      <td><span class="badge ${r.type==='service'?'bb':'bg'}">${r.type}</span></td>
-      <td>${esc(eq?.name||'\u2014')}</td>
-      <td>${esc(loc?.buildingName||'\u2014')}</td>
-      <td>${esc(cl?.name||'\u2014')}</td>
-      <td>${esc(r.techName||'\u2014')}</td>
-      <td>${r.status?`<span class="badge ${r.status==='Operational'?'bg':r.status==='Needs Attention'?'ba':'br'}">${esc(r.status)}</span>`:'\u2014'}</td>
-      <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="openReportDetail('${r.id}')">View</button></td>
-    </tr>`;
-  }).join('');
+  // Store filtered list for CSV export
+  app._filteredReports = list;
+
+  tbody.innerHTML = '';
+  for (var i = 0; i < list.length; i++) {
+    var r = list[i];
+    var tr = document.createElement('tr');
+    tr.className = 'clickable';
+    (function(rid) { tr.onclick = function() { openReportDetail(rid); }; })(r.id);
+
+    var td1 = document.createElement('td'); td1.textContent = fmtDate(r.date);
+    var td2 = document.createElement('td');
+    var badge = document.createElement('span');
+    badge.className = 'badge ' + (r.type === 'service' ? 'bb' : 'bg');
+    badge.textContent = r.type;
+    td2.appendChild(badge);
+    var td3 = document.createElement('td'); td3.textContent = r._eq ? r._eq.name : '\u2014';
+    var td4 = document.createElement('td'); td4.textContent = r._loc ? r._loc.buildingName : '\u2014';
+    var td5 = document.createElement('td'); td5.textContent = r._cl ? r._cl.name : '\u2014';
+    var td6 = document.createElement('td'); td6.textContent = r.techName || '\u2014';
+    var td7 = document.createElement('td'); td7.textContent = r.workOrderNumber || '\u2014';
+    var td8 = document.createElement('td');
+    if (r.status) {
+      var sBadge = document.createElement('span');
+      sBadge.className = 'badge ' + (r.status === 'Operational' ? 'bg' : r.status === 'Needs Attention' ? 'ba' : 'br');
+      sBadge.textContent = r.status;
+      td8.appendChild(sBadge);
+    } else { td8.textContent = '\u2014'; }
+    var td9 = document.createElement('td');
+    var viewBtn = document.createElement('button');
+    viewBtn.className = 'btn btn-ghost btn-sm';
+    viewBtn.textContent = 'View';
+    (function(rid) { viewBtn.onclick = function(ev) { ev.stopPropagation(); openReportDetail(rid); }; })(r.id);
+    td9.appendChild(viewBtn);
+
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+    tr.appendChild(td5); tr.appendChild(td6); tr.appendChild(td7); tr.appendChild(td8); tr.appendChild(td9);
+    tbody.appendChild(tr);
+  }
 }
 
-// â”€â”€â”€ REPORT FORM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function populateReportFilters() {
+  // Client dropdown
+  var clientSel = document.getElementById('rpt-filter-client');
+  var curClient = clientSel?.value || '';
+  if (clientSel) {
+    var clientOpts = '<option value=””>All Clients</option>';
+    (db.clients || []).forEach(function(c) { clientOpts += '<option value=”' + c.id + '”>' + esc(c.name) + '</option>'; });
+    clientSel.innerHTML = clientOpts;
+    clientSel.value = curClient;
+  }
+  // Location dropdown
+  var locSel = document.getElementById('rpt-filter-location');
+  var curLoc = locSel?.value || '';
+  if (locSel) {
+    var locOpts = '<option value=””>All Locations</option>';
+    (db.locations || []).forEach(function(l) { locOpts += '<option value=”' + l.id + '”>' + esc(l.buildingName) + '</option>'; });
+    locSel.innerHTML = locOpts;
+    locSel.value = curLoc;
+  }
+  // Technician dropdown — unique tech names from reports
+  var techSel = document.getElementById('rpt-filter-tech');
+  var curTech = techSel?.value || '';
+  if (techSel) {
+    var techs = [];
+    (db.reports || []).forEach(function(r) { if (r.techName && techs.indexOf(r.techName) === -1) techs.push(r.techName); });
+    techs.sort();
+    var techOpts = '<option value=””>All Technicians</option>';
+    techs.forEach(function(t) { techOpts += '<option value=”' + esc(t) + '”>' + esc(t) + '</option>'; });
+    techSel.innerHTML = techOpts;
+    techSel.value = curTech;
+  }
+}
+
+function clearReportFilters() {
+  ['rpt-filter-search','rpt-filter-type','rpt-filter-client','rpt-filter-location','rpt-filter-tech','rpt-filter-status','rpt-filter-from','rpt-filter-to'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderReportsView();
+}
+
+// ─── EDIT REPORT ────────────────────────────────────────────────────────────
+function openEditReport(id) {
+  var r = db.reports.find(function(x) { return x.id === id; });
+  if (!r) { showToast('Report not found', 'error'); return; }
+  app.editingReportId = id;
+  document.getElementById('er-tech').value = r.techName || '';
+  var dateParts = (r.date || '').split('T');
+  document.getElementById('er-date').value = dateParts[0] || '';
+  document.getElementById('er-time').value = dateParts[1] ? dateParts[1].slice(0,5) : '';
+  document.getElementById('er-status').value = r.status || 'Operational';
+  document.getElementById('er-wo').value = r.workOrderNumber || '';
+  document.getElementById('er-work').value = r.workPerformed || '';
+  document.getElementById('er-cause').value = r.cause || '';
+  document.getElementById('er-parts').value = r.parts || '';
+  document.getElementById('er-recs').value = r.recommendations || '';
+  document.getElementById('er-next').value = r.nextDate || '';
+  document.getElementById('er-reftype').value = r.refrigerantType || '';
+  document.getElementById('er-suction').value = r.suctionPressure || '';
+  document.getElementById('er-discharge').value = r.dischargePressure || '';
+  document.getElementById('er-supply').value = r.supplyTemp || '';
+  document.getElementById('er-return').value = r.returnTemp || '';
+  openModal('modal-edit-report');
+}
+
+async function saveEditReport() {
+  var work = document.getElementById('er-work').value.trim();
+  if (!work) { showToast('Work Performed is required', 'error'); document.getElementById('er-work').focus(); return; }
+  var dateVal = document.getElementById('er-date').value;
+  var timeVal = document.getElementById('er-time').value;
+  var body = {
+    techName: document.getElementById('er-tech').value.trim(),
+    date: dateVal + (timeVal ? 'T' + timeVal : ''),
+    status: document.getElementById('er-status').value,
+    workOrderNumber: document.getElementById('er-wo').value.trim(),
+    workPerformed: work,
+    cause: document.getElementById('er-cause').value.trim(),
+    parts: document.getElementById('er-parts').value.trim(),
+    recommendations: document.getElementById('er-recs').value.trim(),
+    nextDate: document.getElementById('er-next').value,
+    refrigerantType: document.getElementById('er-reftype').value.trim(),
+    suctionPressure: document.getElementById('er-suction').value.trim(),
+    dischargePressure: document.getElementById('er-discharge').value.trim(),
+    supplyTemp: document.getElementById('er-supply').value.trim(),
+    returnTemp: document.getElementById('er-return').value.trim()
+  };
+  try {
+    var updated = await apiPost('/api/reports/' + app.editingReportId, body, 'PUT');
+    var idx = db.reports.findIndex(function(x) { return x.id === app.editingReportId; });
+    if (idx !== -1) db.reports[idx] = updated;
+    closeModal('modal-edit-report');
+    showToast('Report updated', 'success');
+    renderReportDetail();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+// ─── EXPORT CSV ─────────────────────────────────────────────────────────────
+function exportReportsCSV() {
+  var list = app._filteredReports || [];
+  if (list.length === 0) { showToast('No reports to export', 'error'); return; }
+  var headers = ['Date','Type','Equipment','Location','Client','Technician','WO#','Status','Work Performed','Cause','Parts','Recommendations'];
+  var rows = [headers.join(',')];
+  list.forEach(function(r) {
+    var row = [
+      r.date ? r.date.slice(0,10) : '',
+      r.type || '',
+      csvCell(r._eq ? r._eq.name : ''),
+      csvCell(r._loc ? r._loc.buildingName : ''),
+      csvCell(r._cl ? r._cl.name : ''),
+      csvCell(r.techName || ''),
+      r.workOrderNumber || '',
+      r.status || '',
+      csvCell(r.workPerformed || ''),
+      csvCell(r.cause || ''),
+      csvCell(r.parts || ''),
+      csvCell(r.recommendations || '')
+    ];
+    rows.push(row.join(','));
+  });
+  var csv = rows.join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'fieldmark-reports-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('CSV exported (' + list.length + ' reports)', 'success');
+}
+
+function csvCell(val) {
+  if (!val) return '';
+  val = String(val);
+  if (val.indexOf(',') !== -1 || val.indexOf('”') !== -1 || val.indexOf('\n') !== -1) {
+    return '”' + val.replace(/”/g, '””') + '”';
+  }
+  return val;
+}
+
+// ─── EXPORT PDF ─────────────────────────────────────────────────────────────
+function exportReportPDF(id) {
+  var r = db.reports.find(function(x) { return x.id === id; });
+  if (!r) { showToast('Report not found', 'error'); return; }
+  var eq = db.equipment.find(function(e) { return e.id === r.equipmentId; });
+  var loc = eq ? db.locations.find(function(l) { return l.id === eq.locationId; }) : null;
+  var cl = loc ? db.clients.find(function(c) { return c.id === loc.clientId; }) : null;
+
+  var html = '<!DOCTYPE html><html><head><title>Report - ' + (eq ? eq.name : 'Unknown') + '</title>';
+  html += '<style>';
+  html += 'body{font-family:-apple-system,BlinkMacSystemFont,”Segoe UI”,sans-serif;padding:40px;max-width:800px;margin:0 auto;font-size:14px;color:#1a1a1a;}';
+  html += 'h1{font-size:22px;margin-bottom:4px;}';
+  html += '.sub{color:#666;font-size:13px;margin-bottom:24px;}';
+  html += '.section{margin-bottom:20px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;}';
+  html += '.section-hd{background:#f5f5f5;padding:10px 16px;font-weight:600;font-size:13px;border-bottom:1px solid #e0e0e0;}';
+  html += '.section-body{padding:12px 16px;}';
+  html += '.row{display:flex;padding:6px 0;border-bottom:1px solid #f0f0f0;}';
+  html += '.row:last-child{border:none;}';
+  html += '.lbl{width:160px;color:#666;font-size:12px;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}';
+  html += '.val{flex:1;}';
+  html += '.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;}';
+  html += '.bg{background:#dcfce7;color:#166534;}.bb{background:#dbeafe;color:#1e40af;}.ba{background:#fef3c7;color:#92400e;}.br{background:#fee2e2;color:#991b1b;}';
+  html += '@media print{body{padding:20px;}}';
+  html += '</style></head><body>';
+  html += '<h1>' + (r.type === 'service' ? 'Service' : 'Maintenance') + ' Report</h1>';
+  html += '<div class=”sub”>' + (eq ? eq.name : '') + ' &mdash; ' + fmtDT(r.date) + '</div>';
+
+  html += '<div class=”section”><div class=”section-hd”>Report Details</div><div class=”section-body”>';
+  var statusCls = r.status === 'Operational' ? 'bg' : r.status === 'Needs Attention' ? 'ba' : 'br';
+  html += '<div class=”row”><div class=”lbl”>Type</div><div class=”val”><span class=”badge ' + (r.type === 'service' ? 'bb' : 'bg') + '”>' + r.type + '</span></div></div>';
+  html += '<div class=”row”><div class=”lbl”>Status</div><div class=”val”><span class=”badge ' + statusCls + '”>' + (r.status || '\u2014') + '</span></div></div>';
+  html += '<div class=”row”><div class=”lbl”>Technician</div><div class=”val”>' + esc(r.techName || '\u2014') + '</div></div>';
+  html += '<div class=”row”><div class=”lbl”>Date & Time</div><div class=”val”>' + fmtDT(r.date) + '</div></div>';
+  if (r.workOrderNumber) html += '<div class=”row”><div class=”lbl”>Work Order</div><div class=”val”>' + esc(r.workOrderNumber) + '</div></div>';
+  if (r.nextDate) html += '<div class=”row”><div class=”lbl”>Next Service</div><div class=”val”>' + fmtDate(r.nextDate) + '</div></div>';
+  html += '</div></div>';
+
+  html += '<div class=”section”><div class=”section-hd”>Equipment Info</div><div class=”section-body”>';
+  html += '<div class=”row”><div class=”lbl”>Equipment</div><div class=”val”>' + esc(eq?.name || '\u2014') + '</div></div>';
+  html += '<div class=”row”><div class=”lbl”>Type</div><div class=”val”>' + esc(eq?.type || '\u2014') + '</div></div>';
+  html += '<div class=”row”><div class=”lbl”>Model</div><div class=”val”>' + esc(eq?.model || '\u2014') + '</div></div>';
+  html += '<div class=”row”><div class=”lbl”>Serial</div><div class=”val”>' + esc(eq?.serial || '\u2014') + '</div></div>';
+  html += '<div class=”row”><div class=”lbl”>Location</div><div class=”val”>' + esc(loc?.buildingName || '\u2014') + (loc?.address ? ' — ' + esc(loc.address) : '') + '</div></div>';
+  html += '<div class=”row”><div class=”lbl”>Client</div><div class=”val”>' + esc(cl?.name || '\u2014') + '</div></div>';
+  html += '</div></div>';
+
+  if (r.workPerformed) { html += '<div class=”section”><div class=”section-hd”>Work Performed</div><div class=”section-body”>' + esc(r.workPerformed) + '</div></div>'; }
+  if (r.cause) { html += '<div class=”section”><div class=”section-hd”>Cause / Finding</div><div class=”section-body”>' + esc(r.cause) + '</div></div>'; }
+  if (r.parts) { html += '<div class=”section”><div class=”section-hd”>Parts Used</div><div class=”section-body”>' + esc(r.parts) + '</div></div>'; }
+  if (r.recommendations) { html += '<div class=”section”><div class=”section-hd”>Recommendations</div><div class=”section-body”>' + esc(r.recommendations) + '</div></div>'; }
+
+  if (r.refrigerantType || r.suctionPressure || r.dischargePressure || r.supplyTemp || r.returnTemp) {
+    html += '<div class=”section”><div class=”section-hd”>Readings</div><div class=”section-body”>';
+    if (r.refrigerantType) html += '<div class=”row”><div class=”lbl”>Refrigerant</div><div class=”val”>' + esc(r.refrigerantType) + '</div></div>';
+    if (r.suctionPressure) html += '<div class=”row”><div class=”lbl”>Suction PSI</div><div class=”val”>' + esc(r.suctionPressure) + '</div></div>';
+    if (r.dischargePressure) html += '<div class=”row”><div class=”lbl”>Discharge PSI</div><div class=”val”>' + esc(r.dischargePressure) + '</div></div>';
+    if (r.supplyTemp) html += '<div class=”row”><div class=”lbl”>Supply Temp</div><div class=”val”>' + esc(r.supplyTemp) + '°F</div></div>';
+    if (r.returnTemp) html += '<div class=”row”><div class=”lbl”>Return Temp</div><div class=”val”>' + esc(r.returnTemp) + '°F</div></div>';
+    html += '</div></div>';
+  }
+
+  html += '</body></html>';
+  var win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(function() { win.print(); }, 500);
+}
+
+// ─── REPORT FORM ────────────────────────────────────────────────────────────
 function startReport(type) { app.reportType = type; app.prevView = 'equipment'; app.customFieldPhotos = {}; showView('report-form'); }
 function goBackFromReport() { openEquipmentView(app.equipmentId); }
 

@@ -661,6 +661,31 @@ app.post('/api/reports', requireAuth, async (req, res) => {
   res.json(report);
 });
 
+app.put('/api/reports/:id', requireAdmin, (req, res) => {
+  const existing = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Report not found' });
+  const { techName, date, status, workPerformed, cause, parts, recommendations, nextDate,
+          refrigerantType, suctionPressure, dischargePressure, supplyTemp, returnTemp, workOrderNumber } = req.body;
+  db.prepare(`UPDATE reports SET techName=?, date=?, status=?, workPerformed=?, cause=?, parts=?,
+    recommendations=?, nextDate=?, refrigerantType=?, suctionPressure=?, dischargePressure=?,
+    supplyTemp=?, returnTemp=?, workOrderNumber=? WHERE id=?`)
+    .run(techName||existing.techName, date||existing.date, status||existing.status,
+         workPerformed!==undefined?workPerformed:existing.workPerformed,
+         cause!==undefined?cause:existing.cause, parts!==undefined?parts:existing.parts,
+         recommendations!==undefined?recommendations:existing.recommendations,
+         nextDate!==undefined?nextDate:existing.nextDate,
+         refrigerantType!==undefined?refrigerantType:existing.refrigerantType,
+         suctionPressure!==undefined?suctionPressure:existing.suctionPressure,
+         dischargePressure!==undefined?dischargePressure:existing.dischargePressure,
+         supplyTemp!==undefined?supplyTemp:existing.supplyTemp,
+         returnTemp!==undefined?returnTemp:existing.returnTemp,
+         workOrderNumber!==undefined?workOrderNumber:existing.workOrderNumber,
+         req.params.id);
+  const updated = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,createdAt FROM reports WHERE id=?').get(req.params.id);
+  try { updated.checklist = JSON.parse(updated.checklist); } catch(e) { updated.checklist = []; }
+  res.json(updated);
+});
+
 app.delete('/api/reports/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM reports WHERE id=?').run(req.params.id);
   res.json({ ok: true });

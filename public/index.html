@@ -3713,14 +3713,17 @@ function csvCell(val) {
 async function exportReportPDF(id) {
   var r = db.reports.find(function(x) { return x.id === id; });
   if (!r) { showToast('Report not found', 'error'); return; }
-  showToast('Generating report...', 'info');
+  // Open window immediately (before await) to avoid popup blocker
+  var win = window.open('', '_blank');
+  if (!win) { showToast('Popup blocked — please allow popups for this site', 'error'); return; }
+  win.document.write('<html><head><title>Loading Report...</title></head><body style="font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#666;"><div style="text-align:center;"><div style="font-size:18px;margin-bottom:8px;">Generating Report...</div><div style="font-size:13px;">Loading photos and data</div></div></body></html>');
   var eq = db.equipment.find(function(e) { return e.id === r.equipmentId; });
   var loc = eq ? db.locations.find(function(l) { return l.id === eq.locationId; }) : null;
   var cl = loc ? db.clients.find(function(c) { return c.id === loc.clientId; }) : null;
 
   // Load photos
   var photos = {};
-  try { photos = await apiGet('/api/reports/' + id + '/photos'); } catch(e) {}
+  try { photos = await apiGet('/api/reports/' + id + '/photos'); } catch(e) { console.log('Photo load error:', e); }
 
   var reportType = r.type === 'service' ? 'Service Record' : 'Maintenance Record';
   var dateStr = fmtDT(r.date);
@@ -3902,10 +3905,27 @@ async function exportReportPDF(id) {
   html += '</div>';
 
   html += '</div></body></html>';
-  var win = window.open('', '_blank');
+  win.document.open();
   win.document.write(html);
   win.document.close();
-  setTimeout(function() { win.print(); }, 800);
+  // Wait for images to load before printing
+  var imgs = win.document.querySelectorAll('img');
+  var loaded = 0;
+  var total = imgs.length;
+  if (total === 0) {
+    setTimeout(function() { win.print(); }, 500);
+  } else {
+    var tryPrint = function() {
+      loaded++;
+      if (loaded >= total) { setTimeout(function() { win.print(); }, 300); }
+    };
+    imgs.forEach(function(img) {
+      if (img.complete) { tryPrint(); }
+      else { img.onload = tryPrint; img.onerror = tryPrint; }
+    });
+    // Fallback: print after 5 seconds even if images haven't loaded
+    setTimeout(function() { win.print(); }, 5000);
+  }
 }
 
 // ─── REPORT FORM ────────────────────────────────────────────────────────────

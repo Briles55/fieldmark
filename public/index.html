@@ -3790,7 +3790,7 @@ async function exportReportPDF(id) {
   h.push('<td style=”padding:5px 10px;font-size:12px;color:#555;”>' + esc(locName) + (locAddr ? '<br>' + esc(locAddr) : '') + '</td>');
   h.push('</tr></table>');
 
-  // PHOTOS FROM SERVICE CALL
+  // PHOTOS FROM SERVICE CALL — use placeholder imgs, photo data set via JS below
   var hasBefore = photos.photoBefore && photos.photoBefore.length > 50;
   var hasAfter = photos.photoAfter && photos.photoAfter.length > 50;
   if (hasBefore || hasAfter) {
@@ -3798,13 +3798,13 @@ async function exportReportPDF(id) {
     h.push('<table style=”width:100%;border-collapse:collapse;”><tr>');
     if (hasBefore) {
       h.push('<td style=”width:50%;text-align:center;padding:8px;vertical-align:top;”>');
-      h.push('<img src=”' + photos.photoBefore + '” style=”max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;”>');
+      h.push('<img data-photo-key=”before” src=”” style=”max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;”>');
       h.push('<div style=”font-size:11px;font-style:italic;color:#555;margin-top:6px;”>Photo Before Work</div>');
       h.push('</td>');
     }
     if (hasAfter) {
       h.push('<td style=”width:50%;text-align:center;padding:8px;vertical-align:top;”>');
-      h.push('<img src=”' + photos.photoAfter + '” style=”max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;”>');
+      h.push('<img data-photo-key=”after” src=”” style=”max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;”>');
       h.push('<div style=”font-size:11px;font-style:italic;color:#555;margin-top:6px;”>Photo of Work After Completion</div>');
       h.push('</td>');
     }
@@ -3837,6 +3837,8 @@ async function exportReportPDF(id) {
   h.push('</tr></table>');
 
   // CHECKLIST
+  var checklistPhotoData = {};
+  var checklistPhotoIdx = 0;
   if (r.checklist) {
     var ck = r.checklist;
     if (typeof ck === 'string') { try { ck = JSON.parse(ck); } catch(e) { ck = null; } }
@@ -3851,8 +3853,11 @@ async function exportReportPDF(id) {
         } else if (f.type === 'text' || f.type === 'select') {
           h.push('<div style=”padding:4px 0;font-size:13px;”><span style=”font-weight:700;”>' + esc(f.label) + ':</span> ' + esc(f.value || 'N/A') + '</div>');
         } else if (f.type === 'photo' && f.value) {
+          var ckKey = 'ck' + checklistPhotoIdx;
+          checklistPhotoIdx++;
+          checklistPhotoData[ckKey] = f.value;
           h.push('<div style=”margin:10px 0;”><div style=”font-weight:700;font-size:12px;margin-bottom:4px;”>' + esc(f.label) + '</div>');
-          h.push('<img src=”' + f.value + '” style=”max-width:260px;border:1px solid #ccc;”></div>');
+          h.push('<img data-photo-key=”' + ckKey + '” src=”” style=”max-width:260px;border:1px solid #ccc;”></div>');
         }
       });
     } else if (Array.isArray(ck) && ck.length > 0) {
@@ -3866,13 +3871,13 @@ async function exportReportPDF(id) {
     }
   }
 
-  // NAMEPLATE / ADDITIONAL IMAGES
+  // NAMEPLATE / ADDITIONAL IMAGES — placeholder img, data set via JS
   var hasNameplate = photos.photoNameplate && photos.photoNameplate.length > 50;
   if (hasNameplate) {
     h.push('<div style=”font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;”>Additional Images</div>');
     h.push('<table style=”width:100%;”><tr>');
     h.push('<td style=”width:50%;text-align:center;padding:8px;vertical-align:top;”>');
-    h.push('<img src=”' + photos.photoNameplate + '” style=”max-width:100%;max-height:240px;border:1px solid #ccc;display:block;margin:0 auto;”>');
+    h.push('<img data-photo-key=”nameplate” src=”” style=”max-width:100%;max-height:240px;border:1px solid #ccc;display:block;margin:0 auto;”>');
     h.push('<div style=”font-size:11px;color:#555;margin-top:4px;”>Nameplate</div>');
     h.push('</td><td style=”width:50%;”></td></tr></table>');
   }
@@ -3885,18 +3890,31 @@ async function exportReportPDF(id) {
 
   h.push('</div>');
 
-  // Embed a script INSIDE the report page that handles image loading and auto-print
+  // Build photoMap object with all photo data — passed to embedded script via JSON.stringify
+  var photoMap = {};
+  if (hasBefore) photoMap.before = photos.photoBefore;
+  if (hasAfter) photoMap.after = photos.photoAfter;
+  if (hasNameplate) photoMap.nameplate = photos.photoNameplate;
+  Object.keys(checklistPhotoData).forEach(function(k) { photoMap[k] = checklistPhotoData[k]; });
+
+  // Embed script that sets img src from JS variables (avoids base64 in HTML attributes)
   h.push('<script>');
+  h.push('var photoMap = ' + JSON.stringify(photoMap) + ';');
+  h.push('var imgs = document.querySelectorAll(“img[data-photo-key]”);');
+  h.push('for (var i = 0; i < imgs.length; i++) {');
+  h.push('  var key = imgs[i].getAttribute(“data-photo-key”);');
+  h.push('  if (photoMap[key]) imgs[i].src = photoMap[key];');
+  h.push('}');
   h.push('window.onload = function() {');
-  h.push('  var imgs = document.querySelectorAll(“img”);');
-  h.push('  var total = imgs.length;');
+  h.push('  var allImgs = document.querySelectorAll(“img”);');
+  h.push('  var total = allImgs.length;');
   h.push('  if (total === 0) { setTimeout(function(){ window.print(); }, 300); return; }');
   h.push('  var loaded = 0;');
   h.push('  var done = false;');
   h.push('  function check() { loaded++; if (!done && loaded >= total) { done = true; setTimeout(function(){ window.print(); }, 500); } }');
-  h.push('  for (var i = 0; i < imgs.length; i++) {');
-  h.push('    if (imgs[i].complete) { check(); }');
-  h.push('    else { imgs[i].onload = check; imgs[i].onerror = check; }');
+  h.push('  for (var j = 0; j < allImgs.length; j++) {');
+  h.push('    if (allImgs[j].complete && allImgs[j].naturalWidth > 0) { check(); }');
+  h.push('    else { allImgs[j].onload = check; allImgs[j].onerror = check; }');
   h.push('  }');
   h.push('  setTimeout(function(){ if (!done) { done = true; window.print(); } }, 8000);');
   h.push('};');
@@ -3906,12 +3924,10 @@ async function exportReportPDF(id) {
 
   var finalHtml = h.join('\n');
 
-  // Use Blob URL instead of document.write — handles large base64 images reliably
-  var blob = new Blob([finalHtml], { type: 'text/html' });
-  var blobUrl = URL.createObjectURL(blob);
-  win.location.href = blobUrl;
-  // Clean up blob URL after window loads (give it time)
-  setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 60000);
+  // Write HTML into popup — photo data is in JS variables, not in img src attributes
+  win.document.open();
+  win.document.write(finalHtml);
+  win.document.close();
 }
 
 // ─── REPORT FORM ────────────────────────────────────────────────────────────

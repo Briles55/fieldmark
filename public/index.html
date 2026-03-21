@@ -3791,7 +3791,7 @@ async function exportReportPDF(id) {
   h.push('<td style=”padding:5px 10px;font-size:12px;color:#555;”>' + esc(locName) + (locAddr ? '<br>' + esc(locAddr) : '') + '</td>');
   h.push('</tr></table>');
 
-  // PHOTOS FROM SERVICE CALL
+  // PHOTOS FROM SERVICE CALL — use placeholder IDs, set src via DOM after write
   var hasBefore = photos.photoBefore && photos.photoBefore.length > 50;
   var hasAfter = photos.photoAfter && photos.photoAfter.length > 50;
   if (hasBefore || hasAfter) {
@@ -3799,13 +3799,13 @@ async function exportReportPDF(id) {
     h.push('<table style=”width:100%;border-collapse:collapse;”><tr>');
     if (hasBefore) {
       h.push('<td style=”width:50%;text-align:center;padding:8px;vertical-align:top;”>');
-      h.push('<img src=”' + photos.photoBefore + '” style=”max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;”>');
+      h.push('<img id=”pdf-photo-before” style=”max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;”>');
       h.push('<div style=”font-size:11px;font-style:italic;color:#555;margin-top:6px;”>Photo Before Work</div>');
       h.push('</td>');
     }
     if (hasAfter) {
       h.push('<td style=”width:50%;text-align:center;padding:8px;vertical-align:top;”>');
-      h.push('<img src=”' + photos.photoAfter + '” style=”max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;”>');
+      h.push('<img id=”pdf-photo-after” style=”max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;”>');
       h.push('<div style=”font-size:11px;font-style:italic;color:#555;margin-top:6px;”>Photo of Work After Completion</div>');
       h.push('</td>');
     }
@@ -3867,13 +3867,13 @@ async function exportReportPDF(id) {
     }
   }
 
-  // NAMEPLATE / ADDITIONAL IMAGES
+  // NAMEPLATE / ADDITIONAL IMAGES — placeholder, set src via DOM
   var hasNameplate = photos.photoNameplate && photos.photoNameplate.length > 50;
   if (hasNameplate) {
     h.push('<div style=”font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;”>Additional Images</div>');
     h.push('<table style=”width:100%;”><tr>');
     h.push('<td style=”width:50%;text-align:center;padding:8px;vertical-align:top;”>');
-    h.push('<img src=”' + photos.photoNameplate + '” style=”max-width:100%;max-height:240px;border:1px solid #ccc;display:block;margin:0 auto;”>');
+    h.push('<img id=”pdf-photo-nameplate” style=”max-width:100%;max-height:240px;border:1px solid #ccc;display:block;margin:0 auto;”>');
     h.push('<div style=”font-size:11px;color:#555;margin-top:4px;”>Nameplate</div>');
     h.push('</td><td style=”width:50%;”></td></tr></table>');
   }
@@ -3890,6 +3890,20 @@ async function exportReportPDF(id) {
   win.document.open();
   win.document.write(finalHtml);
   win.document.close();
+
+  // Set photo sources via DOM (avoids huge base64 strings in document.write)
+  if (hasBefore) {
+    var imgBefore = win.document.getElementById('pdf-photo-before');
+    if (imgBefore) imgBefore.src = photos.photoBefore;
+  }
+  if (hasAfter) {
+    var imgAfter = win.document.getElementById('pdf-photo-after');
+    if (imgAfter) imgAfter.src = photos.photoAfter;
+  }
+  if (hasNameplate) {
+    var imgNp = win.document.getElementById('pdf-photo-nameplate');
+    if (imgNp) imgNp.src = photos.photoNameplate;
+  }
 
   // Wait for images to load before printing
   var imgs = win.document.querySelectorAll('img');

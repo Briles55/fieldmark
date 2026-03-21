@@ -142,6 +142,7 @@ try { db.exec("ALTER TABLE reports ADD COLUMN photoAfter TEXT DEFAULT ''"); } ca
 try { db.exec("ALTER TABLE reports ADD COLUMN photoNameplate TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN workOrderNumber TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN logo TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE equipment ADD COLUMN photo TEXT DEFAULT ''"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -578,19 +579,19 @@ app.delete('/api/locations/:id', requireAdmin, (req, res) => {
 
 // ─── EQUIPMENT ────────────────────────────────────────────────────────────────
 app.post('/api/equipment', requireAdmin, (req, res) => {
-  const { locationId, name, model, serial, yearInstalled, type, notes, formTemplateId } = req.body;
+  const { locationId, name, model, serial, yearInstalled, type, notes, formTemplateId, photo } = req.body;
   if (!locationId || !name) return res.status(400).json({ error: 'locationId and name required' });
   const id = genId();
-  db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,formTemplateId,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', new Date().toISOString());
+  db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,formTemplateId,photo,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photo||'', new Date().toISOString());
   res.json(db.prepare('SELECT * FROM equipment WHERE id=?').get(id));
 });
 
 app.put('/api/equipment/:id', requireAdmin, (req, res) => {
-  const { name, model, serial, yearInstalled, type, notes, formTemplateId } = req.body;
+  const { name, model, serial, yearInstalled, type, notes, formTemplateId, photo } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=?,formTemplateId=? WHERE id=?')
-    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', req.params.id);
+  db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=?,formTemplateId=?,photo=? WHERE id=?')
+    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photo||'', req.params.id);
   res.json(db.prepare('SELECT * FROM equipment WHERE id=?').get(req.params.id));
 });
 

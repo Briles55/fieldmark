@@ -3272,17 +3272,51 @@ async function saveFormTemplate() {
 
 // â”€â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderDashboard() {
+  var dashView = document.getElementById('view-dashboard');
+
+  // Technician dashboard — three tiles only
+  if (!isAdmin()) {
+    var myWOs = (db.workOrders||[]).filter(function(wo){return wo.assignedTo===currentUser?.id;});
+    var openWOs = myWOs.filter(function(wo){return wo.status==='Open'||wo.status==='In Progress';}).length;
+    var onHoldWOs = myWOs.filter(function(wo){return wo.status==='On Hold';}).length;
+    document.getElementById('dash-stats').innerHTML = '';
+    var belowStats = dashView.querySelector('.g2');
+    if (belowStats) belowStats.style.display = 'none';
+    document.getElementById('dash-stats').innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:20px;">' +
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:box-shadow .2s;" onclick="nav(\'work-orders\')" onmouseenter="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.1)\'" onmouseleave="this.style.boxShadow=\'none\'">' +
+        '<svg width="40" height="40" fill="none" stroke="var(--accent)" viewBox="0 0 24 24" style="margin-bottom:12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>' +
+        '<div style="font-size:18px;font-weight:600;color:var(--fg);">Work Orders</div>' +
+        '<div style="font-size:13px;color:var(--muted);margin-top:6px;">' + openWOs + ' open' + (onHoldWOs > 0 ? ' \u2022 ' + onHoldWOs + ' on hold' : '') + '</div>' +
+      '</div>' +
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:box-shadow .2s;" onclick="nav(\'clients\')" onmouseenter="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.1)\'" onmouseleave="this.style.boxShadow=\'none\'">' +
+        '<svg width="40" height="40" fill="none" stroke="var(--green)" viewBox="0 0 24 24" style="margin-bottom:12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-16 0H3m2-8h4m-4 4h4m6-4h4m-4 4h4"/></svg>' +
+        '<div style="font-size:18px;font-weight:600;color:var(--fg);">Clients</div>' +
+        '<div style="font-size:13px;color:var(--muted);margin-top:6px;">' + db.clients.length + ' client' + (db.clients.length!==1?'s':'') + '</div>' +
+      '</div>' +
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:box-shadow .2s;" onclick="nav(\'time-cards\')" onmouseenter="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.1)\'" onmouseleave="this.style.boxShadow=\'none\'">' +
+        '<svg width="40" height="40" fill="none" stroke="var(--amber)" viewBox="0 0 24 24" style="margin-bottom:12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
+        '<div style="font-size:18px;font-weight:600;color:var(--fg);">Time Card</div>' +
+        '<div style="font-size:13px;color:var(--muted);margin-top:6px;">Log &amp; view hours</div>' +
+      '</div>' +
+      '</div>';
+    return;
+  }
+
+  // Admin dashboard — full stats and lists
+  var belowStats2 = dashView.querySelector('.g2');
+  if (belowStats2) belowStats2.style.display = '';
   const totalClients = db.clients.length;
   const totalLocs = db.locations.length;
   const totalEq = db.equipment.length;
   const totalRpts = db.reports.length;
-  const myWOs = isAdmin() ? (db.workOrders||[]) : (db.workOrders||[]).filter(wo=>wo.assignedTo===currentUser?.id);
-  const openWOs = myWOs.filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
+  const allWOs = db.workOrders||[];
+  const adminOpenWOs = allWOs.filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${totalClients}</div><div class="stat-lbl">Clients</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--green)">${totalLocs}</div><div class="stat-lbl">Locations</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--amber)">${totalEq}</div><div class="stat-lbl">Equipment</div></div>
-    <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${openWOs}</div><div class="stat-lbl">${isAdmin()?'Open Work Orders':'My Work Orders'}</div></div>
+    <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${adminOpenWOs}</div><div class="stat-lbl">Open Work Orders</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--muted)">${totalRpts}</div><div class="stat-lbl">Reports</div></div>
   `;
   const recent = [...db.reports].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);

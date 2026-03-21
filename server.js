@@ -697,6 +697,168 @@ app.get('/api/reports/:id/photos', requireAuth, (req, res) => {
   res.json(row);
 });
 
+// ─── PDF VIEW (server-rendered HTML with photos) ──────────────────────────────
+app.get('/api/reports/:id/pdf-view', requireAuth, (req, res) => {
+  const r = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id);
+  if (!r) return res.status(404).send('Report not found');
+
+  const eq = r.equipmentId ? db.prepare('SELECT * FROM equipment WHERE id=?').get(r.equipmentId) : null;
+  const loc = eq && eq.locationId ? db.prepare('SELECT * FROM locations WHERE id=?').get(eq.locationId) : null;
+  const cl = loc && loc.clientId ? db.prepare('SELECT * FROM clients WHERE id=?').get(loc.clientId) : null;
+
+  function e(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  const reportType = r.type === 'service' ? 'Service Record' : 'Maintenance Record';
+  const dateStr = r.date || '';
+  const statusLabel = r.status || 'N/A';
+  const locName = loc ? loc.buildingName || '' : '';
+  let locAddr = '';
+  if (loc && loc.address) locAddr += loc.address;
+  if (loc && loc.city) locAddr += ', ' + loc.city;
+  if (loc && loc.state) locAddr += ' ' + loc.state;
+  const eqName = eq ? eq.name || 'Equipment' : 'Equipment';
+
+  let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>FieldMark Report</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Arial, Helvetica, sans-serif; }
+@media print { body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+@page { margin: 12mm 10mm; size: letter; }
+</style></head><body>
+<div style="max-width:760px;margin:0 auto;padding:20px 28px 40px;font-size:13px;line-height:1.5;color:#1a1a1a;">`;
+
+  // DATE LINE
+  h += `<div style="color:#c0392b;font-size:13px;margin-bottom:10px;">${e(dateStr)}</div>`;
+
+  // RED HEADER BAR TABLE
+  h += `<table style="width:100%;border-collapse:collapse;margin-bottom:0;">
+<tr>
+<th style="background:#c0392b;color:#fff;font-size:11px;font-weight:700;text-align:left;padding:6px 12px;border:1px solid #a93226;">Report Name</th>
+<th style="background:#c0392b;color:#fff;font-size:11px;font-weight:700;text-align:left;padding:6px 12px;border:1px solid #a93226;">Equipment Location</th>
+<th style="background:#c0392b;color:#fff;font-size:11px;font-weight:700;text-align:left;padding:6px 12px;border:1px solid #a93226;">Work Order</th>
+<th style="background:#c0392b;color:#fff;font-size:11px;font-weight:700;text-align:left;padding:6px 12px;border:1px solid #a93226;">Technician Name</th>
+</tr><tr>
+<td style="font-size:12px;padding:5px 12px;border:1px solid #ddd;">${e(reportType)}</td>
+<td style="font-size:12px;padding:5px 12px;border:1px solid #ddd;">${e(locName)}</td>
+<td style="font-size:12px;padding:5px 12px;border:1px solid #ddd;">${e(r.workOrderNumber || '\u2014')}</td>
+<td style="font-size:12px;padding:5px 12px;border:1px solid #ddd;">${e(r.techName || '\u2014')}</td>
+</tr></table>`;
+
+  // EQUIPMENT INFO
+  h += `<div style="font-size:16px;font-weight:700;margin:22px 0 12px;color:#1a1a1a;">${e(eqName)} Information</div>`;
+  h += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+<tr>
+<td style="padding:5px 10px;font-size:12px;font-weight:700;color:#333;width:120px;">Manufacturer</td>
+<td style="padding:5px 10px;font-size:12px;color:#555;">${e(eq ? eq.type || '\u2014' : '\u2014')}</td>
+<td style="padding:5px 10px;font-size:12px;font-weight:700;color:#333;width:120px;">Year Installed</td>
+<td style="padding:5px 10px;font-size:12px;color:#555;">${e(eq ? eq.yearInstalled || '\u2014' : '\u2014')}</td>
+</tr><tr>
+<td style="padding:5px 10px;font-size:12px;font-weight:700;color:#333;">Model number</td>
+<td style="padding:5px 10px;font-size:12px;color:#555;">${e(eq ? eq.model || '\u2014' : '\u2014')}</td>
+<td style="padding:5px 10px;font-size:12px;font-weight:700;color:#333;">Client</td>
+<td style="padding:5px 10px;font-size:12px;color:#555;">${e(cl ? cl.name || '\u2014' : '\u2014')}</td>
+</tr><tr>
+<td style="padding:5px 10px;font-size:12px;font-weight:700;color:#333;">Serial number</td>
+<td style="padding:5px 10px;font-size:12px;color:#555;">${e(eq ? eq.serial || '\u2014' : '\u2014')}</td>
+<td style="padding:5px 10px;font-size:12px;font-weight:700;color:#333;">Location</td>
+<td style="padding:5px 10px;font-size:12px;color:#555;">${e(locName)}${locAddr ? '<br>' + e(locAddr) : ''}</td>
+</tr></table>`;
+
+  // PHOTOS — served directly from DB, no client-side manipulation
+  const hasBefore = r.photoBefore && r.photoBefore.length > 50;
+  const hasAfter = r.photoAfter && r.photoAfter.length > 50;
+  if (hasBefore || hasAfter) {
+    h += `<div style="font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;">Photos from Service Call</div>`;
+    h += `<table style="width:100%;border-collapse:collapse;"><tr>`;
+    if (hasBefore) {
+      h += `<td style="width:50%;text-align:center;padding:8px;vertical-align:top;">
+<img src="${r.photoBefore}" style="max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;">
+<div style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Photo Before Work</div></td>`;
+    }
+    if (hasAfter) {
+      h += `<td style="width:50%;text-align:center;padding:8px;vertical-align:top;">
+<img src="${r.photoAfter}" style="max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;">
+<div style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Photo of Work After Completion</div></td>`;
+    }
+    h += `</tr></table>`;
+  }
+
+  // WORK PERFORMED
+  h += `<div style="font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;">Description of Work Performed</div>`;
+  if (r.workPerformed) h += `<div style="margin:10px 0;"><div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">Work performed</div><div style="font-size:13px;line-height:1.6;color:#333;">${e(r.workPerformed)}</div></div>`;
+  if (r.cause) h += `<div style="margin:10px 0;"><div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">Cause / Finding</div><div style="font-size:13px;line-height:1.6;color:#333;">${e(r.cause)}</div></div>`;
+  if (r.parts) h += `<div style="margin:10px 0;"><div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">Parts Used / Replaced</div><div style="font-size:13px;line-height:1.6;color:#333;">${e(r.parts)}</div></div>`;
+  if (r.recommendations) h += `<div style="margin:10px 0;"><div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">Recommendations</div><div style="font-size:13px;line-height:1.6;color:#333;">${e(r.recommendations)}</div></div>`;
+
+  // STATUS LINE
+  h += `<table style="width:100%;margin:20px 0;"><tr>
+<td style="width:28px;vertical-align:middle;"><div style="width:22px;height:22px;background:#3498db;border-radius:50%;color:#fff;font-size:13px;font-weight:700;text-align:center;line-height:22px;">i</div></td>
+<td style="font-size:13px;font-weight:600;color:#1a1a1a;padding-left:8px;">Does this Unit Require Attention: ${e(statusLabel)}</td>
+</tr></table>`;
+
+  // CHECKLIST
+  let ck = r.checklist;
+  if (typeof ck === 'string') { try { ck = JSON.parse(ck); } catch(err) { ck = null; } }
+  if (ck && ck.templateId && ck.fields) {
+    h += `<div style="font-size:15px;font-weight:700;margin:24px 0 10px;border-bottom:2px solid #1a1a1a;padding-bottom:4px;">${e(ck.templateName || 'Checklist')}</div>`;
+    (ck.fields || []).forEach(f => {
+      if (f.type === 'checkbox') {
+        const bg = f.value ? 'background:#27ae60;border-color:#27ae60;' : '';
+        h += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #eee;">
+<div style="width:16px;height:16px;border:2px solid #999;display:inline-block;text-align:center;line-height:14px;font-size:11px;color:#fff;${bg}">${f.value ? '&#10003;' : ''}</div>
+<span style="font-size:13px;">${e(f.label)}</span></div>`;
+      } else if (f.type === 'text' || f.type === 'select') {
+        h += `<div style="padding:4px 0;font-size:13px;"><span style="font-weight:700;">${e(f.label)}:</span> ${e(f.value || 'N/A')}</div>`;
+      } else if (f.type === 'photo' && f.value) {
+        h += `<div style="margin:10px 0;"><div style="font-weight:700;font-size:12px;margin-bottom:4px;">${e(f.label)}</div>
+<img src="${f.value}" style="max-width:260px;border:1px solid #ccc;"></div>`;
+      }
+    });
+  } else if (Array.isArray(ck) && ck.length > 0) {
+    h += `<div style="font-size:15px;font-weight:700;margin:24px 0 10px;border-bottom:2px solid #1a1a1a;padding-bottom:4px;">Maintenance Checklist</div>`;
+    ck.forEach(c => {
+      const bg2 = c.done ? 'background:#27ae60;border-color:#27ae60;' : '';
+      h += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #eee;">
+<div style="width:16px;height:16px;border:2px solid #999;display:inline-block;text-align:center;line-height:14px;font-size:11px;color:#fff;${bg2}">${c.done ? '&#10003;' : ''}</div>
+<span style="font-size:13px;${c.done ? '' : 'color:#999;'}">${e(c.item)}</span></div>`;
+    });
+  }
+
+  // NAMEPLATE
+  const hasNameplate = r.photoNameplate && r.photoNameplate.length > 50;
+  if (hasNameplate) {
+    h += `<div style="font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;">Additional Images</div>`;
+    h += `<table style="width:100%;"><tr>
+<td style="width:50%;text-align:center;padding:8px;vertical-align:top;">
+<img src="${r.photoNameplate}" style="max-width:100%;max-height:240px;border:1px solid #ccc;display:block;margin:0 auto;">
+<div style="font-size:11px;color:#555;margin-top:4px;">Nameplate</div>
+</td><td style="width:50%;"></td></tr></table>`;
+  }
+
+  // FOOTER
+  h += `<div style="margin-top:40px;padding-top:16px;border-top:1px solid #ddd;text-align:center;">
+<div style="color:#c0392b;font-size:16px;font-weight:700;font-style:italic;">Thank you for choosing us - we truly appreciate your trust.</div>
+<div style="color:#999;font-size:10px;margin-top:6px;">Generated by FieldMark &bull; www.field-mark.app</div>
+</div></div>
+<script>
+window.onload = function() {
+  var imgs = document.querySelectorAll("img");
+  var total = imgs.length;
+  if (total === 0) { setTimeout(function(){ window.print(); }, 300); return; }
+  var loaded = 0, done = false;
+  function check() { loaded++; if (!done && loaded >= total) { done = true; setTimeout(function(){ window.print(); }, 500); } }
+  for (var i = 0; i < imgs.length; i++) {
+    if (imgs[i].complete && imgs[i].naturalWidth > 0) { check(); }
+    else { imgs[i].onload = check; imgs[i].onerror = check; }
+  }
+  setTimeout(function(){ if (!done) { done = true; window.print(); } }, 8000);
+};
+<\/script></body></html>`;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(h);
+});
+
 // ─── SERVICE REQUESTS ─────────────────────────────────────────────────────────
 app.post('/api/service-requests', requireClientAuth, async (req, res) => {
   const cfg = getEmailSettings();

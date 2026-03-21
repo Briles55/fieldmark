@@ -154,6 +154,7 @@ try { db.exec("ALTER TABLE clients ADD COLUMN creditLimit TEXT DEFAULT ''"); } c
 try { db.exec("ALTER TABLE clients ADD COLUMN accountNumber TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN defaultRate TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN arNotes TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE service_requests ADD COLUMN poNumber TEXT DEFAULT ''"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -909,14 +910,20 @@ window.onload = function() {
 // ─── SERVICE REQUESTS ─────────────────────────────────────────────────────────
 app.post('/api/service-requests', requireClientAuth, async (req, res) => {
   const cfg = getEmailSettings();
-  const { locationId, equipmentId, urgency, description, photos } = req.body;
+  const { locationId, equipmentId, urgency, description, photos, poNumber } = req.body;
   if (!locationId || !urgency || !description) return res.status(400).json({ error: 'Location, urgency, and description are required' });
+
+  // Check if client requires PO
+  const clientData = db.prepare('SELECT poRequired FROM clients WHERE id=?').get(req.session.client.id);
+  if (clientData && clientData.poRequired === 'Yes' && (!poNumber || !poNumber.trim())) {
+    return res.status(400).json({ error: 'A Purchase Order number is required to submit a service request' });
+  }
 
   // Store in database
   const srId = genId();
   const now = new Date().toISOString();
-  db.prepare('INSERT INTO service_requests (id,clientId,locationId,equipmentId,urgency,description,photos,status,createdAt) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(srId, req.session.client.id, locationId, equipmentId||'', urgency, description, JSON.stringify(photos||[]), 'New', now);
+  db.prepare('INSERT INTO service_requests (id,clientId,locationId,equipmentId,urgency,description,photos,status,poNumber,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(srId, req.session.client.id, locationId, equipmentId||'', urgency, description, JSON.stringify(photos||[]), 'New', poNumber||'', now);
 
   const client = db.prepare('SELECT * FROM clients WHERE id=?').get(req.session.client.id);
   const loc = db.prepare('SELECT * FROM locations WHERE id=?').get(locationId);
@@ -964,6 +971,10 @@ app.post('/api/service-requests', requireClientAuth, async (req, res) => {
             <td style="padding:10px 0;color:#64748b">Urgency</td>
             <td style="padding:10px 0"><span style="background:${urgencyColor};color:#fff;padding:3px 10px;border-radius:4px;font-size:13px;font-weight:600">${urgency}</span></td>
           </tr>
+          ${poNumber ? `<tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:10px 0;color:#64748b">Purchase Order #</td>
+            <td style="padding:10px 0;font-weight:600">${poNumber}</td>
+          </tr>` : ''}
           <tr style="border-bottom:1px solid #e2e8f0">
             <td style="padding:10px 0;color:#64748b;vertical-align:top">Description</td>
             <td style="padding:10px 0">${description.replace(/\n/g, '<br>')}</td>

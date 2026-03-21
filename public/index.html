@@ -1971,6 +1971,9 @@ function renderServiceRequest() {
               <option>Emergency</option>
             </select>
           </div>
+          <div class="fg"><label class="flbl">Purchase Order # *</label>
+            <input class="fc" type="text" id="sr-po" placeholder="Enter PO number" required>
+          </div>
           <div class="fg"><label class="flbl">Description *</label>
             <textarea class="fc" id="sr-description" placeholder="Describe the issue or service needed…" style="min-height:140px;" required></textarea>
           </div>
@@ -2041,11 +2044,13 @@ async function submitServiceRequest(e) {
   const equipmentId = document.getElementById('sr-equipment').value;
   const urgency = document.getElementById('sr-urgency').value;
   const description = document.getElementById('sr-description').value.trim();
+  const poNumber = document.getElementById('sr-po').value.trim();
   if (!locationId || !urgency || !description) { showToast('Please fill in all required fields','error'); return; }
+  if (!poNumber) { showToast('Purchase Order number is required','error'); return; }
   const btn = document.getElementById('sr-submit-btn');
   btn.disabled = true; btn.textContent = 'Sending…';
   try {
-    await apiPost('/api/service-requests', { locationId, equipmentId: equipmentId||undefined, urgency, description, photos: app.requestPhotos });
+    await apiPost('/api/service-requests', { locationId, equipmentId: equipmentId||undefined, urgency, description, photos: app.requestPhotos, poNumber });
     showToast('Service request submitted successfully!','success');
     renderServiceRequest(); // reset form
   } catch(err) {
@@ -2136,6 +2141,7 @@ function renderServiceRequestDetail() {
           <div><div class="ii-lbl">Location</div><div class="ii-val">${esc(loc?.buildingName||'\u2014')}${loc?.address?' \u2022 '+esc(loc.address):''}</div></div>
           <div><div class="ii-lbl">Equipment</div><div class="ii-val">${eq?esc(eq.name)+(eq.model?' \u2014 '+esc(eq.model):''):'\u2014'}</div></div>
           <div><div class="ii-lbl">Urgency</div><div class="ii-val"><span class="badge ${urgBadge}">${esc(sr.urgency)}</span></div></div>
+          <div><div class="ii-lbl">Purchase Order #</div><div class="ii-val"><strong>${esc(sr.poNumber||'\u2014')}</strong></div></div>
         </div>
         <hr class="div">
         <div class="ii-lbl">Description</div>

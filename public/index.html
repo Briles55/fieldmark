@@ -2372,6 +2372,10 @@ async function techUpdateStatus() {
   var newStatus = document.getElementById('wod-tech-status').value;
   if (!newStatus) { showToast('Please select a status','error'); return; }
   if (newStatus === wo.status) { showToast('Status is already ' + newStatus,'info'); return; }
+  if (newStatus === 'Completed') {
+    var linkedReports = (db.reports||[]).filter(function(r){return r.workOrderNumber===wo.woNumber;});
+    if (linkedReports.length === 0) { showToast('Cannot mark as Complete — no reports linked to this work order. Submit a report first.','error'); return; }
+  }
   try {
     var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: newStatus }, 'PUT');
     var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});

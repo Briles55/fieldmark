@@ -1047,6 +1047,10 @@ app.put('/api/work-orders/:id/close', requireAuth, (req, res) => {
   }
   const allowed = ['Completed', 'On Hold', 'Open'];
   const status = allowed.includes(req.body.status) ? req.body.status : 'Completed';
+  if (status === 'Completed') {
+    const linked = db.prepare("SELECT COUNT(*) as c FROM reports WHERE workOrderNumber=?").get(wo.woNumber);
+    if (!linked || linked.c === 0) return res.status(400).json({ error: 'Cannot mark as Complete — no reports linked to this work order' });
+  }
   db.prepare('UPDATE work_orders SET status=?, updatedAt=? WHERE id=?')
     .run(status, new Date().toISOString(), req.params.id);
   const updated = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);

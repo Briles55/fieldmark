@@ -1140,6 +1140,21 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div class="fg"><label class="flbl">Notes</label><textarea class="fc" id="c-notes" placeholder="Additional notesâ€¦"></textarea></div>
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
       <div class="fg">
+        <label class="flbl">Company Logo</label>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:4px;">
+          <div id="c-logo-preview" style="width:80px;height:80px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--bg2);">
+            <svg id="c-logo-placeholder" width="28" height="28" fill="none" stroke="var(--muted)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </div>
+          <div style="flex:1;">
+            <input type="file" id="c-logo-input" accept="image/*" onchange="handleClientLogoSelect(this)" style="display:none;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('c-logo-input').click()">Upload Logo</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="c-logo-remove" onclick="removeClientLogo()" style="display:none;margin-left:8px;color:var(--danger);">Remove</button>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px;">Logo will appear on PDF reports for this client.</div>
+          </div>
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+      <div class="fg">
         <label class="flbl">Client Portal Password</label>
         <input class="fc" type="password" id="c-portal-pass" placeholder="Set password for portal access (min 6 chars)">
         <div style="font-size:11px;color:var(--muted);margin-top:4px;">If set, the client can log in to view their locations, equipment, and reports using their email and this password. Leave blank to keep unchanged when editing.</div>
@@ -3304,12 +3319,17 @@ function renderClientDetail() {
   if (!c) { nav('clients'); return; }
   document.getElementById('client-title').textContent = c.name;
   document.getElementById('client-sub').textContent = `${db.locations.filter(l=>l.clientId===c.id).length} location(s)`;
-  document.getElementById('client-info').innerHTML = `
+  var infoHtml = '';
+  if (c.logo && c.logo.length > 50) {
+    infoHtml += `<div style="grid-column:1/-1;margin-bottom:8px;"><div class="ii-lbl">Logo</div><div class="ii-val"><img src="${esc(c.logo)}" style="max-height:60px;max-width:180px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:4px;background:#fff;"></div></div>`;
+  }
+  infoHtml += `
     <div><div class="ii-lbl">Phone</div><div class="ii-val">${esc(c.phone||'\u2014')}</div></div>
     <div><div class="ii-lbl">Email</div><div class="ii-val">${esc(c.email||'\u2014')}</div></div>
     <div><div class="ii-lbl">Address</div><div class="ii-val">${esc([c.address,c.city,c.state].filter(Boolean).join(', ')||'\u2014')}</div></div>
     ${c.notes?`<div style="grid-column:1/-1"><div class="ii-lbl">Notes</div><div class="ii-val" style="font-weight:400;color:var(--muted)">${esc(c.notes)}</div></div>`:''}
   `;
+  document.getElementById('client-info').innerHTML = infoHtml;
   renderLocationsTable();
 }
 
@@ -4173,14 +4193,69 @@ function openClientModal(id) {
   document.getElementById('c-state').value = c?.state||'';
   document.getElementById('c-notes').value = c?.notes||'';
   document.getElementById('c-portal-pass').value = '';
+  // Logo preview
+  app._clientLogo = c?.logo || '';
+  document.getElementById('c-logo-input').value = '';
+  var previewEl = document.getElementById('c-logo-preview');
+  var placeholderEl = document.getElementById('c-logo-placeholder');
+  var removeBtn = document.getElementById('c-logo-remove');
+  if (app._clientLogo && app._clientLogo.length > 50) {
+    previewEl.style.border = '1px solid var(--border)';
+    placeholderEl.style.display = 'none';
+    var existImg = previewEl.querySelector('img');
+    if (existImg) existImg.remove();
+    var img = document.createElement('img');
+    img.src = app._clientLogo;
+    img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
+    previewEl.appendChild(img);
+    removeBtn.style.display = '';
+  } else {
+    previewEl.style.border = '2px dashed var(--border)';
+    placeholderEl.style.display = '';
+    var existImg2 = previewEl.querySelector('img');
+    if (existImg2) existImg2.remove();
+    removeBtn.style.display = 'none';
+  }
   openModal('modal-client');
+}
+
+async function handleClientLogoSelect(inputEl) {
+  var file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  try {
+    var dataUri = await compressImage(file, 400, 0.8);
+    app._clientLogo = dataUri;
+    var previewEl = document.getElementById('c-logo-preview');
+    var placeholderEl = document.getElementById('c-logo-placeholder');
+    placeholderEl.style.display = 'none';
+    previewEl.style.border = '1px solid var(--border)';
+    var existImg = previewEl.querySelector('img');
+    if (existImg) existImg.remove();
+    var img = document.createElement('img');
+    img.src = dataUri;
+    img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
+    previewEl.appendChild(img);
+    document.getElementById('c-logo-remove').style.display = '';
+  } catch(err) { showToast('Failed to load image', 'error'); }
+}
+
+function removeClientLogo() {
+  app._clientLogo = '';
+  document.getElementById('c-logo-input').value = '';
+  var previewEl = document.getElementById('c-logo-preview');
+  var placeholderEl = document.getElementById('c-logo-placeholder');
+  previewEl.style.border = '2px dashed var(--border)';
+  placeholderEl.style.display = '';
+  var existImg = previewEl.querySelector('img');
+  if (existImg) existImg.remove();
+  document.getElementById('c-logo-remove').style.display = 'none';
 }
 
 async function saveClient() {
   const id = document.getElementById('client-id-field').value;
   const name = document.getElementById('c-name').value.trim();
   if (!name) { showToast('Company name is required','error'); return; }
-  const data = { name, phone: document.getElementById('c-phone').value.trim(), email: document.getElementById('c-email').value.trim(), address: document.getElementById('c-address').value.trim(), city: document.getElementById('c-city').value.trim(), state: document.getElementById('c-state').value.trim(), notes: document.getElementById('c-notes').value.trim() };
+  const data = { name, phone: document.getElementById('c-phone').value.trim(), email: document.getElementById('c-email').value.trim(), address: document.getElementById('c-address').value.trim(), city: document.getElementById('c-city').value.trim(), state: document.getElementById('c-state').value.trim(), notes: document.getElementById('c-notes').value.trim(), logo: app._clientLogo || '' };
   const portalPass = document.getElementById('c-portal-pass').value;
   if (portalPass) data.portalPassword = portalPass;
   try {

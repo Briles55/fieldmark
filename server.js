@@ -140,6 +140,7 @@ try { db.exec("ALTER TABLE reports ADD COLUMN photoBefore TEXT DEFAULT ''"); } c
 try { db.exec("ALTER TABLE reports ADD COLUMN photoAfter TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoNameplate TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN workOrderNumber TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN logo TEXT DEFAULT ''"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -506,21 +507,21 @@ app.get('/api/data', requireAuth, (req, res) => {
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
 app.post('/api/clients', requireAdmin, async (req, res) => {
-  const { name, phone, email, address, city, state, notes, portalPassword } = req.body;
+  const { name, phone, email, address, city, state, notes, portalPassword, logo } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const id = genId();
   let hash = '';
   if (portalPassword && portalPassword.length >= 6) hash = await bcrypt.hash(portalPassword, 10);
-  db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,passwordHash,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', hash, new Date().toISOString());
+  db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,passwordHash,logo,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', hash, logo||'', new Date().toISOString());
   res.json(db.prepare('SELECT * FROM clients WHERE id=?').get(id));
 });
 
 app.put('/api/clients/:id', requireAdmin, async (req, res) => {
-  const { name, phone, email, address, city, state, notes, portalPassword } = req.body;
+  const { name, phone, email, address, city, state, notes, portalPassword, logo } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
-  db.prepare('UPDATE clients SET name=?,phone=?,email=?,address=?,city=?,state=?,notes=? WHERE id=?')
-    .run(name, phone||'', email||'', address||'', city||'', state||'', notes||'', req.params.id);
+  db.prepare('UPDATE clients SET name=?,phone=?,email=?,address=?,city=?,state=?,notes=?,logo=? WHERE id=?')
+    .run(name, phone||'', email||'', address||'', city||'', state||'', notes||'', logo||'', req.params.id);
   if (portalPassword && portalPassword.length >= 6) {
     const hash = await bcrypt.hash(portalPassword, 10);
     db.prepare('UPDATE clients SET passwordHash=? WHERE id=?').run(hash, req.params.id);
@@ -741,6 +742,7 @@ body { font-family: Arial, Helvetica, sans-serif; }
 </div>
 </td>
 <td style="text-align:right;vertical-align:middle;">
+${cl && cl.logo && cl.logo.length > 50 ? `<img src="${cl.logo}" style="max-height:44px;max-width:160px;object-fit:contain;margin-bottom:4px;display:block;margin-left:auto;">` : ''}
 <div style="color:#c0392b;font-size:13px;font-weight:600;">${e(dateStr)}</div>
 </td>
 </tr></table>`;

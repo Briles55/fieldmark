@@ -13,7 +13,8 @@ const PORT = process.env.PORT || 3000;
 const SECRET = process.env.SESSION_SECRET || 'fieldmark-dev-secret-change-me';
 
 // ─── DATABASE ─────────────────────────────────────────────────────────────────
-const db = new Database(path.join(__dirname, 'fieldmark.db'));
+const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'fieldmark.db');
+const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 

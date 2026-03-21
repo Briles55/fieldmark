@@ -783,6 +783,15 @@ ${cl && cl.logo && cl.logo.length > 50 ? `<img src="${cl.logo}" style="max-heigh
 <td style="padding:5px 10px;font-size:12px;color:#555;">${e(locName)}${locAddr ? '<br>' + e(locAddr) : ''}</td>
 </tr></table>`;
 
+  // EQUIPMENT PHOTO — from equipment profile
+  const hasEqPhoto = eq && eq.photo && eq.photo.length > 50;
+  if (hasEqPhoto) {
+    h += `<div style="text-align:center;margin:20px 0 10px;">
+<img src="${eq.photo}" style="max-width:280px;max-height:220px;border:1px solid #ccc;border-radius:4px;display:block;margin:0 auto;">
+<div style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Equipment Photo</div>
+</div>`;
+  }
+
   // PHOTOS — served directly from DB, no client-side manipulation
   const hasBefore = r.photoBefore && r.photoBefore.length > 50;
   const hasAfter = r.photoAfter && r.photoAfter.length > 50;

@@ -2307,15 +2307,19 @@ function renderWorkOrderDetail() {
   content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Labor Entries</span><span class="badge bgr">' + labor.length + '</span>' +
     '<button class="btn btn-ghost btn-sm" onclick="addLaborEntry()" style="margin-left:auto;">+ Add Entry</button></div><div class="tbl-wrap">' + laborHtml + '</div></div>';
 
-  // Close Work Order button (assigned tech or admin, only when not already completed)
-  if (wo.status !== 'Completed' && wo.status !== 'Cancelled') {
-    var canClose = isAdmin() || (currentUser && wo.assignedTo === currentUser.id);
-    if (canClose) {
-      content.innerHTML += '<div style="margin-top:16px;text-align:center;">' +
-        '<button class="btn btn-success" onclick="closeWorkOrder()" style="min-width:220px;padding:12px 24px;font-size:15px;">' +
-        '<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:6px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>' +
-        'Close Work Order</button></div>';
-    }
+  // Update Status (assigned tech or admin)
+  var canUpdateStatus = isAdmin() || (currentUser && wo.assignedTo === currentUser.id);
+  if (canUpdateStatus) {
+    content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Update Status</span></div>' +
+      '<div class="card-body"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+      '<select class="fc" id="wod-tech-status" style="max-width:280px;">' +
+      '<option value="">\u2014 Select Status \u2014</option>' +
+      '<option value="Completed"' + (wo.status==='Completed'?' selected':'') + '>Complete</option>' +
+      '<option value="On Hold"' + (wo.status==='On Hold'?' selected':'') + '>Waiting on Material / Parts</option>' +
+      '<option value="Open"' + (wo.status==='Open'?' selected':'') + '>Not Complete</option>' +
+      '</select>' +
+      '<button class="btn btn-primary" onclick="techUpdateStatus()">Update</button>' +
+      '</div></div></div>';
   }
 
   // Edit section (admin only)
@@ -2362,15 +2366,18 @@ function addLaborEntry() {
   modal.style.display = 'flex';
 }
 
-async function closeWorkOrder() {
+async function techUpdateStatus() {
   var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
   if (!wo) return;
-  if (!confirm('Close this work order (' + wo.woNumber + ')? This will mark it as Completed and notify admin for billing.')) return;
+  var newStatus = document.getElementById('wod-tech-status').value;
+  if (!newStatus) { showToast('Please select a status','error'); return; }
+  if (newStatus === wo.status) { showToast('Status is already ' + newStatus,'info'); return; }
   try {
-    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', {}, 'PUT');
+    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: newStatus }, 'PUT');
     var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
     if (idx>=0) db.workOrders[idx] = updated;
-    showToast('Work order closed — marked as Completed','success');
+    var label = newStatus==='Completed'?'Complete':newStatus==='On Hold'?'Waiting on Material / Parts':'Not Complete';
+    showToast('Status updated to ' + label,'success');
     renderWorkOrderDetail();
   } catch(e) { showToast(e.message,'error'); }
 }

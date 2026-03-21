@@ -1037,16 +1037,18 @@ app.delete('/api/work-orders/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── CLOSE WORK ORDER (assigned tech or admin) ───────────────────────────────
+// ─── UPDATE WORK ORDER STATUS (assigned tech or admin) ───────────────────────
 app.put('/api/work-orders/:id/close', requireAuth, (req, res) => {
   const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
   if (!wo) return res.status(404).json({ error: 'Work order not found' });
   const user = req.session.user;
   if (user.role !== 'admin' && wo.assignedTo !== user.id) {
-    return res.status(403).json({ error: 'Only the assigned technician or an admin can close this work order' });
+    return res.status(403).json({ error: 'Only the assigned technician or an admin can update this work order' });
   }
+  const allowed = ['Completed', 'On Hold', 'Open'];
+  const status = allowed.includes(req.body.status) ? req.body.status : 'Completed';
   db.prepare('UPDATE work_orders SET status=?, updatedAt=? WHERE id=?')
-    .run('Completed', new Date().toISOString(), req.params.id);
+    .run(status, new Date().toISOString(), req.params.id);
   const updated = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
   try { updated.laborEntries = JSON.parse(updated.laborEntries); } catch(e) { updated.laborEntries = []; }
   res.json(updated);

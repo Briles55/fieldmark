@@ -3653,11 +3653,29 @@ function renderReportsView() {
   // Store filtered list for CSV export
   app._filteredReports = list;
 
+  // Load reviewed reports from localStorage
+  var reviewed = {};
+  var lastViewedId = '';
+  var lastViewedTime = '';
+  try { reviewed = JSON.parse(localStorage.getItem('fm_reviewed_reports') || '{}'); } catch(e) {}
+  Object.keys(reviewed).forEach(function(rid) {
+    if (!lastViewedTime || reviewed[rid] > lastViewedTime) { lastViewedId = rid; lastViewedTime = reviewed[rid]; }
+  });
+
   tbody.innerHTML = '';
   for (var i = 0; i < list.length; i++) {
     var r = list[i];
     var tr = document.createElement('tr');
     tr.className = 'clickable';
+    var isReviewed = !!reviewed[r.id];
+    var isLastViewed = r.id === lastViewedId;
+    if (!isReviewed) {
+      tr.style.backgroundColor = 'rgba(52, 152, 219, 0.08)';
+      tr.style.fontWeight = '600';
+    }
+    if (isLastViewed) {
+      tr.style.borderLeft = '3px solid var(--accent)';
+    }
     (function(rid) { tr.onclick = function() { openReportDetail(rid); }; })(r.id);
 
     var td1 = document.createElement('td'); td1.textContent = fmtDate(r.date);
@@ -3679,6 +3697,20 @@ function renderReportsView() {
       td8.appendChild(sBadge);
     } else { td8.textContent = '\u2014'; }
     var td9 = document.createElement('td');
+    if (!isReviewed) {
+      var newBadge = document.createElement('span');
+      newBadge.className = 'badge ba';
+      newBadge.textContent = 'New';
+      newBadge.style.cssText = 'margin-right:6px;font-size:10px;';
+      td9.appendChild(newBadge);
+    }
+    if (isLastViewed) {
+      var lastBadge = document.createElement('span');
+      lastBadge.className = 'badge bb';
+      lastBadge.textContent = 'Last Viewed';
+      lastBadge.style.cssText = 'margin-right:6px;font-size:10px;';
+      td9.appendChild(lastBadge);
+    }
     var viewBtn = document.createElement('button');
     viewBtn.className = 'btn btn-ghost btn-sm';
     viewBtn.textContent = 'View';
@@ -4064,7 +4096,15 @@ async function submitReport(e) {
 }
 
 // â”€â”€â”€ REPORT DETAIL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function openReportDetail(id) { app.reportId = id; app.prevView = app.view; showView('report-detail'); }
+function openReportDetail(id) {
+  app.reportId = id; app.prevView = app.view;
+  // Track reviewed reports
+  var reviewed = {};
+  try { reviewed = JSON.parse(localStorage.getItem('fm_reviewed_reports') || '{}'); } catch(e) {}
+  reviewed[id] = new Date().toISOString();
+  localStorage.setItem('fm_reviewed_reports', JSON.stringify(reviewed));
+  showView('report-detail');
+}
 function goBackFromReportDetail() { if (app.prevView === 'equipment') openEquipmentView(app.equipmentId); else if (isClient()) nav('portal-reports'); else nav('reports'); }
 
 function renderReportDetail() {

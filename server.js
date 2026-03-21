@@ -727,8 +727,23 @@ body { font-family: Arial, Helvetica, sans-serif; }
 </style></head><body>
 <div style="max-width:760px;margin:0 auto;padding:20px 28px 40px;font-size:13px;line-height:1.5;color:#1a1a1a;">`;
 
-  // DATE LINE
-  h += `<div style="color:#c0392b;font-size:13px;margin-bottom:10px;">${e(dateStr)}</div>`;
+  // LOGO + DATE HEADER
+  h += `<table style="width:100%;margin-bottom:14px;"><tr>
+<td style="vertical-align:middle;">
+<div style="display:flex;align-items:center;gap:10px;">
+<div style="width:36px;height:36px;background:rgba(59,130,246,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+<svg width="20" height="20" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+</div>
+<div>
+<div style="font-size:20px;font-weight:700;color:#3b82f6;letter-spacing:-.5px;">FieldMark</div>
+<div style="font-size:10px;color:#888;">Service Management Platform</div>
+</div>
+</div>
+</td>
+<td style="text-align:right;vertical-align:middle;">
+<div style="color:#c0392b;font-size:13px;font-weight:600;">${e(dateStr)}</div>
+</td>
+</tr></table>`;
 
   // RED HEADER BAR TABLE
   h += `<table style="width:100%;border-collapse:collapse;margin-bottom:0;">

@@ -3713,6 +3713,7 @@ function csvCell(val) {
 async function exportReportPDF(id) {
   var r = db.reports.find(function(x) { return x.id === id; });
   if (!r) { showToast('Report not found', 'error'); return; }
+  showToast('Generating report...', 'info');
   var eq = db.equipment.find(function(e) { return e.id === r.equipmentId; });
   var loc = eq ? db.locations.find(function(l) { return l.id === eq.locationId; }) : null;
   var cl = loc ? db.clients.find(function(c) { return c.id === loc.clientId; }) : null;
@@ -3721,197 +3722,183 @@ async function exportReportPDF(id) {
   var photos = {};
   try { photos = await apiGet('/api/reports/' + id + '/photos'); } catch(e) {}
 
-  var reportTitle = (r.type === 'service' ? 'Service' : 'Maintenance') + ' Report';
+  var reportType = r.type === 'service' ? 'Service Record' : 'Maintenance Record';
   var dateStr = fmtDT(r.date);
   var statusLabel = r.status || 'N/A';
-  var statusColor = r.status === 'Operational' ? '#166534' : r.status === 'Needs Attention' ? '#92400e' : '#991b1b';
-  var statusBg = r.status === 'Operational' ? '#dcfce7' : r.status === 'Needs Attention' ? '#fef3c7' : '#fee2e2';
-  var locLine = esc(loc?.buildingName || '');
-  if (loc?.address) locLine += ', ' + esc(loc.address);
-  if (loc?.city) locLine += ', ' + esc(loc.city);
-  if (loc?.state) locLine += ' ' + esc(loc.state);
+  var locName = loc?.buildingName || '';
+  var locAddr = '';
+  if (loc?.address) locAddr += loc.address;
+  if (loc?.city) locAddr += ', ' + loc.city;
+  if (loc?.state) locAddr += ' ' + loc.state;
 
-  var html = '<!DOCTYPE html><html><head><title>' + esc(reportTitle) + '</title>';
+  var html = '<!DOCTYPE html><html><head><title>FieldMark Report</title>';
   html += '<style>';
   html += '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }';
-  html += 'body { font-family: -apple-system, BlinkMacSystemFont, “Segoe UI”, Roboto, sans-serif; color: #1a1a2e; font-size: 13px; line-height: 1.5; }';
-  html += '.page { max-width: 800px; margin: 0 auto; padding: 0 32px 40px; }';
+  html += 'body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; font-size: 13px; line-height: 1.5; background: #fff; }';
+  html += '.page { max-width: 780px; margin: 0 auto; padding: 20px 28px 40px; }';
 
-  // Header
-  html += '.header { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; padding: 28px 32px; margin: 0 -32px 0; }';
-  html += '.header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }';
-  html += '.header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin: 0; }';
-  html += '.header .brand { font-size: 11px; opacity: 0.7; margin-top: 2px; }';
-  html += '.header .date-badge { background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; }';
+  // Date line
+  html += '.date-line { color: #c0392b; font-size: 13px; font-weight: 400; margin-bottom: 10px; }';
 
-  // Info bar
-  html += '.info-bar { display: grid; grid-template-columns: repeat(4, 1fr); background: #f0f4f8; margin: 0 -32px; padding: 14px 32px; border-bottom: 2px solid #e2e8f0; }';
-  html += '.info-bar .ib-item { }';
-  html += '.info-bar .ib-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 600; margin-bottom: 2px; }';
-  html += '.info-bar .ib-value { font-size: 13px; font-weight: 600; color: #1e293b; }';
+  // Red header bar
+  html += '.header-bar { width: 100%; border-collapse: collapse; margin-bottom: 0; }';
+  html += '.header-bar th { background: #c0392b; color: #fff; font-size: 11px; font-weight: 700; text-align: left; padding: 6px 12px; border: 1px solid #a93226; }';
+  html += '.header-bar td { font-size: 12px; padding: 5px 12px; border: 1px solid #ddd; color: #333; }';
 
-  // Sections
-  html += '.section { margin-top: 24px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; page-break-inside: avoid; }';
-  html += '.section-hd { background: #f8fafc; padding: 12px 20px; font-weight: 700; font-size: 13px; color: #1e293b; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.3px; }';
-  html += '.section-body { padding: 16px 20px; }';
+  // Section titles
+  html += '.section-title { font-size: 18px; font-weight: 700; text-align: center; margin: 28px 0 16px; color: #1a1a1a; }';
+  html += '.section-title-left { font-size: 15px; font-weight: 700; margin: 24px 0 12px; color: #1a1a1a; border-bottom: 2px solid #1a1a1a; padding-bottom: 4px; }';
 
-  // Info grid
-  html += '.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }';
-  html += '.info-row { display: flex; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }';
-  html += '.info-row:last-child { border-bottom: none; }';
-  html += '.info-lbl { width: 140px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: #64748b; font-weight: 600; flex-shrink: 0; padding-top: 1px; }';
-  html += '.info-val { flex: 1; font-size: 13px; color: #1e293b; }';
-  html += '.info-val code { font-family: “SF Mono”, “Consolas”, monospace; font-size: 12px; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; }';
+  // Equipment info table
+  html += '.eq-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }';
+  html += '.eq-table td { padding: 5px 10px; font-size: 12px; vertical-align: top; }';
+  html += '.eq-label { font-weight: 700; color: #333; width: 130px; }';
+  html += '.eq-val { color: #555; }';
 
-  // Status badge
-  html += '.status-badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.2px; }';
-
-  // Work text
-  html += '.work-text { font-size: 13.5px; line-height: 1.7; color: #334155; white-space: pre-wrap; }';
+  // Equipment name heading
+  html += '.eq-name { font-size: 16px; font-weight: 700; margin: 20px 0 10px; color: #1a1a1a; }';
 
   // Photos
-  html += '.photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }';
-  html += '.photo-item { text-align: center; }';
-  html += '.photo-item img { max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #e2e8f0; object-fit: contain; }';
-  html += '.photo-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: #64748b; margin-bottom: 8px; }';
+  html += '.photo-row { display: flex; gap: 20px; justify-content: center; margin: 16px 0; }';
+  html += '.photo-item { text-align: center; flex: 1; max-width: 48%; }';
+  html += '.photo-item img { width: 100%; max-height: 280px; object-fit: contain; border: 1px solid #ccc; }';
+  html += '.photo-caption { font-size: 11px; font-style: italic; color: #555; margin-top: 4px; }';
+
+  // Work description
+  html += '.work-block { margin: 12px 0; }';
+  html += '.work-label { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }';
+  html += '.work-text { font-size: 13px; line-height: 1.6; color: #333; white-space: pre-wrap; }';
+
+  // Status line
+  html += '.status-line { display: flex; align-items: center; gap: 8px; margin: 16px 0; padding: 10px 14px; background: #f0f4f8; border-left: 4px solid #3498db; }';
+  html += '.status-icon { width: 20px; height: 20px; background: #3498db; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0; }';
+  html += '.status-text { font-size: 13px; font-weight: 600; }';
 
   // Checklist
-  html += '.chk-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; }';
+  html += '.chk-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #eee; }';
   html += '.chk-row:last-child { border: none; }';
-  html += '.chk-box { width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }';
-  html += '.chk-done { background: #22c55e; }';
-  html += '.chk-undone { background: #e2e8f0; }';
-  html += '.chk-label { font-size: 13px; }';
-  html += '.chk-val { font-size: 13px; color: #334155; }';
+  html += '.chk-box { width: 16px; height: 16px; border: 2px solid #999; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }';
+  html += '.chk-done { background: #27ae60; border-color: #27ae60; }';
+  html += '.chk-mark { color: #fff; font-size: 11px; font-weight: 700; }';
 
   // Footer
-  html += '.footer { margin-top: 32px; padding-top: 16px; border-top: 2px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 11px; }';
+  html += '.footer { margin-top: 40px; text-align: center; padding-top: 16px; border-top: 1px solid #ddd; }';
+  html += '.footer-msg { color: #c0392b; font-size: 16px; font-weight: 700; font-style: italic; }';
+  html += '.footer-sub { color: #999; font-size: 10px; margin-top: 6px; }';
+
+  // Additional images grid
+  html += '.img-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }';
+  html += '.img-grid-item { text-align: center; }';
+  html += '.img-grid-item img { width: 100%; max-height: 240px; object-fit: contain; border: 1px solid #ccc; }';
+  html += '.img-grid-caption { font-size: 11px; color: #555; margin-top: 4px; }';
 
   // Print
-  html += '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .section { break-inside: avoid; } }';
-  html += '@page { margin: 0; size: letter; }';
+  html += '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } @page { margin: 12mm 10mm; size: letter; } }';
   html += '</style></head><body><div class=”page”>';
 
-  // === HEADER ===
-  html += '<div class=”header”>';
-  html += '<div class=”header-top”>';
-  html += '<div><h1>' + esc(reportTitle) + '</h1><div class=”brand”>FieldMark &mdash; Service Management</div></div>';
-  html += '<div class=”date-badge”>' + dateStr + '</div>';
-  html += '</div>';
-  // Client & location in header
-  html += '<div style=”display:flex;justify-content:space-between;align-items:flex-end;”>';
-  html += '<div><div style=”font-size:16px;font-weight:600;”>' + esc(cl?.name || '') + '</div>';
-  if (locLine) html += '<div style=”font-size:12px;opacity:0.8;margin-top:2px;”>' + locLine + '</div>';
-  html += '</div>';
-  html += '<div style=”text-align:right;”><div style=”font-size:11px;opacity:0.7;”>EQUIPMENT STATUS</div><div style=”margin-top:4px;”><span class=”status-badge” style=”background:' + statusBg + ';color:' + statusColor + ';”>' + esc(statusLabel) + '</span></div></div>';
-  html += '</div></div>';
+  // === DATE LINE ===
+  html += '<div class=”date-line”>' + dateStr + '</div>';
 
-  // === INFO BAR ===
-  html += '<div class=”info-bar”>';
-  html += '<div class=”ib-item”><div class=”ib-label”>Technician</div><div class=”ib-value”>' + esc(r.techName || '\u2014') + '</div></div>';
-  html += '<div class=”ib-item”><div class=”ib-label”>Report Type</div><div class=”ib-value”>' + (r.type === 'service' ? 'Service' : 'Maintenance') + '</div></div>';
-  html += '<div class=”ib-item”><div class=”ib-label”>Work Order</div><div class=”ib-value”>' + esc(r.workOrderNumber || 'N/A') + '</div></div>';
-  html += '<div class=”ib-item”><div class=”ib-label”>Equipment</div><div class=”ib-value”>' + esc(eq?.name || '\u2014') + '</div></div>';
-  html += '</div>';
+  // === RED HEADER BAR ===
+  html += '<table class=”header-bar”><thead><tr>';
+  html += '<th>Report Name</th><th>Equipment Location</th><th>Work Order</th><th>Technician Name</th>';
+  html += '</tr></thead><tbody><tr>';
+  html += '<td>' + esc(reportType) + '</td>';
+  html += '<td>' + esc(locName) + '</td>';
+  html += '<td>' + esc(r.workOrderNumber || '\u2014') + '</td>';
+  html += '<td>' + esc(r.techName || '\u2014') + '</td>';
+  html += '</tr></tbody></table>';
 
-  // === EQUIPMENT INFO ===
-  html += '<div class=”section”><div class=”section-hd”>Equipment Information</div><div class=”section-body”>';
-  html += '<div class=”info-grid”>';
-  html += '<div class=”info-row”><div class=”info-lbl”>Equipment</div><div class=”info-val”>' + esc(eq?.name || '\u2014') + '</div></div>';
-  html += '<div class=”info-row”><div class=”info-lbl”>Type</div><div class=”info-val”>' + esc(eq?.type || '\u2014') + '</div></div>';
-  html += '<div class=”info-row”><div class=”info-lbl”>Manufacturer</div><div class=”info-val”>' + esc(eq?.manufacturer || eq?.type || '\u2014') + '</div></div>';
-  html += '<div class=”info-row”><div class=”info-lbl”>Model</div><div class=”info-val”><code>' + esc(eq?.model || '\u2014') + '</code></div></div>';
-  html += '<div class=”info-row”><div class=”info-lbl”>Serial #</div><div class=”info-val”><code>' + esc(eq?.serial || '\u2014') + '</code></div></div>';
-  if (eq?.yearInstalled) html += '<div class=”info-row”><div class=”info-lbl”>Year Installed</div><div class=”info-val”>' + esc(eq.yearInstalled) + '</div></div>';
-  html += '<div class=”info-row”><div class=”info-lbl”>Location</div><div class=”info-val”>' + esc(loc?.buildingName || '\u2014') + '</div></div>';
-  html += '<div class=”info-row”><div class=”info-lbl”>Client</div><div class=”info-val”>' + esc(cl?.name || '\u2014') + '</div></div>';
-  html += '</div></div></div>';
+  // === EQUIPMENT NAME & INFO ===
+  html += '<div class=”eq-name”>' + esc(eq?.name || 'Equipment') + ' Information</div>';
+  html += '<table class=”eq-table”>';
+  html += '<tr><td class=”eq-label”>Manufacturer</td><td class=”eq-val”>' + esc(eq?.type || '\u2014') + '</td>';
+  html += '<td class=”eq-label”>Year Installed</td><td class=”eq-val”>' + esc(eq?.yearInstalled || '\u2014') + '</td></tr>';
+  html += '<tr><td class=”eq-label”>Model number</td><td class=”eq-val”>' + esc(eq?.model || '\u2014') + '</td>';
+  html += '<td class=”eq-label”>Client</td><td class=”eq-val”>' + esc(cl?.name || '\u2014') + '</td></tr>';
+  html += '<tr><td class=”eq-label”>Serial number</td><td class=”eq-val”>' + esc(eq?.serial || '\u2014') + '</td>';
+  html += '<td class=”eq-label”>Location</td><td class=”eq-val”>' + esc(locName) + (locAddr ? '<br>' + esc(locAddr) : '') + '</td></tr>';
+  html += '</table>';
 
   // === PHOTOS FROM SERVICE CALL ===
-  if (photos.photoBefore || photos.photoAfter || photos.photoNameplate) {
-    html += '<div class=”section”><div class=”section-hd”>Photos from Service Call</div><div class=”section-body”>';
-    html += '<div class=”photo-grid”>';
+  if (photos.photoBefore || photos.photoAfter) {
+    html += '<div class=”section-title”>Photos from Service Call</div>';
+    html += '<div class=”photo-row”>';
     if (photos.photoBefore) {
-      html += '<div class=”photo-item”><div class=”photo-label”>Before Work</div><img src=”' + photos.photoBefore + '”></div>';
+      html += '<div class=”photo-item”><img src=”' + photos.photoBefore + '”><div class=”photo-caption”>Photo Before Work</div></div>';
     }
     if (photos.photoAfter) {
-      html += '<div class=”photo-item”><div class=”photo-label”>After Completion</div><img src=”' + photos.photoAfter + '”></div>';
+      html += '<div class=”photo-item”><img src=”' + photos.photoAfter + '”><div class=”photo-caption”>Photo of Work After Completion</div></div>';
     }
     html += '</div>';
-    if (photos.photoNameplate) {
-      html += '<div style=”margin-top:16px;”><div class=”photo-item”><div class=”photo-label”>Nameplate</div><img src=”' + photos.photoNameplate + '” style=”max-height:200px;”></div></div>';
-    }
-    html += '</div></div>';
   }
 
   // === DESCRIPTION OF WORK PERFORMED ===
+  html += '<div class=”section-title”>Description of Work Performed</div>';
   if (r.workPerformed) {
-    html += '<div class=”section”><div class=”section-hd”>Description of Work Performed</div><div class=”section-body”>';
-    html += '<div class=”work-text”>' + esc(r.workPerformed) + '</div>';
-    html += '</div></div>';
+    html += '<div class=”work-block”><div class=”work-label”>Work performed</div>';
+    html += '<div class=”work-text”>' + esc(r.workPerformed) + '</div></div>';
   }
-
-  // === CAUSE / FINDING ===
   if (r.cause) {
-    html += '<div class=”section”><div class=”section-hd”>Cause / Finding</div><div class=”section-body”>';
-    html += '<div class=”work-text”>' + esc(r.cause) + '</div>';
-    html += '</div></div>';
+    html += '<div class=”work-block”><div class=”work-label”>Cause / Finding</div>';
+    html += '<div class=”work-text”>' + esc(r.cause) + '</div></div>';
   }
-
-  // === PARTS USED ===
   if (r.parts) {
-    html += '<div class=”section”><div class=”section-hd”>Parts Used / Replaced</div><div class=”section-body”>';
-    html += '<div class=”work-text”>' + esc(r.parts) + '</div>';
-    html += '</div></div>';
+    html += '<div class=”work-block”><div class=”work-label”>Parts Used / Replaced</div>';
+    html += '<div class=”work-text”>' + esc(r.parts) + '</div></div>';
+  }
+  if (r.recommendations) {
+    html += '<div class=”work-block”><div class=”work-label”>Recommendations</div>';
+    html += '<div class=”work-text”>' + esc(r.recommendations) + '</div></div>';
   }
 
-  // === RECOMMENDATIONS ===
-  if (r.recommendations) {
-    html += '<div class=”section”><div class=”section-hd”>Recommendations</div><div class=”section-body”>';
-    html += '<div class=”work-text”>' + esc(r.recommendations) + '</div>';
-    html += '</div></div>';
-  }
+  // === STATUS LINE ===
+  html += '<div class=”status-line”>';
+  html += '<div class=”status-icon”>i</div>';
+  html += '<div class=”status-text”>Does this Unit Require Attention: ' + esc(statusLabel) + '</div>';
+  html += '</div>';
 
   // === CHECKLIST ===
   if (r.checklist) {
     var cl2 = r.checklist;
     if (typeof cl2 === 'string') { try { cl2 = JSON.parse(cl2); } catch(e) { cl2 = null; } }
     if (cl2 && cl2.templateId && cl2.fields) {
-      // Custom template checklist
-      html += '<div class=”section”><div class=”section-hd”>' + esc(cl2.templateName || 'Checklist') + '</div><div class=”section-body”>';
+      html += '<div class=”section-title-left”>' + esc(cl2.templateName || 'Checklist') + '</div>';
       (cl2.fields || []).forEach(function(f) {
         if (f.type === 'checkbox') {
           html += '<div class=”chk-row”>';
-          html += '<div class=”chk-box ' + (f.value ? 'chk-done' : 'chk-undone') + '”>' + (f.value ? '<svg width=”12” height=”12” fill=”none” stroke=”#fff” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”3” d=”M5 13l4 4L19 7”/></svg>' : '') + '</div>';
-          html += '<div class=”chk-label”>' + esc(f.label) + '</div>';
+          html += '<div class=”chk-box ' + (f.value ? 'chk-done' : '') + '”>' + (f.value ? '<span class=”chk-mark”>&#10003;</span>' : '') + '</div>';
+          html += '<span>' + esc(f.label) + '</span>';
           html += '</div>';
-        } else if (f.type === 'text') {
-          html += '<div class=”info-row”><div class=”info-lbl”>' + esc(f.label) + '</div><div class=”info-val”>' + esc(f.value || 'N/A') + '</div></div>';
-        } else if (f.type === 'select') {
-          html += '<div class=”info-row”><div class=”info-lbl”>' + esc(f.label) + '</div><div class=”info-val”>' + esc(f.value || 'N/A') + '</div></div>';
+        } else if (f.type === 'text' || f.type === 'select') {
+          html += '<div style=”padding:4px 0;”><span style=”font-weight:700;”>' + esc(f.label) + ':</span> ' + esc(f.value || 'N/A') + '</div>';
         } else if (f.type === 'photo' && f.value) {
-          html += '<div style=”margin:12px 0;”><div class=”photo-label”>' + esc(f.label) + '</div><img src=”' + f.value + '” style=”max-width:280px;border-radius:8px;border:1px solid #e2e8f0;”></div>';
+          html += '<div style=”margin:10px 0;”><div style=”font-weight:700;margin-bottom:4px;”>' + esc(f.label) + '</div><img src=”' + f.value + '” style=”max-width:260px;border:1px solid #ccc;”></div>';
         }
       });
-      html += '</div></div>';
     } else if (Array.isArray(cl2) && cl2.length > 0) {
-      // Legacy checklist
-      var doneCount = cl2.filter(function(c) { return c.done; }).length;
-      html += '<div class=”section”><div class=”section-hd”>Maintenance Checklist <span style=”float:right;font-weight:400;color:#64748b;”>' + doneCount + '/' + cl2.length + ' complete</span></div><div class=”section-body”>';
+      html += '<div class=”section-title-left”>Maintenance Checklist</div>';
       cl2.forEach(function(c) {
         html += '<div class=”chk-row”>';
-        html += '<div class=”chk-box ' + (c.done ? 'chk-done' : 'chk-undone') + '”>' + (c.done ? '<svg width=”12” height=”12” fill=”none” stroke=”#fff” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”3” d=”M5 13l4 4L19 7”/></svg>' : '') + '</div>';
-        html += '<div class=”chk-label” style=”' + (c.done ? '' : 'color:#94a3b8;') + '”>' + esc(c.item) + '</div>';
+        html += '<div class=”chk-box ' + (c.done ? 'chk-done' : '') + '”>' + (c.done ? '<span class=”chk-mark”>&#10003;</span>' : '') + '</div>';
+        html += '<span style=”' + (c.done ? '' : 'color:#999;') + '”>' + esc(c.item) + '</span>';
         html += '</div>';
       });
-      html += '</div></div>';
     }
+  }
+
+  // === NAMEPLATE / ADDITIONAL IMAGES ===
+  if (photos.photoNameplate) {
+    html += '<div class=”section-title”>Additional Images</div>';
+    html += '<div class=”img-grid”>';
+    html += '<div class=”img-grid-item”><img src=”' + photos.photoNameplate + '”><div class=”img-grid-caption”>Nameplate</div></div>';
+    html += '</div>';
   }
 
   // === FOOTER ===
   html += '<div class=”footer”>';
-  html += '<div style=”font-weight:600;color:#64748b;margin-bottom:4px;”>Thank you for choosing us &mdash; we truly appreciate your trust.</div>';
-  html += '<div>Generated by FieldMark &bull; www.field-mark.app &bull; ' + new Date().toLocaleDateString() + '</div>';
+  html += '<div class=”footer-msg”>Thank you for choosing us - we truly appreciate your trust.</div>';
+  html += '<div class=”footer-sub”>Generated by FieldMark &bull; www.field-mark.app</div>';
   html += '</div>';
 
   html += '</div></body></html>';

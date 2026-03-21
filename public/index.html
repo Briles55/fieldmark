@@ -514,6 +514,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div class="card-hd"><span class="card-title">Client Details</span></div>
         <div class="card-body"><div class="ig3" id="client-info"></div></div>
       </div>
+      <div class="card admin-only" style="margin-bottom:20px;" id="client-ar-card">
+        <div class="card-hd"><span class="card-title">Accounts Receivable</span></div>
+        <div class="card-body"><div class="ig3" id="client-ar-info"></div></div>
+      </div>
       <div class="card">
         <div class="card-hd">
           <span class="card-title">Locations</span>
@@ -1158,6 +1162,45 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <label class="flbl">Client Portal Password</label>
         <input class="fc" type="password" id="c-portal-pass" placeholder="Set password for portal access (min 6 chars)">
         <div style="font-size:11px;color:var(--muted);margin-top:4px;">If set, the client can log in to view their locations, equipment, and reports using their email and this password. Leave blank to keep unchanged when editing.</div>
+      </div>
+      <!-- Accounts Receivable Section (admin only) -->
+      <div class="admin-only">
+        <hr style="border:none;border-top:2px solid var(--border);margin:20px 0;">
+        <div style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--fg);">Accounts Receivable</div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">Billing Contact Name</label><input class="fc" type="text" id="c-ar-contact" placeholder="Jane Smith"></div>
+          <div class="fg"><label class="flbl">Billing Email</label><input class="fc" type="email" id="c-ar-email" placeholder="billing@company.com"></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">Billing Phone</label><input class="fc" type="tel" id="c-ar-phone" placeholder="(555) 000-0000"></div>
+          <div class="fg"><label class="flbl">Account Number</label><input class="fc" type="text" id="c-ar-account" placeholder="ACCT-001"></div>
+        </div>
+        <div class="fg"><label class="flbl">Billing Address</label><input class="fc" type="text" id="c-ar-address" placeholder="PO Box 123 or street address"></div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">Payment Terms</label>
+            <select class="fc" id="c-ar-terms">
+              <option value="">Select terms</option>
+              <option>Due on Receipt</option>
+              <option>Net 15</option>
+              <option>Net 30</option>
+              <option>Net 45</option>
+              <option>Net 60</option>
+              <option>Net 90</option>
+            </select>
+          </div>
+          <div class="fg"><label class="flbl">PO Required</label>
+            <select class="fc" id="c-ar-po">
+              <option>No</option>
+              <option>Yes</option>
+            </select>
+          </div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">Tax ID / GST Number</label><input class="fc" type="text" id="c-ar-taxid" placeholder="Tax ID"></div>
+          <div class="fg"><label class="flbl">Credit Limit</label><input class="fc" type="text" id="c-ar-creditlimit" placeholder="$0.00"></div>
+        </div>
+        <div class="fg"><label class="flbl">Default Hourly Rate</label><input class="fc" type="text" id="c-ar-rate" placeholder="$0.00" style="max-width:200px;"></div>
+        <div class="fg"><label class="flbl">AR Notes</label><textarea class="fc" id="c-ar-notes" placeholder="Billing instructions, special terms, etc."></textarea></div>
       </div>
     </div>
     <div class="modal-ft">
@@ -3412,6 +3455,23 @@ function renderClientDetail() {
     ${c.notes?`<div style="grid-column:1/-1"><div class="ii-lbl">Notes</div><div class="ii-val" style="font-weight:400;color:var(--muted)">${esc(c.notes)}</div></div>`:''}
   `;
   document.getElementById('client-info').innerHTML = infoHtml;
+  // AR section (admin only)
+  if (isAdmin()) {
+    var poLabel = c.poRequired === 'Yes' ? '<span class="badge br">Yes</span>' : '<span class="badge bg">No</span>';
+    document.getElementById('client-ar-info').innerHTML = `
+      <div><div class="ii-lbl">Billing Contact</div><div class="ii-val">${esc(c.billingContact||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Billing Email</div><div class="ii-val">${esc(c.billingEmail||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Billing Phone</div><div class="ii-val">${esc(c.billingPhone||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Account Number</div><div class="ii-val">${esc(c.accountNumber||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Payment Terms</div><div class="ii-val">${esc(c.paymentTerms||'\u2014')}</div></div>
+      <div><div class="ii-lbl">PO Required</div><div class="ii-val">${poLabel}</div></div>
+      <div><div class="ii-lbl">Tax ID / GST</div><div class="ii-val">${esc(c.taxId||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Credit Limit</div><div class="ii-val">${esc(c.creditLimit||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Default Hourly Rate</div><div class="ii-val">${esc(c.defaultRate||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Billing Address</div><div class="ii-val">${esc(c.billingAddress||'\u2014')}</div></div>
+      ${c.arNotes ? `<div style="grid-column:1/-1"><div class="ii-lbl">AR Notes</div><div class="ii-val" style="font-weight:400;color:var(--muted)">${esc(c.arNotes)}</div></div>` : ''}
+    `;
+  }
   renderLocationsTable();
 }
 
@@ -4344,6 +4404,18 @@ function openClientModal(id) {
     if (existImg2) existImg2.remove();
     removeBtn.style.display = 'none';
   }
+  // AR fields
+  document.getElementById('c-ar-contact').value = c?.billingContact||'';
+  document.getElementById('c-ar-email').value = c?.billingEmail||'';
+  document.getElementById('c-ar-phone').value = c?.billingPhone||'';
+  document.getElementById('c-ar-address').value = c?.billingAddress||'';
+  document.getElementById('c-ar-terms').value = c?.paymentTerms||'';
+  document.getElementById('c-ar-po').value = c?.poRequired||'No';
+  document.getElementById('c-ar-taxid').value = c?.taxId||'';
+  document.getElementById('c-ar-creditlimit').value = c?.creditLimit||'';
+  document.getElementById('c-ar-account').value = c?.accountNumber||'';
+  document.getElementById('c-ar-rate').value = c?.defaultRate||'';
+  document.getElementById('c-ar-notes').value = c?.arNotes||'';
   openModal('modal-client');
 }
 
@@ -4383,7 +4455,9 @@ async function saveClient() {
   const id = document.getElementById('client-id-field').value;
   const name = document.getElementById('c-name').value.trim();
   if (!name) { showToast('Company name is required','error'); return; }
-  const data = { name, phone: document.getElementById('c-phone').value.trim(), email: document.getElementById('c-email').value.trim(), address: document.getElementById('c-address').value.trim(), city: document.getElementById('c-city').value.trim(), state: document.getElementById('c-state').value.trim(), notes: document.getElementById('c-notes').value.trim(), logo: app._clientLogo || '' };
+  const data = { name, phone: document.getElementById('c-phone').value.trim(), email: document.getElementById('c-email').value.trim(), address: document.getElementById('c-address').value.trim(), city: document.getElementById('c-city').value.trim(), state: document.getElementById('c-state').value.trim(), notes: document.getElementById('c-notes').value.trim(), logo: app._clientLogo || '',
+    billingContact: document.getElementById('c-ar-contact').value.trim(), billingEmail: document.getElementById('c-ar-email').value.trim(), billingPhone: document.getElementById('c-ar-phone').value.trim(), billingAddress: document.getElementById('c-ar-address').value.trim(), paymentTerms: document.getElementById('c-ar-terms').value, poRequired: document.getElementById('c-ar-po').value,
+    taxId: document.getElementById('c-ar-taxid').value.trim(), creditLimit: document.getElementById('c-ar-creditlimit').value.trim(), accountNumber: document.getElementById('c-ar-account').value.trim(), defaultRate: document.getElementById('c-ar-rate').value.trim(), arNotes: document.getElementById('c-ar-notes').value.trim() };
   const portalPass = document.getElementById('c-portal-pass').value;
   if (portalPass) data.portalPassword = portalPass;
   try {

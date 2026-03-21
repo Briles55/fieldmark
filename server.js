@@ -143,6 +143,17 @@ try { db.exec("ALTER TABLE reports ADD COLUMN photoNameplate TEXT DEFAULT ''"); 
 try { db.exec("ALTER TABLE reports ADD COLUMN workOrderNumber TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN logo TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN photo TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN billingContact TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN billingEmail TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN billingPhone TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN billingAddress TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN paymentTerms TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN poRequired TEXT DEFAULT 'No'"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN taxId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN creditLimit TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN accountNumber TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN defaultRate TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN arNotes TEXT DEFAULT ''"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -509,21 +520,29 @@ app.get('/api/data', requireAuth, (req, res) => {
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
 app.post('/api/clients', requireAdmin, async (req, res) => {
-  const { name, phone, email, address, city, state, notes, portalPassword, logo } = req.body;
+  const { name, phone, email, address, city, state, notes, portalPassword, logo,
+          billingContact, billingEmail, billingPhone, billingAddress, paymentTerms, poRequired,
+          taxId, creditLimit, accountNumber, defaultRate, arNotes } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const id = genId();
   let hash = '';
   if (portalPassword && portalPassword.length >= 6) hash = await bcrypt.hash(portalPassword, 10);
-  db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,passwordHash,logo,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-    .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', hash, logo||'', new Date().toISOString());
+  db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,passwordHash,logo,billingContact,billingEmail,billingPhone,billingAddress,paymentTerms,poRequired,taxId,creditLimit,accountNumber,defaultRate,arNotes,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', hash, logo||'',
+         billingContact||'', billingEmail||'', billingPhone||'', billingAddress||'', paymentTerms||'', poRequired||'No',
+         taxId||'', creditLimit||'', accountNumber||'', defaultRate||'', arNotes||'', new Date().toISOString());
   res.json(db.prepare('SELECT * FROM clients WHERE id=?').get(id));
 });
 
 app.put('/api/clients/:id', requireAdmin, async (req, res) => {
-  const { name, phone, email, address, city, state, notes, portalPassword, logo } = req.body;
+  const { name, phone, email, address, city, state, notes, portalPassword, logo,
+          billingContact, billingEmail, billingPhone, billingAddress, paymentTerms, poRequired,
+          taxId, creditLimit, accountNumber, defaultRate, arNotes } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
-  db.prepare('UPDATE clients SET name=?,phone=?,email=?,address=?,city=?,state=?,notes=?,logo=? WHERE id=?')
-    .run(name, phone||'', email||'', address||'', city||'', state||'', notes||'', logo||'', req.params.id);
+  db.prepare('UPDATE clients SET name=?,phone=?,email=?,address=?,city=?,state=?,notes=?,logo=?,billingContact=?,billingEmail=?,billingPhone=?,billingAddress=?,paymentTerms=?,poRequired=?,taxId=?,creditLimit=?,accountNumber=?,defaultRate=?,arNotes=? WHERE id=?')
+    .run(name, phone||'', email||'', address||'', city||'', state||'', notes||'', logo||'',
+         billingContact||'', billingEmail||'', billingPhone||'', billingAddress||'', paymentTerms||'', poRequired||'No',
+         taxId||'', creditLimit||'', accountNumber||'', defaultRate||'', arNotes||'', req.params.id);
   if (portalPassword && portalPassword.length >= 6) {
     const hash = await bcrypt.hash(portalPassword, 10);
     db.prepare('UPDATE clients SET passwordHash=? WHERE id=?').run(hash, req.params.id);

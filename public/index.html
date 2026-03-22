@@ -2207,6 +2207,17 @@ function renderInvoiceDetail() {
     (inv.paidAt ? '<div><div class="ii-lbl">Paid</div><div class="ii-val">' + esc(inv.paidAt.split('T')[0]) + '</div></div>' : '') +
     '</div></div></div>';
 
+  // Payment details card (shown when paid)
+  if (inv.status === 'Paid') {
+    content.innerHTML += '<div class="card" style="margin-top:16px;border-left:4px solid var(--green);"><div class="card-hd"><span class="card-title">Payment Received</span><span class="badge bg">Paid</span></div>' +
+      '<div class="card-body"><div class="ig3">' +
+      '<div><div class="ii-lbl">Amount Paid</div><div class="ii-val" style="font-size:16px;font-weight:700;color:var(--green);">$' + (inv.paymentAmount || inv.total || 0).toFixed(2) + '</div></div>' +
+      '<div><div class="ii-lbl">Payment Date</div><div class="ii-val">' + esc(inv.paymentDate || (inv.paidAt ? inv.paidAt.split('T')[0] : '\u2014')) + '</div></div>' +
+      '<div><div class="ii-lbl">Payment Method</div><div class="ii-val">' + esc(inv.paymentMethod || '\u2014') + '</div></div>' +
+      '<div><div class="ii-lbl">Reference / Check #</div><div class="ii-val">' + esc(inv.paymentRef || '\u2014') + '</div></div>' +
+      '</div></div></div>';
+  }
+
   // Billing info card
   if (cl) {
     content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Bill To</span></div>' +
@@ -2362,13 +2373,47 @@ async function sendInvoice(id) {
   } catch (e) { showToast(e.message, 'error'); }
 }
 
-async function markInvoicePaid(id) {
-  if (!confirm('Mark this invoice as paid?')) return;
+function markInvoicePaid(id) {
+  var inv = (db.invoices || []).find(function(x) { return x.id === id; });
+  if (!inv) return;
+  var today = new Date().toISOString().split('T')[0];
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = 'Record Payment — ' + inv.invoiceNumber;
+  modal.querySelector('.modal-body').innerHTML =
+    '<div class="fr">' +
+    '<div class="fg"><label class="flbl">Amount Paid *</label><input class="fc" type="number" id="pay-amount" step="0.01" min="0" value="' + (inv.total || 0).toFixed(2) + '"></div>' +
+    '<div class="fg"><label class="flbl">Payment Date *</label><input class="fc" type="date" id="pay-date" value="' + today + '"></div>' +
+    '</div>' +
+    '<div class="fr">' +
+    '<div class="fg"><label class="flbl">Payment Method</label><select class="fc" id="pay-method">' +
+    '<option value="">— Select —</option><option>Check</option><option>EFT / Wire</option><option>Credit Card</option><option>Cash</option><option>Other</option>' +
+    '</select></div>' +
+    '<div class="fg"><label class="flbl">Reference / Check #</label><input class="fc" type="text" id="pay-ref" placeholder="Check number, transaction ID, etc."></div>' +
+    '</div>';
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="submitPayment(\'' + id + '\')">Record Payment</button>';
+  modal.style.display = 'flex';
+}
+
+async function submitPayment(id) {
+  var amount = parseFloat(document.getElementById('pay-amount').value) || 0;
+  var payDate = document.getElementById('pay-date').value;
+  if (!amount || !payDate) { showToast('Amount and date are required', 'error'); return; }
+  var method = document.getElementById('pay-method').value;
+  var ref = document.getElementById('pay-ref').value;
   try {
-    var updated = await apiPost('/api/invoices/' + id, { status: 'Paid' }, 'PUT');
+    var updated = await apiPost('/api/invoices/' + id, {
+      status: 'Paid',
+      paymentAmount: amount,
+      paymentMethod: method,
+      paymentDate: payDate,
+      paymentRef: ref
+    }, 'PUT');
     var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
     if (idx >= 0) db.invoices[idx] = updated;
-    showToast('Invoice marked as paid', 'success');
+    closeGenericModal();
+    showToast('Payment recorded', 'success');
     renderInvoiceDetail();
   } catch (e) { showToast(e.message, 'error'); }
 }

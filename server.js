@@ -178,6 +178,10 @@ try { db.exec("ALTER TABLE clients ADD COLUMN arNotes TEXT DEFAULT ''"); } catch
 try { db.exec("ALTER TABLE service_requests ADD COLUMN poNumber TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE work_orders ADD COLUMN techNotes TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE work_orders ADD COLUMN apprenticeId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE invoices ADD COLUMN paymentAmount REAL DEFAULT 0"); } catch(e) {}
+try { db.exec("ALTER TABLE invoices ADD COLUMN paymentMethod TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE invoices ADD COLUMN paymentDate TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE invoices ADD COLUMN paymentRef TEXT DEFAULT ''"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -1007,14 +1011,14 @@ app.post('/api/invoices', requireAdmin, (req, res) => {
 app.put('/api/invoices/:id', requireAdmin, (req, res) => {
   const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
   if (!inv) return res.status(404).json({ error: 'Invoice not found' });
-  const { lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, status } = req.body;
+  const { lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, status, paymentAmount, paymentMethod, paymentDate, paymentRef } = req.body;
   const now = new Date().toISOString();
   let newStatus = status !== undefined ? status : inv.status;
   let sentAt = inv.sentAt;
   let paidAt = inv.paidAt;
   if (newStatus === 'Sent' && !inv.sentAt) sentAt = now;
   if (newStatus === 'Paid' && !inv.paidAt) paidAt = now;
-  db.prepare(`UPDATE invoices SET lineItems=?, subtotal=?, taxRate=?, taxAmount=?, total=?, notes=?, paymentTerms=?, dueDate=?, status=?, sentAt=?, paidAt=?, updatedAt=? WHERE id=?`)
+  db.prepare(`UPDATE invoices SET lineItems=?, subtotal=?, taxRate=?, taxAmount=?, total=?, notes=?, paymentTerms=?, dueDate=?, status=?, sentAt=?, paidAt=?, paymentAmount=?, paymentMethod=?, paymentDate=?, paymentRef=?, updatedAt=? WHERE id=?`)
     .run(
       lineItems !== undefined ? JSON.stringify(lineItems) : inv.lineItems,
       subtotal !== undefined ? subtotal : inv.subtotal,
@@ -1024,7 +1028,12 @@ app.put('/api/invoices/:id', requireAdmin, (req, res) => {
       notes !== undefined ? notes : inv.notes,
       paymentTerms !== undefined ? paymentTerms : inv.paymentTerms,
       dueDate !== undefined ? dueDate : inv.dueDate,
-      newStatus, sentAt, paidAt, now, req.params.id
+      newStatus, sentAt, paidAt,
+      paymentAmount !== undefined ? paymentAmount : inv.paymentAmount || 0,
+      paymentMethod !== undefined ? paymentMethod : inv.paymentMethod || '',
+      paymentDate !== undefined ? paymentDate : inv.paymentDate || '',
+      paymentRef !== undefined ? paymentRef : inv.paymentRef || '',
+      now, req.params.id
     );
   const updated = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
   try { updated.lineItems = JSON.parse(updated.lineItems); } catch(e) { updated.lineItems = []; }

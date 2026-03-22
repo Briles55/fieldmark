@@ -162,6 +162,39 @@ db.exec(`
     fiscalYear  INTEGER NOT NULL,
     createdAt   TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS wholesalers (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    accountNumber TEXT DEFAULT '',
+    phone         TEXT DEFAULT '',
+    email         TEXT DEFAULT '',
+    address       TEXT DEFAULT '',
+    createdAt     TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS subcontractors (
+    id        TEXT PRIMARY KEY,
+    name      TEXT NOT NULL,
+    trade     TEXT DEFAULT '',
+    phone     TEXT DEFAULT '',
+    email     TEXT DEFAULT '',
+    rate      TEXT DEFAULT '',
+    createdAt TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS purchase_orders (
+    id              TEXT PRIMARY KEY,
+    poNumber        TEXT UNIQUE NOT NULL,
+    woId            TEXT NOT NULL,
+    type            TEXT DEFAULT 'Purchase',
+    wholesalerId    TEXT DEFAULT '',
+    subcontractorId TEXT DEFAULT '',
+    items           TEXT DEFAULT '[]',
+    total           REAL DEFAULT 0,
+    status          TEXT DEFAULT 'Pending',
+    createdBy       TEXT DEFAULT '',
+    notes           TEXT DEFAULT '',
+    createdAt       TEXT NOT NULL,
+    updatedAt       TEXT NOT NULL
+  );
 `);
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
@@ -192,6 +225,7 @@ try { db.exec("ALTER TABLE invoices ADD COLUMN paymentMethod TEXT DEFAULT ''"); 
 try { db.exec("ALTER TABLE invoices ADD COLUMN paymentDate TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN paymentRef TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN apprenticeConfirmed INTEGER DEFAULT 1"); } catch(e) {}
+try { db.exec("ALTER TABLE invoices ADD COLUMN poConfirmed INTEGER DEFAULT 1"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN ratePlumber TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN rateHvacB TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN rateHvacA TEXT DEFAULT ''"); } catch(e) {}
@@ -379,6 +413,18 @@ function nextInvoiceNumber() {
   return prefix + String(seq).padStart(4, '0');
 }
 
+function nextPONumber() {
+  const year = new Date().getFullYear();
+  const prefix = 'PO-' + year + '-';
+  const row = db.prepare("SELECT poNumber FROM purchase_orders WHERE poNumber LIKE ? ORDER BY poNumber DESC LIMIT 1").get(prefix + '%');
+  let seq = 1;
+  if (row) {
+    const parts = row.poNumber.split('-');
+    seq = parseInt(parts[2], 10) + 1;
+  }
+  return prefix + String(seq).padStart(4, '0');
+}
+
 function createInvoiceForWO(woId) {
   const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(woId);
   if (!wo) return null;
@@ -404,6 +450,22 @@ function createInvoiceForWO(woId) {
     }
   });
 
+  // Add purchase order line items
+  const pos = db.prepare('SELECT * FROM purchase_orders WHERE woId=?').all(woId);
+  let hasUnconfirmedPO = false;
+  pos.forEach(po => {
+    let poItems = [];
+    try { poItems = JSON.parse(po.items); } catch(e) { poItems = []; }
+    if (po.status !== 'Confirmed') hasUnconfirmedPO = true;
+    const vendor = po.wholesalerId ? (db.prepare('SELECT name FROM wholesalers WHERE id=?').get(po.wholesalerId) || {}).name || 'Wholesaler'
+      : po.subcontractorId ? (db.prepare('SELECT name FROM subcontractors WHERE id=?').get(po.subcontractorId) || {}).name || 'Subcontractor' : '';
+    const prefix = po.type === 'Return' ? 'Return — ' : po.type === 'Subcontractor' ? 'Subcontractor — ' : 'Parts — ';
+    poItems.forEach(item => {
+      const amt = po.type === 'Return' ? -Math.abs(parseFloat(item.total) || 0) : (parseFloat(item.total) || 0);
+      lineItems.push({ desc: prefix + vendor + ': ' + (item.desc || ''), qty: parseFloat(item.qty) || 1, rate: parseFloat(item.unitCost) || amt, amount: amt });
+    });
+  });
+
   const subtotal = lineItems.reduce((s, li) => s + li.amount, 0);
   const id = genId();
   const invNum = nextInvoiceNumber();
@@ -421,10 +483,11 @@ function createInvoiceForWO(woId) {
   }
 
   const needsApprenticeConfirm = wo.apprenticeId ? 0 : 1;
+  const needsPOConfirm = hasUnconfirmedPO ? 0 : 1;
 
-  db.prepare(`INSERT INTO invoices (id, invoiceNumber, woId, clientId, status, lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, sentAt, paidAt, apprenticeConfirmed, createdAt, updatedAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, invNum, woId, wo.clientId, 'Draft', JSON.stringify(lineItems), subtotal, 0, 0, subtotal, '', terms, dueDate, '', '', needsApprenticeConfirm, now, now);
+  db.prepare(`INSERT INTO invoices (id, invoiceNumber, woId, clientId, status, lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, sentAt, paidAt, apprenticeConfirmed, poConfirmed, createdAt, updatedAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, invNum, woId, wo.clientId, 'Draft', JSON.stringify(lineItems), subtotal, 0, 0, subtotal, '', terms, dueDate, '', '', needsApprenticeConfirm, needsPOConfirm, now, now);
 
   const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(id);
   try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; }
@@ -624,7 +687,9 @@ app.get('/api/data', requireAuth, (req, res) => {
   const timeCards = db.prepare('SELECT * FROM time_cards ORDER BY weekStart DESC').all();
   const invoices = req.session.user.role === 'admin' ? db.prepare('SELECT * FROM invoices ORDER BY createdAt DESC').all() : [];
   invoices.forEach(inv => { try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; } });
-  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users, timeCards, invoices });
+  const wholesalers = db.prepare('SELECT * FROM wholesalers ORDER BY name').all();
+  const subcontractors = db.prepare('SELECT * FROM subcontractors ORDER BY name').all();
+  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users, timeCards, invoices, wholesalers, subcontractors });
 });
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
@@ -1032,14 +1097,14 @@ app.post('/api/invoices', requireAdmin, (req, res) => {
 app.put('/api/invoices/:id', requireAdmin, (req, res) => {
   const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
   if (!inv) return res.status(404).json({ error: 'Invoice not found' });
-  const { lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, status, paymentAmount, paymentMethod, paymentDate, paymentRef, apprenticeConfirmed } = req.body;
+  const { lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, status, paymentAmount, paymentMethod, paymentDate, paymentRef, apprenticeConfirmed, poConfirmed } = req.body;
   const now = new Date().toISOString();
   let newStatus = status !== undefined ? status : inv.status;
   let sentAt = inv.sentAt;
   let paidAt = inv.paidAt;
   if (newStatus === 'Sent' && !inv.sentAt) sentAt = now;
   if (newStatus === 'Paid' && !inv.paidAt) paidAt = now;
-  db.prepare(`UPDATE invoices SET lineItems=?, subtotal=?, taxRate=?, taxAmount=?, total=?, notes=?, paymentTerms=?, dueDate=?, status=?, sentAt=?, paidAt=?, paymentAmount=?, paymentMethod=?, paymentDate=?, paymentRef=?, apprenticeConfirmed=?, updatedAt=? WHERE id=?`)
+  db.prepare(`UPDATE invoices SET lineItems=?, subtotal=?, taxRate=?, taxAmount=?, total=?, notes=?, paymentTerms=?, dueDate=?, status=?, sentAt=?, paidAt=?, paymentAmount=?, paymentMethod=?, paymentDate=?, paymentRef=?, apprenticeConfirmed=?, poConfirmed=?, updatedAt=? WHERE id=?`)
     .run(
       lineItems !== undefined ? JSON.stringify(lineItems) : inv.lineItems,
       subtotal !== undefined ? subtotal : inv.subtotal,
@@ -1055,11 +1120,122 @@ app.put('/api/invoices/:id', requireAdmin, (req, res) => {
       paymentDate !== undefined ? paymentDate : inv.paymentDate || '',
       paymentRef !== undefined ? paymentRef : inv.paymentRef || '',
       apprenticeConfirmed !== undefined ? (apprenticeConfirmed ? 1 : 0) : (inv.apprenticeConfirmed != null ? inv.apprenticeConfirmed : 1),
+      poConfirmed !== undefined ? (poConfirmed ? 1 : 0) : (inv.poConfirmed != null ? inv.poConfirmed : 1),
       now, req.params.id
     );
   const updated = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
   try { updated.lineItems = JSON.parse(updated.lineItems); } catch(e) { updated.lineItems = []; }
   res.json(updated);
+});
+
+// ─── WHOLESALERS ──────────────────────────────────────────────────────────────
+app.get('/api/wholesalers', requireAuth, (req, res) => {
+  res.json(db.prepare('SELECT * FROM wholesalers ORDER BY name').all());
+});
+app.post('/api/wholesalers', requireAdmin, (req, res) => {
+  const { name, accountNumber, phone, email, address } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const id = genId();
+  db.prepare('INSERT INTO wholesalers (id,name,accountNumber,phone,email,address,createdAt) VALUES (?,?,?,?,?,?,?)')
+    .run(id, name, accountNumber||'', phone||'', email||'', address||'', new Date().toISOString());
+  res.json(db.prepare('SELECT * FROM wholesalers WHERE id=?').get(id));
+});
+app.put('/api/wholesalers/:id', requireAdmin, (req, res) => {
+  const { name, accountNumber, phone, email, address } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  db.prepare('UPDATE wholesalers SET name=?,accountNumber=?,phone=?,email=?,address=? WHERE id=?')
+    .run(name, accountNumber||'', phone||'', email||'', address||'', req.params.id);
+  res.json(db.prepare('SELECT * FROM wholesalers WHERE id=?').get(req.params.id));
+});
+app.delete('/api/wholesalers/:id', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM wholesalers WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ─── SUBCONTRACTORS ───────────────────────────────────────────────────────────
+app.get('/api/subcontractors', requireAuth, (req, res) => {
+  res.json(db.prepare('SELECT * FROM subcontractors ORDER BY name').all());
+});
+app.post('/api/subcontractors', requireAdmin, (req, res) => {
+  const { name, trade, phone, email, rate } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const id = genId();
+  db.prepare('INSERT INTO subcontractors (id,name,trade,phone,email,rate,createdAt) VALUES (?,?,?,?,?,?,?)')
+    .run(id, name, trade||'', phone||'', email||'', rate||'', new Date().toISOString());
+  res.json(db.prepare('SELECT * FROM subcontractors WHERE id=?').get(id));
+});
+app.put('/api/subcontractors/:id', requireAdmin, (req, res) => {
+  const { name, trade, phone, email, rate } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  db.prepare('UPDATE subcontractors SET name=?,trade=?,phone=?,email=?,rate=? WHERE id=?')
+    .run(name, trade||'', phone||'', email||'', rate||'', req.params.id);
+  res.json(db.prepare('SELECT * FROM subcontractors WHERE id=?').get(req.params.id));
+});
+app.delete('/api/subcontractors/:id', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM subcontractors WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ─── PURCHASE ORDERS ──────────────────────────────────────────────────────────
+app.get('/api/work-orders/:id/purchase-orders', requireAuth, (req, res) => {
+  const pos = db.prepare('SELECT * FROM purchase_orders WHERE woId=? ORDER BY createdAt DESC').all(req.params.id);
+  pos.forEach(po => { try { po.items = JSON.parse(po.items); } catch(e) { po.items = []; } });
+  res.json(pos);
+});
+
+app.post('/api/work-orders/:id/purchase-orders', requireAuth, (req, res) => {
+  const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
+  if (!wo) return res.status(404).json({ error: 'Work order not found' });
+  const { type, wholesalerId, subcontractorId, items, notes } = req.body;
+  if (!type) return res.status(400).json({ error: 'PO type required' });
+  const id = genId();
+  const poNum = nextPONumber();
+  const now = new Date().toISOString();
+  const itemsArr = Array.isArray(items) ? items : [];
+  const total = itemsArr.reduce((s, li) => s + (parseFloat(li.total) || 0), 0);
+  const finalTotal = type === 'Return' ? -Math.abs(total) : total;
+  db.prepare('INSERT INTO purchase_orders (id,poNumber,woId,type,wholesalerId,subcontractorId,items,total,status,createdBy,notes,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, poNum, req.params.id, type, wholesalerId||'', subcontractorId||'', JSON.stringify(itemsArr), finalTotal, 'Pending', req.session.user.id, notes||'', now, now);
+  const po = db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(id);
+  try { po.items = JSON.parse(po.items); } catch(e) { po.items = []; }
+  res.json(po);
+});
+
+app.put('/api/purchase-orders/:id', requireAdmin, (req, res) => {
+  const po = db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(req.params.id);
+  if (!po) return res.status(404).json({ error: 'PO not found' });
+  const { items, notes, wholesalerId, subcontractorId } = req.body;
+  const now = new Date().toISOString();
+  const itemsArr = items !== undefined ? (Array.isArray(items) ? items : []) : null;
+  let total = po.total;
+  if (itemsArr) {
+    total = itemsArr.reduce((s, li) => s + (parseFloat(li.total) || 0), 0);
+    if (po.type === 'Return') total = -Math.abs(total);
+  }
+  db.prepare('UPDATE purchase_orders SET items=?,total=?,notes=?,wholesalerId=?,subcontractorId=?,updatedAt=? WHERE id=?')
+    .run(itemsArr ? JSON.stringify(itemsArr) : po.items, total,
+         notes !== undefined ? notes : po.notes,
+         wholesalerId !== undefined ? wholesalerId : po.wholesalerId,
+         subcontractorId !== undefined ? subcontractorId : po.subcontractorId,
+         now, req.params.id);
+  const updated = db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(req.params.id);
+  try { updated.items = JSON.parse(updated.items); } catch(e) { updated.items = []; }
+  res.json(updated);
+});
+
+app.put('/api/purchase-orders/:id/confirm', requireAdmin, (req, res) => {
+  const po = db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(req.params.id);
+  if (!po) return res.status(404).json({ error: 'PO not found' });
+  db.prepare('UPDATE purchase_orders SET status=?,updatedAt=? WHERE id=?')
+    .run('Confirmed', new Date().toISOString(), req.params.id);
+  const updated = db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(req.params.id);
+  try { updated.items = JSON.parse(updated.items); } catch(e) { updated.items = []; }
+  res.json(updated);
+});
+
+app.delete('/api/purchase-orders/:id', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM purchase_orders WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
 });
 
 // ─── WARRANTY ─────────────────────────────────────────────────────────────────
@@ -1276,6 +1452,7 @@ app.post('/api/invoices/:id/send', requireAdmin, async (req, res) => {
   const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
   if (!inv) return res.status(404).json({ error: 'Invoice not found' });
   if (!inv.apprenticeConfirmed) return res.status(400).json({ error: 'Cannot send — apprentice time has not been confirmed. Please review and confirm apprentice hours before sending.' });
+  if (!inv.poConfirmed) return res.status(400).json({ error: 'Cannot send — purchase orders have not been confirmed. Please review and confirm all POs before sending.' });
   const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(inv.clientId);
   if (!cl || !cl.billingEmail) return res.status(400).json({ error: 'Client has no billing email address configured' });
   const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(inv.woId);

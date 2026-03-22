@@ -1145,6 +1145,18 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
             <button class="btn btn-secondary" onclick="importData()">Import Data</button>
           </div>
         </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Wholesalers</span>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="openWholesalerModal()">+ Add</button>
+          </div>
+          <div class="card-body"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Account #</th><th>Phone</th><th>Email</th><th style="width:100px;"></th></tr></thead><tbody id="wholesalers-tbody"></tbody></table></div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Subcontractors</span>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="openSubcontractorModal()">+ Add</button>
+          </div>
+          <div class="card-body"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Trade</th><th>Phone</th><th>Email</th><th>Rate</th><th style="width:100px;"></th></tr></thead><tbody id="subs-tbody"></tbody></table></div></div>
+        </div>
       </div>
     </div>
     <!-- REPORT FORM -->
@@ -2217,8 +2229,15 @@ function renderInvoiceDetail() {
       btnConfApp.onclick = function() { confirmApprenticeTime(inv.id); };
       actDiv.appendChild(btnConfApp);
     }
+    if (!inv.poConfirmed) {
+      var btnConfPO = document.createElement('button'); btnConfPO.className = 'btn btn-sm'; btnConfPO.style.cssText = 'background:var(--amber);color:#fff;';
+      btnConfPO.textContent = 'Confirm POs';
+      btnConfPO.onclick = function() { confirmInvoicePOs(inv.id); };
+      actDiv.appendChild(btnConfPO);
+    }
     var btnSend = document.createElement('button'); btnSend.className = 'btn btn-primary btn-sm'; btnSend.textContent = 'Send to Client';
     if (!inv.apprenticeConfirmed) { btnSend.disabled = true; btnSend.title = 'Confirm apprentice time before sending'; btnSend.style.opacity = '0.5'; }
+    if (!inv.poConfirmed) { btnSend.disabled = true; btnSend.title = 'Confirm purchase orders before sending'; btnSend.style.opacity = '0.5'; }
     btnSend.onclick = function() { sendInvoice(inv.id); };
     actDiv.appendChild(btnSend);
   }
@@ -2245,6 +2264,12 @@ function renderInvoiceDetail() {
       '<span style="font-size:20px;">\u26A0\uFE0F</span>' +
       '<div><div style="font-weight:600;color:#856404;">Apprentice Time Pending Confirmation</div>' +
       '<div style="font-size:12px;color:#856404;">Apprentice: <strong>' + esc(apprentice ? apprentice.name : 'Unknown') + '</strong> — Review and confirm apprentice hours before this invoice can be sent.</div></div></div>';
+  }
+  if (!inv.poConfirmed && inv.status === 'Draft') {
+    content.innerHTML += '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">' +
+      '<span style="font-size:20px;">\u26A0\uFE0F</span>' +
+      '<div><div style="font-weight:600;color:#856404;">Purchase Orders Pending Confirmation</div>' +
+      '<div style="font-size:12px;color:#856404;">One or more purchase orders need to be confirmed before this invoice can be sent.</div></div></div>';
   }
 
   // Header card
@@ -2465,6 +2490,253 @@ async function submitPayment(id) {
     if (idx >= 0) db.invoices[idx] = updated;
     closeGenericModal();
     showToast('Payment recorded', 'success');
+    renderInvoiceDetail();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ─── WHOLESALERS & SUBCONTRACTORS (Settings) ─────────────────────────────────
+function renderWholesalersTable() {
+  var tbody = document.getElementById('wholesalers-tbody');
+  if (!tbody) return;
+  var list = db.wholesalers || [];
+  if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-size:13px;padding:16px;">No wholesalers added yet</td></tr>'; return; }
+  tbody.innerHTML = '';
+  list.forEach(function(w) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + esc(w.name) + '</td><td>' + esc(w.accountNumber || '\u2014') + '</td><td>' + esc(w.phone || '\u2014') + '</td><td>' + esc(w.email || '\u2014') + '</td>';
+    var tdA = document.createElement('td');
+    tdA.style.cssText = 'display:flex;gap:4px;';
+    var btnE = document.createElement('button'); btnE.className = 'btn btn-ghost btn-sm'; btnE.textContent = 'Edit';
+    (function(id) { btnE.onclick = function() { openWholesalerModal(id); }; })(w.id);
+    var btnD = document.createElement('button'); btnD.className = 'btn btn-danger btn-sm'; btnD.textContent = 'Delete';
+    (function(id) { btnD.onclick = function() { deleteWholesaler(id); }; })(w.id);
+    tdA.appendChild(btnE); tdA.appendChild(btnD);
+    tr.appendChild(tdA);
+    tbody.appendChild(tr);
+  });
+}
+
+function openWholesalerModal(id) {
+  var w = id ? (db.wholesalers || []).find(function(x) { return x.id === id; }) : null;
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = w ? 'Edit Wholesaler' : 'Add Wholesaler';
+  modal.querySelector('.modal-body').innerHTML =
+    '<input type="hidden" id="ws-id" value="' + (w ? w.id : '') + '">' +
+    '<div class="fg"><label class="flbl">Name *</label><input class="fc" type="text" id="ws-name" value="' + esc(w ? w.name : '') + '"></div>' +
+    '<div class="fr"><div class="fg"><label class="flbl">Account Number</label><input class="fc" type="text" id="ws-account" value="' + esc(w ? w.accountNumber : '') + '"></div>' +
+    '<div class="fg"><label class="flbl">Phone</label><input class="fc" type="text" id="ws-phone" value="' + esc(w ? w.phone : '') + '"></div></div>' +
+    '<div class="fr"><div class="fg"><label class="flbl">Email</label><input class="fc" type="text" id="ws-email" value="' + esc(w ? w.email : '') + '"></div>' +
+    '<div class="fg"><label class="flbl">Address</label><input class="fc" type="text" id="ws-address" value="' + esc(w ? w.address : '') + '"></div></div>';
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="saveWholesaler()">Save</button>';
+  modal.style.display = 'flex';
+}
+
+async function saveWholesaler() {
+  var id = document.getElementById('ws-id').value;
+  var data = { name: document.getElementById('ws-name').value.trim(), accountNumber: document.getElementById('ws-account').value.trim(), phone: document.getElementById('ws-phone').value.trim(), email: document.getElementById('ws-email').value.trim(), address: document.getElementById('ws-address').value.trim() };
+  if (!data.name) { showToast('Name required', 'error'); return; }
+  try {
+    if (id) { var u = await apiPost('/api/wholesalers/' + id, data, 'PUT'); var idx = (db.wholesalers||[]).findIndex(function(x){return x.id===id;}); if (idx>=0) db.wholesalers[idx]=u; }
+    else { var c = await apiPost('/api/wholesalers', data); db.wholesalers = db.wholesalers||[]; db.wholesalers.push(c); }
+    closeGenericModal(); showToast('Wholesaler saved', 'success'); renderWholesalersTable();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteWholesaler(id) {
+  if (!confirm('Delete this wholesaler?')) return;
+  try { await apiPost('/api/wholesalers/' + id, {}, 'DELETE'); db.wholesalers = (db.wholesalers||[]).filter(function(x){return x.id!==id;}); showToast('Deleted', 'success'); renderWholesalersTable(); } catch(e) { showToast(e.message, 'error'); }
+}
+
+function renderSubcontractorsTable() {
+  var tbody = document.getElementById('subs-tbody');
+  if (!tbody) return;
+  var list = db.subcontractors || [];
+  if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:13px;padding:16px;">No subcontractors added yet</td></tr>'; return; }
+  tbody.innerHTML = '';
+  list.forEach(function(s) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + esc(s.name) + '</td><td>' + esc(s.trade || '\u2014') + '</td><td>' + esc(s.phone || '\u2014') + '</td><td>' + esc(s.email || '\u2014') + '</td><td>' + esc(s.rate || '\u2014') + '</td>';
+    var tdA = document.createElement('td');
+    tdA.style.cssText = 'display:flex;gap:4px;';
+    var btnE = document.createElement('button'); btnE.className = 'btn btn-ghost btn-sm'; btnE.textContent = 'Edit';
+    (function(id) { btnE.onclick = function() { openSubcontractorModal(id); }; })(s.id);
+    var btnD = document.createElement('button'); btnD.className = 'btn btn-danger btn-sm'; btnD.textContent = 'Delete';
+    (function(id) { btnD.onclick = function() { deleteSubcontractor(id); }; })(s.id);
+    tdA.appendChild(btnE); tdA.appendChild(btnD);
+    tr.appendChild(tdA);
+    tbody.appendChild(tr);
+  });
+}
+
+function openSubcontractorModal(id) {
+  var s = id ? (db.subcontractors || []).find(function(x) { return x.id === id; }) : null;
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = s ? 'Edit Subcontractor' : 'Add Subcontractor';
+  modal.querySelector('.modal-body').innerHTML =
+    '<input type="hidden" id="sub-id" value="' + (s ? s.id : '') + '">' +
+    '<div class="fg"><label class="flbl">Name *</label><input class="fc" type="text" id="sub-name" value="' + esc(s ? s.name : '') + '"></div>' +
+    '<div class="fr"><div class="fg"><label class="flbl">Trade</label><input class="fc" type="text" id="sub-trade" value="' + esc(s ? s.trade : '') + '" placeholder="e.g. Plumbing, Electrical"></div>' +
+    '<div class="fg"><label class="flbl">Hourly Rate</label><input class="fc" type="text" id="sub-rate" value="' + esc(s ? s.rate : '') + '" placeholder="$0.00"></div></div>' +
+    '<div class="fr"><div class="fg"><label class="flbl">Phone</label><input class="fc" type="text" id="sub-phone" value="' + esc(s ? s.phone : '') + '"></div>' +
+    '<div class="fg"><label class="flbl">Email</label><input class="fc" type="text" id="sub-email" value="' + esc(s ? s.email : '') + '"></div></div>';
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="saveSubcontractor()">Save</button>';
+  modal.style.display = 'flex';
+}
+
+async function saveSubcontractor() {
+  var id = document.getElementById('sub-id').value;
+  var data = { name: document.getElementById('sub-name').value.trim(), trade: document.getElementById('sub-trade').value.trim(), phone: document.getElementById('sub-phone').value.trim(), email: document.getElementById('sub-email').value.trim(), rate: document.getElementById('sub-rate').value.trim() };
+  if (!data.name) { showToast('Name required', 'error'); return; }
+  try {
+    if (id) { var u = await apiPost('/api/subcontractors/' + id, data, 'PUT'); var idx = (db.subcontractors||[]).findIndex(function(x){return x.id===id;}); if (idx>=0) db.subcontractors[idx]=u; }
+    else { var c = await apiPost('/api/subcontractors', data); db.subcontractors = db.subcontractors||[]; db.subcontractors.push(c); }
+    closeGenericModal(); showToast('Subcontractor saved', 'success'); renderSubcontractorsTable();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deleteSubcontractor(id) {
+  if (!confirm('Delete this subcontractor?')) return;
+  try { await apiPost('/api/subcontractors/' + id, {}, 'DELETE'); db.subcontractors = (db.subcontractors||[]).filter(function(x){return x.id!==id;}); showToast('Deleted', 'success'); renderSubcontractorsTable(); } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ─── PURCHASE ORDERS (Work Order Detail) ─────────────────────────────────────
+function renderWOPurchaseOrders(woId) {
+  var el = document.getElementById('wo-po-content');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">Loading...</div>';
+  apiGet('/api/work-orders/' + woId + '/purchase-orders').then(function(pos) {
+    app._woPOs = pos;
+    var badge = document.getElementById('wo-po-badge');
+    if (badge) badge.textContent = pos.length;
+    if (pos.length === 0) {
+      el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">No purchase orders</div>';
+      return;
+    }
+    var html = '<table class="tbl" style="width:100%;"><thead><tr><th>PO #</th><th>Type</th><th>Vendor</th><th>Items</th><th style="text-align:right;">Total</th><th>Status</th>';
+    if (isAdmin()) html += '<th style="width:80px;"></th>';
+    html += '</tr></thead><tbody>';
+    pos.forEach(function(po) {
+      var vendor = '';
+      if (po.wholesalerId) { var w = (db.wholesalers||[]).find(function(x){return x.id===po.wholesalerId;}); vendor = w ? w.name : ''; }
+      if (po.subcontractorId) { var s = (db.subcontractors||[]).find(function(x){return x.id===po.subcontractorId;}); vendor = s ? s.name : ''; }
+      var typeBadge = po.type === 'Return' ? 'ba' : po.type === 'Subcontractor' ? 'bb' : 'bgr';
+      var statusBadge = po.status === 'Confirmed' ? 'bg' : 'ba';
+      var itemCount = (po.items || []).length;
+      html += '<tr><td style="font-size:12px;"><strong>' + esc(po.poNumber) + '</strong></td>' +
+        '<td><span class="badge ' + typeBadge + '">' + esc(po.type) + '</span></td>' +
+        '<td style="font-size:12px;">' + esc(vendor) + '</td>' +
+        '<td style="font-size:12px;">' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + '</td>' +
+        '<td style="font-size:12px;text-align:right;font-weight:600;">$' + Math.abs(po.total || 0).toFixed(2) + (po.type === 'Return' ? ' (credit)' : '') + '</td>' +
+        '<td><span class="badge ' + statusBadge + '">' + esc(po.status) + '</span></td>';
+      if (isAdmin()) {
+        html += '<td style="display:flex;gap:4px;">';
+        if (po.status === 'Pending') html += '<button class="btn btn-ghost btn-sm" style="color:var(--green);" onclick="confirmPO(\'' + po.id + '\',\'' + woId + '\')">Confirm</button>';
+        html += '<button class="btn btn-danger btn-sm" onclick="deletePO(\'' + po.id + '\',\'' + woId + '\')">Del</button></td>';
+      }
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }).catch(function() { el.innerHTML = '<div style="color:var(--red);padding:12px;">Error loading POs</div>'; });
+}
+
+function openNewPOModal(woId) {
+  var wsOpts = (db.wholesalers || []).map(function(w) { return '<option value="' + w.id + '">' + esc(w.name) + (w.accountNumber ? ' (' + esc(w.accountNumber) + ')' : '') + '</option>'; }).join('');
+  var subOpts = (db.subcontractors || []).map(function(s) { return '<option value="' + s.id + '">' + esc(s.name) + (s.trade ? ' — ' + esc(s.trade) : '') + '</option>'; }).join('');
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = 'New Purchase Order';
+  modal.querySelector('.modal-body').innerHTML =
+    '<input type="hidden" id="po-wo-id" value="' + woId + '">' +
+    '<div class="fr"><div class="fg"><label class="flbl">Type *</label><select class="fc" id="po-type" onchange="togglePOVendor()">' +
+    '<option value="Purchase">Purchase</option><option value="Return">Return</option><option value="Subcontractor">Subcontractor</option></select></div>' +
+    '<div class="fg" id="po-ws-wrap"><label class="flbl">Wholesaler *</label><select class="fc" id="po-wholesaler"><option value="">— Select —</option>' + wsOpts + '</select></div>' +
+    '<div class="fg" id="po-sub-wrap" style="display:none;"><label class="flbl">Subcontractor *</label><select class="fc" id="po-subcontractor"><option value="">— Select —</option>' + subOpts + '</select></div></div>' +
+    '<div style="margin:12px 0 8px;font-weight:600;font-size:13px;">Line Items</div>' +
+    '<table class="tbl" style="width:100%;"><thead><tr><th>Description</th><th style="width:60px;">Qty</th><th style="width:80px;">Unit Cost</th><th style="width:80px;">Total</th></tr></thead>' +
+    '<tbody id="po-items-tbody"><tr>' +
+    '<td><input class="fc po-item-desc" type="text" placeholder="Part or material" style="font-size:12px;padding:4px 6px;"></td>' +
+    '<td><input class="fc po-item-qty" type="number" value="1" min="1" step="1" style="font-size:12px;padding:4px 6px;text-align:center;" oninput="calcPOItemTotal(this)"></td>' +
+    '<td><input class="fc po-item-cost" type="number" value="0" step="0.01" min="0" style="font-size:12px;padding:4px 6px;text-align:right;" oninput="calcPOItemTotal(this)"></td>' +
+    '<td class="po-item-total" style="text-align:right;font-size:12px;">$0.00</td>' +
+    '</tr></tbody></table>' +
+    '<button class="btn btn-ghost btn-sm" onclick="addPOItemRow()" style="margin-top:6px;">+ Add Item</button>' +
+    '<div class="fg" style="margin-top:12px;"><label class="flbl">Notes</label><input class="fc" type="text" id="po-notes" placeholder="Optional notes"></div>';
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="submitNewPO()">Create PO</button>';
+  modal.style.display = 'flex';
+  makeSearchable('po-wholesaler');
+  makeSearchable('po-subcontractor');
+}
+
+function togglePOVendor() {
+  var type = document.getElementById('po-type').value;
+  document.getElementById('po-ws-wrap').style.display = type === 'Subcontractor' ? 'none' : '';
+  document.getElementById('po-sub-wrap').style.display = type === 'Subcontractor' ? '' : 'none';
+}
+
+function addPOItemRow() {
+  var tbody = document.getElementById('po-items-tbody');
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><input class="fc po-item-desc" type="text" placeholder="Part or material" style="font-size:12px;padding:4px 6px;"></td>' +
+    '<td><input class="fc po-item-qty" type="number" value="1" min="1" step="1" style="font-size:12px;padding:4px 6px;text-align:center;" oninput="calcPOItemTotal(this)"></td>' +
+    '<td><input class="fc po-item-cost" type="number" value="0" step="0.01" min="0" style="font-size:12px;padding:4px 6px;text-align:right;" oninput="calcPOItemTotal(this)"></td>' +
+    '<td class="po-item-total" style="text-align:right;font-size:12px;">$0.00</td>';
+  tbody.appendChild(tr);
+}
+
+function calcPOItemTotal(el) {
+  var tr = el.closest('tr');
+  var qty = parseFloat(tr.querySelector('.po-item-qty').value) || 0;
+  var cost = parseFloat(tr.querySelector('.po-item-cost').value) || 0;
+  tr.querySelector('.po-item-total').textContent = '$' + (qty * cost).toFixed(2);
+}
+
+async function submitNewPO() {
+  var woId = document.getElementById('po-wo-id').value;
+  var type = document.getElementById('po-type').value;
+  var wholesalerId = type !== 'Subcontractor' ? document.getElementById('po-wholesaler').value : '';
+  var subcontractorId = type === 'Subcontractor' ? document.getElementById('po-subcontractor').value : '';
+  if (type !== 'Subcontractor' && !wholesalerId) { showToast('Select a wholesaler', 'error'); return; }
+  if (type === 'Subcontractor' && !subcontractorId) { showToast('Select a subcontractor', 'error'); return; }
+  var items = [];
+  document.querySelectorAll('#po-items-tbody tr').forEach(function(tr) {
+    var desc = tr.querySelector('.po-item-desc').value.trim();
+    var qty = parseFloat(tr.querySelector('.po-item-qty').value) || 0;
+    var unitCost = parseFloat(tr.querySelector('.po-item-cost').value) || 0;
+    if (desc && qty > 0) items.push({ desc: desc, qty: qty, unitCost: unitCost, total: qty * unitCost });
+  });
+  if (items.length === 0) { showToast('Add at least one item', 'error'); return; }
+  var notes = document.getElementById('po-notes').value.trim();
+  try {
+    await apiPost('/api/work-orders/' + woId + '/purchase-orders', { type: type, wholesalerId: wholesalerId, subcontractorId: subcontractorId, items: items, notes: notes });
+    closeGenericModal();
+    showToast('Purchase order created', 'success');
+    renderWOPurchaseOrders(woId);
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function confirmPO(poId, woId) {
+  if (!confirm('Confirm this purchase order?')) return;
+  try { await apiPost('/api/purchase-orders/' + poId + '/confirm', {}, 'PUT'); showToast('PO confirmed', 'success'); renderWOPurchaseOrders(woId); } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deletePO(poId, woId) {
+  if (!confirm('Delete this purchase order?')) return;
+  try { await apiPost('/api/purchase-orders/' + poId, {}, 'DELETE'); showToast('PO deleted', 'success'); renderWOPurchaseOrders(woId); } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function confirmInvoicePOs(id) {
+  if (!confirm('Confirm that all purchase orders have been reviewed and verified?')) return;
+  try {
+    var updated = await apiPost('/api/invoices/' + id, { poConfirmed: true }, 'PUT');
+    var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
+    if (idx >= 0) db.invoices[idx] = updated;
+    showToast('Purchase orders confirmed', 'success');
     renderInvoiceDetail();
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -3005,6 +3277,13 @@ function renderWorkOrderDetail() {
   // Labor Entries card
   content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Labor Entries</span><span class="badge bgr">' + labor.length + '</span>' +
     '<button class="btn btn-ghost btn-sm" onclick="addLaborEntry()" style="margin-left:auto;">+ Add Entry</button></div><div class="tbl-wrap">' + laborHtml + '</div></div>';
+
+  // Purchase Orders card
+  var canCreatePO = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id) && wo.status !== 'Completed' && wo.status !== 'Cancelled');
+  content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Purchase Orders</span><span class="badge bgr" id="wo-po-badge">0</span>' +
+    (canCreatePO ? '<button class="btn btn-ghost btn-sm" onclick="openNewPOModal(\'' + wo.id + '\')" style="margin-left:auto;">+ New PO</button>' : '') +
+    '</div><div id="wo-po-content"></div></div>';
+  renderWOPurchaseOrders(wo.id);
 
   // Update Status (assigned tech or admin)
   var canUpdateStatus = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id) && wo.status !== 'Completed' && wo.status !== 'Cancelled');
@@ -5484,6 +5763,8 @@ async function renderSettingsView() {
     document.getElementById('from-name').value = cfg.fromName || '';
     document.getElementById('app-url').value = cfg.appUrl || '';
   } catch(err) { /* first time, no settings yet */ }
+  renderWholesalersTable();
+  renderSubcontractorsTable();
 }
 async function saveEmailConfig() {
   if (!isAdmin()) return;

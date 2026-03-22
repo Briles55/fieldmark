@@ -539,6 +539,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div class="card-hd"><span class="card-title">Warranty Credits</span></div>
         <div class="card-body" id="client-warranty-content"><div style="text-align:center;color:var(--muted);font-size:13px;">Loading...</div></div>
       </div>
+      <div class="card admin-only" style="margin-bottom:20px;" id="client-history-card">
+        <div class="card-hd"><span class="card-title">Work Order & Invoice History</span></div>
+        <div class="card-body" id="client-history-content"><div style="text-align:center;color:var(--muted);font-size:13px;">Loading...</div></div>
+      </div>
       <div class="card">
         <div class="card-hd">
           <span class="card-title">Locations</span>
@@ -4128,6 +4132,7 @@ function renderClientDetail() {
     `;
     // Load billing summary
     loadClientBillingSummary(c.id);
+    renderClientHistory(c.id);
   }
   renderLocationsTable();
 }
@@ -4169,6 +4174,68 @@ async function loadClientBillingSummary(clientId) {
       warrantyEl.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">No warranty credits</div>';
     }
   } catch(e) { console.error('Billing summary error:', e); }
+}
+
+function renderClientHistory(clientId) {
+  var el = document.getElementById('client-history-content');
+  if (!el) return;
+
+  // Get completed work orders for this client
+  var clientWOs = (db.workOrders || []).filter(function(wo) { return wo.clientId === clientId && wo.status === 'Completed'; });
+  // Get all invoices for this client
+  var clientInvs = (db.invoices || []).filter(function(inv) { return inv.clientId === clientId; });
+
+  if (clientWOs.length === 0 && clientInvs.length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">No work order or invoice history</div>';
+    return;
+  }
+
+  // Build combined timeline sorted by date descending
+  var entries = [];
+  clientWOs.forEach(function(wo) {
+    var loc = db.locations.find(function(l) { return l.id === wo.locationId; });
+    var inv = clientInvs.find(function(i) { return i.woId === wo.id; });
+    entries.push({ type: 'wo', date: wo.updatedAt || wo.createdAt, wo: wo, loc: loc, inv: inv });
+  });
+  // Add invoices not linked to a WO in the list (shouldn't happen but be safe)
+  clientInvs.forEach(function(inv) {
+    var already = entries.find(function(e) { return e.inv && e.inv.id === inv.id; });
+    if (!already) {
+      var wo = (db.workOrders || []).find(function(w) { return w.id === inv.woId; });
+      entries.push({ type: 'inv-only', date: inv.createdAt, wo: wo, inv: inv });
+    }
+  });
+  entries.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+
+  var html = '<table class="tbl" style="width:100%;"><thead><tr>' +
+    '<th>Date</th><th>Work Order</th><th>Location</th><th>Invoice</th><th>Status</th><th style="text-align:right;">Amount</th>' +
+    '</tr></thead><tbody>';
+
+  entries.forEach(function(e) {
+    var wo = e.wo;
+    var inv = e.inv;
+    var dateStr = e.date ? e.date.split('T')[0] : '\u2014';
+    var woNum = wo ? wo.woNumber : '\u2014';
+    var locName = e.loc ? e.loc.buildingName : (wo ? (db.locations.find(function(l) { return l.id === wo.locationId; }) || {}).buildingName || '\u2014' : '\u2014');
+    var invNum = inv ? inv.invoiceNumber : '\u2014';
+    var status = inv ? inv.status : 'No Invoice';
+    var sBadge = status === 'Draft' ? 'bgr' : status === 'Sent' ? 'bb' : status === 'Paid' ? 'bg' : status === 'Warranty' ? 'ba' : 'bgr';
+    var amount = inv ? '$' + (inv.total || 0).toFixed(2) : '\u2014';
+
+    var clickAttr = inv ? ' class="clickable" onclick="openInvoiceDetail(\'' + inv.id + '\')"' : (wo ? ' class="clickable" onclick="openWorkOrderDetail(\'' + wo.id + '\')"' : '');
+
+    html += '<tr' + clickAttr + '>' +
+      '<td style="font-size:12px;">' + esc(dateStr) + '</td>' +
+      '<td style="font-size:12px;"><strong>' + esc(woNum) + '</strong></td>' +
+      '<td style="font-size:12px;">' + esc(locName) + '</td>' +
+      '<td style="font-size:12px;">' + esc(invNum) + '</td>' +
+      '<td><span class="badge ' + sBadge + '">' + esc(status) + '</span></td>' +
+      '<td style="font-size:12px;text-align:right;">' + amount + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 function renderLocationsTable() {

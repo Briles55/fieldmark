@@ -2349,6 +2349,19 @@ function renderWorkOrderDetail() {
     (wo.description ? '<hr class="div"><div class="ii-lbl">Description</div><div style="font-size:14px;margin-top:6px;white-space:pre-wrap;">' + esc(wo.description) + '</div>' : '') +
     '</div></div>';
 
+  // Tech Notes card (visible to assigned tech & admin)
+  var canEditTechNotes = isAdmin() || (currentUser && wo.assignedTo === currentUser.id);
+  if (canEditTechNotes) {
+    content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Tech Notes</span></div>' +
+      '<div class="card-body">' +
+      '<textarea class="fc" id="wod-tech-notes" placeholder="Enter tech notes for this work order..." style="min-height:100px;">' + esc(wo.techNotes||'') + '</textarea>' +
+      '<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="saveTechNotes()">Save Notes</button></div>' +
+      '</div></div>';
+  } else if (wo.techNotes) {
+    content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Tech Notes</span></div>' +
+      '<div class="card-body"><div style="font-size:14px;white-space:pre-wrap;">' + esc(wo.techNotes) + '</div></div></div>';
+  }
+
   // Linked Reports card
   content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Linked Reports</span><span class="badge bgr">' + linkedReports.length + '</span></div>' + reportsHtml + '</div>';
 
@@ -2426,12 +2439,26 @@ async function techUpdateStatus() {
     if (linkedReports.length === 0) { showToast('Cannot mark as Complete — no reports linked to this work order. Submit a report first.','error'); return; }
   }
   try {
-    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: newStatus }, 'PUT');
+    var tnEl = document.getElementById('wod-tech-notes');
+    var tn = tnEl ? tnEl.value : (wo.techNotes||'');
+    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: newStatus, techNotes: tn }, 'PUT');
     var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
     if (idx>=0) db.workOrders[idx] = updated;
     var label = newStatus==='Completed'?'Complete':newStatus==='On Hold'?'Waiting on Material / Parts':'Not Complete';
     showToast('Status updated to ' + label,'success');
     renderWorkOrderDetail();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function saveTechNotes() {
+  var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
+  if (!wo) return;
+  var techNotes = document.getElementById('wod-tech-notes').value;
+  try {
+    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: wo.status, techNotes: techNotes }, 'PUT');
+    var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
+    if (idx>=0) db.workOrders[idx] = updated;
+    showToast('Tech notes saved','success');
   } catch(e) { showToast(e.message,'error'); }
 }
 

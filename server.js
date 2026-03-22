@@ -191,6 +191,7 @@ try { db.exec("ALTER TABLE invoices ADD COLUMN paymentAmount REAL DEFAULT 0"); }
 try { db.exec("ALTER TABLE invoices ADD COLUMN paymentMethod TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN paymentDate TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN paymentRef TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE invoices ADD COLUMN apprenticeConfirmed INTEGER DEFAULT 1"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -414,9 +415,11 @@ function createInvoiceForWO(woId) {
     dueDate = due.toISOString().split('T')[0];
   }
 
-  db.prepare(`INSERT INTO invoices (id, invoiceNumber, woId, clientId, status, lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, sentAt, paidAt, createdAt, updatedAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, invNum, woId, wo.clientId, 'Draft', JSON.stringify(lineItems), subtotal, 0, 0, subtotal, '', terms, dueDate, '', '', now, now);
+  const needsApprenticeConfirm = wo.apprenticeId ? 0 : 1;
+
+  db.prepare(`INSERT INTO invoices (id, invoiceNumber, woId, clientId, status, lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, sentAt, paidAt, apprenticeConfirmed, createdAt, updatedAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, invNum, woId, wo.clientId, 'Draft', JSON.stringify(lineItems), subtotal, 0, 0, subtotal, '', terms, dueDate, '', '', needsApprenticeConfirm, now, now);
 
   const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(id);
   try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; }
@@ -1020,14 +1023,14 @@ app.post('/api/invoices', requireAdmin, (req, res) => {
 app.put('/api/invoices/:id', requireAdmin, (req, res) => {
   const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
   if (!inv) return res.status(404).json({ error: 'Invoice not found' });
-  const { lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, status, paymentAmount, paymentMethod, paymentDate, paymentRef } = req.body;
+  const { lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, status, paymentAmount, paymentMethod, paymentDate, paymentRef, apprenticeConfirmed } = req.body;
   const now = new Date().toISOString();
   let newStatus = status !== undefined ? status : inv.status;
   let sentAt = inv.sentAt;
   let paidAt = inv.paidAt;
   if (newStatus === 'Sent' && !inv.sentAt) sentAt = now;
   if (newStatus === 'Paid' && !inv.paidAt) paidAt = now;
-  db.prepare(`UPDATE invoices SET lineItems=?, subtotal=?, taxRate=?, taxAmount=?, total=?, notes=?, paymentTerms=?, dueDate=?, status=?, sentAt=?, paidAt=?, paymentAmount=?, paymentMethod=?, paymentDate=?, paymentRef=?, updatedAt=? WHERE id=?`)
+  db.prepare(`UPDATE invoices SET lineItems=?, subtotal=?, taxRate=?, taxAmount=?, total=?, notes=?, paymentTerms=?, dueDate=?, status=?, sentAt=?, paidAt=?, paymentAmount=?, paymentMethod=?, paymentDate=?, paymentRef=?, apprenticeConfirmed=?, updatedAt=? WHERE id=?`)
     .run(
       lineItems !== undefined ? JSON.stringify(lineItems) : inv.lineItems,
       subtotal !== undefined ? subtotal : inv.subtotal,
@@ -1042,6 +1045,7 @@ app.put('/api/invoices/:id', requireAdmin, (req, res) => {
       paymentMethod !== undefined ? paymentMethod : inv.paymentMethod || '',
       paymentDate !== undefined ? paymentDate : inv.paymentDate || '',
       paymentRef !== undefined ? paymentRef : inv.paymentRef || '',
+      apprenticeConfirmed !== undefined ? (apprenticeConfirmed ? 1 : 0) : (inv.apprenticeConfirmed != null ? inv.apprenticeConfirmed : 1),
       now, req.params.id
     );
   const updated = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
@@ -1262,6 +1266,7 @@ app.get('/api/invoices/:id/pdf-view', requireAuth, (req, res) => {
 app.post('/api/invoices/:id/send', requireAdmin, async (req, res) => {
   const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
   if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+  if (!inv.apprenticeConfirmed) return res.status(400).json({ error: 'Cannot send — apprentice time has not been confirmed. Please review and confirm apprentice hours before sending.' });
   const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(inv.clientId);
   if (!cl || !cl.billingEmail) return res.status(400).json({ error: 'Client has no billing email address configured' });
   const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(inv.woId);

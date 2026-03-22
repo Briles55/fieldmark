@@ -2199,7 +2199,14 @@ function renderInvoiceDetail() {
   btnPdf.onclick = function() { window.open('/api/invoices/' + inv.id + '/pdf-view', '_blank'); };
   actDiv.appendChild(btnPdf);
   if (inv.status === 'Draft') {
+    if (!inv.apprenticeConfirmed) {
+      var btnConfApp = document.createElement('button'); btnConfApp.className = 'btn btn-sm'; btnConfApp.style.cssText = 'background:var(--amber);color:#fff;';
+      btnConfApp.textContent = 'Confirm Apprentice Time';
+      btnConfApp.onclick = function() { confirmApprenticeTime(inv.id); };
+      actDiv.appendChild(btnConfApp);
+    }
     var btnSend = document.createElement('button'); btnSend.className = 'btn btn-primary btn-sm'; btnSend.textContent = 'Send to Client';
+    if (!inv.apprenticeConfirmed) { btnSend.disabled = true; btnSend.title = 'Confirm apprentice time before sending'; btnSend.style.opacity = '0.5'; }
     btnSend.onclick = function() { sendInvoice(inv.id); };
     actDiv.appendChild(btnSend);
   }
@@ -2218,6 +2225,15 @@ function renderInvoiceDetail() {
 
   var content = document.getElementById('invd-content');
   content.innerHTML = '';
+
+  // Apprentice confirmation warning
+  if (!inv.apprenticeConfirmed && inv.status === 'Draft') {
+    var apprentice = wo && wo.apprenticeId ? (db.users || []).find(function(u) { return u.id === wo.apprenticeId; }) : null;
+    content.innerHTML += '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">' +
+      '<span style="font-size:20px;">\u26A0\uFE0F</span>' +
+      '<div><div style="font-weight:600;color:#856404;">Apprentice Time Pending Confirmation</div>' +
+      '<div style="font-size:12px;color:#856404;">Apprentice: <strong>' + esc(apprentice ? apprentice.name : 'Unknown') + '</strong> — Review and confirm apprentice hours before this invoice can be sent.</div></div></div>';
+  }
 
   // Header card
   content.innerHTML += '<div class="card"><div class="card-hd"><span class="card-title">Invoice Details</span><span class="badge ' + sBadge + '">' + esc(inv.status) + '</span></div>' +
@@ -2437,6 +2453,21 @@ async function submitPayment(id) {
     if (idx >= 0) db.invoices[idx] = updated;
     closeGenericModal();
     showToast('Payment recorded', 'success');
+    renderInvoiceDetail();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function confirmApprenticeTime(id) {
+  var inv = (db.invoices || []).find(function(x) { return x.id === id; });
+  if (!inv) return;
+  var wo = (db.workOrders || []).find(function(w) { return w.id === inv.woId; });
+  var apprentice = wo && wo.apprenticeId ? (db.users || []).find(function(u) { return u.id === wo.apprenticeId; }) : null;
+  if (!confirm('Confirm that apprentice hours' + (apprentice ? ' for ' + apprentice.name : '') + ' have been reviewed and are correct?')) return;
+  try {
+    var updated = await apiPost('/api/invoices/' + id, { apprenticeConfirmed: true }, 'PUT');
+    var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
+    if (idx >= 0) db.invoices[idx] = updated;
+    showToast('Apprentice time confirmed', 'success');
     renderInvoiceDetail();
   } catch (e) { showToast(e.message, 'error'); }
 }

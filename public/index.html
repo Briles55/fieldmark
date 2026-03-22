@@ -921,7 +921,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;">
         <input class="fc" type="text" id="inv-filter-search" placeholder="Search invoices..." style="max-width:200px;" oninput="renderInvoicesView()">
         <select class="fc" id="inv-filter-status" style="max-width:160px;" onchange="renderInvoicesView()">
-          <option value="">All Statuses</option><option>Draft</option><option>Sent</option><option>Paid</option><option>Void</option>
+          <option value="">All Statuses</option><option value="Awaiting">Awaiting Payment</option><option>Paid</option><option>Draft</option><option>Sent</option><option>Void</option>
         </select>
         <select class="fc" id="inv-filter-client" style="max-width:180px;" onchange="renderInvoicesView()">
           <option value="">All Clients</option>
@@ -2114,7 +2114,8 @@ function renderInvoicesView() {
     makeSearchable('inv-filter-client');
   }
 
-  if (statusF) list = list.filter(function(inv) { return inv.status === statusF; });
+  if (statusF === 'Awaiting') list = list.filter(function(inv) { return inv.status === 'Draft' || inv.status === 'Sent'; });
+  else if (statusF) list = list.filter(function(inv) { return inv.status === statusF; });
   if (clientF) list = list.filter(function(inv) { return inv.clientId === clientF; });
   if (fromF) list = list.filter(function(inv) { return (inv.createdAt || '').slice(0,10) >= fromF; });
   if (toF) list = list.filter(function(inv) { return (inv.createdAt || '').slice(0,10) <= toF; });

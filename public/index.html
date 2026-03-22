@@ -2781,7 +2781,7 @@ function renderWorkOrders(search) {
   const priorityFilter = document.getElementById('wo-filter-priority')?.value || '';
   let list = (db.workOrders||[]).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   // Techs only see work orders assigned to them
-  if (!isAdmin() && currentUser) list = list.filter(function(wo) { return isAssignedTo(wo, currentUser.id); });
+  if (!isAdmin() && currentUser) list = list.filter(function(wo) { return isAssignedTo(wo, currentUser.id) && wo.status !== 'Completed' && wo.status !== 'Cancelled'; });
   if (statusFilter) list = list.filter(wo => wo.status === statusFilter);
   if (priorityFilter) list = list.filter(wo => wo.priority === priorityFilter);
   if (search) {
@@ -2926,7 +2926,7 @@ function renderWorkOrderDetail() {
     '</div></div>';
 
   // Tech Notes card (visible to assigned tech & admin)
-  var canEditTechNotes = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id));
+  var canEditTechNotes = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id) && wo.status !== 'Completed' && wo.status !== 'Cancelled');
   if (canEditTechNotes) {
     var apprenticeOpts = (db.users||[]).map(function(u) {
       return '<option value="' + u.id + '"' + (wo.apprenticeId===u.id?' selected':'') + '>' + esc(u.name) + ' (' + u.role + ')</option>';
@@ -2956,7 +2956,7 @@ function renderWorkOrderDetail() {
     '<button class="btn btn-ghost btn-sm" onclick="addLaborEntry()" style="margin-left:auto;">+ Add Entry</button></div><div class="tbl-wrap">' + laborHtml + '</div></div>';
 
   // Update Status (assigned tech or admin)
-  var canUpdateStatus = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id));
+  var canUpdateStatus = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id) && wo.status !== 'Completed' && wo.status !== 'Cancelled');
   if (canUpdateStatus) {
     content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Update Status</span></div>' +
       '<div class="card-body"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
@@ -3970,7 +3970,7 @@ function renderDashboard() {
 
   // Technician dashboard — three tiles only
   if (!isAdmin()) {
-    var myWOs = (db.workOrders||[]).filter(function(wo){return isAssignedTo(wo, currentUser?.id);});
+    var myWOs = (db.workOrders||[]).filter(function(wo){return isAssignedTo(wo, currentUser?.id) && wo.status!=='Completed' && wo.status!=='Cancelled';});
     var openWOs = myWOs.filter(function(wo){return wo.status==='Open'||wo.status==='In Progress';}).length;
     var onHoldWOs = myWOs.filter(function(wo){return wo.status==='On Hold';}).length;
     document.getElementById('dash-stats').innerHTML = '';

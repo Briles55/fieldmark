@@ -106,6 +106,15 @@ tr.clickable:hover td{background:var(--surface2);cursor:pointer;}
 .fc::placeholder{color:var(--muted);opacity:.7;}
 textarea.fc{resize:vertical;min-height:80px;}
 select.fc{cursor:pointer;}
+.ss-wrap{position:relative;}.ss-wrap>select{display:none!important;}
+.ss-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13.5px;font-family:inherit;cursor:pointer;}
+.ss-input:focus{outline:none;border-color:var(--accent);}
+.ss-input::placeholder{color:var(--muted);opacity:.7;}
+.ss-list{display:none;position:absolute;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:999;margin-top:2px;}
+.ss-item{padding:8px 12px;font-size:13px;cursor:pointer;color:var(--text);}
+.ss-item:hover,.ss-item.active{background:var(--accent);color:#fff;}
+.ss-item.ss-empty{color:var(--muted);font-style:italic;cursor:default;}
+.ss-item.ss-empty:hover{background:transparent;color:var(--muted);}
 .fr{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
 .fr3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
 
@@ -1634,6 +1643,89 @@ function getAssignedIds(wo) {
 }
 function isAssignedTo(wo, userId) { return getAssignedIds(wo).indexOf(userId) >= 0; }
 
+function makeSearchable(selectId) {
+  var sel = document.getElementById(selectId);
+  if (!sel || sel.dataset.searchable) return;
+  sel.dataset.searchable = '1';
+
+  var wrapper = document.createElement('div');
+  wrapper.className = 'ss-wrap';
+  sel.parentNode.insertBefore(wrapper, sel);
+  wrapper.appendChild(sel);
+
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'ss-input';
+  input.placeholder = sel.options[0] ? sel.options[0].textContent : 'Search...';
+  if (sel.selectedIndex > 0) input.value = sel.options[sel.selectedIndex].textContent;
+
+  var list = document.createElement('div');
+  list.className = 'ss-list';
+
+  wrapper.insertBefore(input, sel);
+  wrapper.appendChild(list);
+
+  function buildList(filter) {
+    list.innerHTML = '';
+    var count = 0;
+    for (var i = 0; i < sel.options.length; i++) {
+      var text = sel.options[i].textContent;
+      var val = sel.options[i].value;
+      if (filter && !text.toLowerCase().includes(filter.toLowerCase())) continue;
+      count++;
+      var item = document.createElement('div');
+      item.className = 'ss-item' + (i === sel.selectedIndex ? ' active' : '');
+      item.textContent = text;
+      (function(idx, t) {
+        item.onclick = function(e) {
+          e.stopPropagation();
+          sel.selectedIndex = idx;
+          input.value = idx > 0 ? t : '';
+          list.style.display = 'none';
+          sel.dispatchEvent(new Event('change', {bubbles:true}));
+        };
+      })(i, text);
+      list.appendChild(item);
+    }
+    if (count === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'ss-item ss-empty';
+      empty.textContent = 'No matches found';
+      list.appendChild(empty);
+    }
+  }
+
+  input.addEventListener('focus', function() {
+    input.select();
+    buildList(input.value);
+    list.style.display = 'block';
+  });
+
+  input.addEventListener('input', function() {
+    buildList(input.value);
+    list.style.display = 'block';
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { list.style.display = 'none'; input.blur(); }
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!wrapper.contains(e.target)) {
+      list.style.display = 'none';
+      if (sel.selectedIndex > 0) input.value = sel.options[sel.selectedIndex].textContent;
+      else input.value = '';
+    }
+  });
+
+  // Expose a refresh method for dynamically repopulated selects
+  wrapper._ssRefresh = function() {
+    if (sel.selectedIndex > 0) input.value = sel.options[sel.selectedIndex].textContent;
+    else input.value = '';
+  };
+  wrapper._ssReset = function() { input.value = ''; };
+}
+
 function applyRoleUI() {
   if (isClient()) return; // client portal mode manages its own nav visibility
   const admin = isAdmin();
@@ -2003,6 +2095,8 @@ function renderServiceRequest() {
       </div>
     </form>
   `;
+  makeSearchable('sr-location');
+  makeSearchable('sr-equipment');
 }
 
 function updateRequestEquipment() {
@@ -2011,6 +2105,7 @@ function updateRequestEquipment() {
   const eqs = locId ? db.equipment.filter(e => e.locationId === locId) : [];
   eqSelect.innerHTML = '<option value="">— Select Equipment (optional) —</option>' +
     eqs.map(e => `<option value="${e.id}">${esc(e.name)}${e.model ? ' — ' + esc(e.model) : ''}</option>`).join('');
+  var w = eqSelect.closest('.ss-wrap'); if (w && w._ssReset) w._ssReset();
 }
 
 function handleRequestPhoto(inputEl) {
@@ -2537,17 +2632,25 @@ function openWorkOrderModal(prefill) {
 
   modal.style.display = 'flex';
 
+  makeSearchable('wo-m-client');
+  makeSearchable('wo-m-location');
+  makeSearchable('wo-m-equipment');
+
   // If prefill has clientId, trigger cascading
   if (prefill.clientId) {
     setTimeout(function() {
       woModalClientChange();
+      var wLoc = document.getElementById('wo-m-location').closest('.ss-wrap'); if (wLoc && wLoc._ssReset) wLoc._ssReset();
       if (prefill.locationId) {
         setTimeout(function() {
           document.getElementById('wo-m-location').value = prefill.locationId;
+          var wl2 = document.getElementById('wo-m-location').closest('.ss-wrap'); if (wl2 && wl2._ssRefresh) wl2._ssRefresh();
           woModalLocationChange();
+          var wEq = document.getElementById('wo-m-equipment').closest('.ss-wrap'); if (wEq && wEq._ssReset) wEq._ssReset();
           if (prefill.equipmentId) {
             setTimeout(function() {
               document.getElementById('wo-m-equipment').value = prefill.equipmentId;
+              var we2 = document.getElementById('wo-m-equipment').closest('.ss-wrap'); if (we2 && we2._ssRefresh) we2._ssRefresh();
             }, 50);
           }
         }, 50);
@@ -2581,6 +2684,8 @@ function woModalClientChange() {
   var eqSelect = document.getElementById('wo-m-equipment');
   locSelect.innerHTML = '<option value="">— Select Location —</option>';
   eqSelect.innerHTML = '<option value="">— None —</option>';
+  var wl = locSelect.closest('.ss-wrap'); if (wl && wl._ssReset) wl._ssReset();
+  var we = eqSelect.closest('.ss-wrap'); if (we && we._ssReset) we._ssReset();
   if (!clientId) return;
   var locs = db.locations.filter(function(l){return l.clientId===clientId;});
   locs.forEach(function(l) {
@@ -2596,6 +2701,7 @@ function woModalLocationChange() {
   var locId = document.getElementById('wo-m-location').value;
   var eqSelect = document.getElementById('wo-m-equipment');
   eqSelect.innerHTML = '<option value="">— None —</option>';
+  var we = eqSelect.closest('.ss-wrap'); if (we && we._ssReset) we._ssReset();
   if (!locId) return;
   var eqs = db.equipment.filter(function(e){return e.locationId===locId;});
   eqs.forEach(function(e) {
@@ -2982,6 +3088,7 @@ function openAddTimeEntryModal(dateStr) {
     '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
     '<button class="btn btn-primary" onclick="saveTimeEntry()">Add Entry</button>';
   modal.style.display = 'flex';
+  makeSearchable('te-wo');
 }
 
 function openEditTimeEntryModal(woId, entryId) {
@@ -3857,12 +3964,16 @@ function populateReportFilters() {
     techSel.innerHTML = techOpts;
     techSel.value = curTech;
   }
+  // Make filter dropdowns searchable
+  makeSearchable('rpt-filter-client');
+  makeSearchable('rpt-filter-location');
+  makeSearchable('rpt-filter-tech');
 }
 
 function clearReportFilters() {
   ['rpt-filter-search','rpt-filter-type','rpt-filter-client','rpt-filter-location','rpt-filter-tech','rpt-filter-status','rpt-filter-from','rpt-filter-to'].forEach(function(id) {
     var el = document.getElementById(id);
-    if (el) el.value = '';
+    if (el) { el.value = ''; var w = el.closest('.ss-wrap'); if (w && w._ssReset) w._ssReset(); }
   });
   renderReportsView();
 }

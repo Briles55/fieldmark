@@ -2447,6 +2447,7 @@ function renderWorkOrderDetail() {
     '<div><div class="ii-lbl">Equipment</div><div class="ii-val">' + (eq?esc(eq.name)+(eq.model?' \u2014 '+esc(eq.model):''):'\u2014') + '</div></div>' +
     '<div><div class="ii-lbl">Priority</div><div class="ii-val"><span class="badge ' + priBadge + '">' + esc(wo.priority) + '</span></div></div>' +
     '<div><div class="ii-lbl">Assigned To</div><div class="ii-val">' + (assigneeNames.length ? esc(assigneeNames.join(', ')) : 'Unassigned') + '</div></div>' +
+    (wo.apprenticeId ? (function(){ var ap = (db.users||[]).find(function(u){return u.id===wo.apprenticeId;}); return '<div><div class="ii-lbl">Apprentice</div><div class="ii-val">' + esc(ap ? ap.name : 'Unknown') + '</div></div>'; })() : '') +
     '<div><div class="ii-lbl">Created</div><div class="ii-val">' + fmtDT(wo.createdAt) + '</div></div>' +
     '<div><div class="ii-lbl">Updated</div><div class="ii-val">' + fmtDT(wo.updatedAt) + '</div></div>' +
     (sr ? '<div><div class="ii-lbl">Service Request</div><div class="ii-val"><a href="#" onclick="event.preventDefault();openServiceRequestDetail(\'' + sr.id + '\')">View Request</a></div></div>' : '') +
@@ -2457,11 +2458,21 @@ function renderWorkOrderDetail() {
   // Tech Notes card (visible to assigned tech & admin)
   var canEditTechNotes = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id));
   if (canEditTechNotes) {
+    var apprenticeOpts = (db.users||[]).map(function(u) {
+      return '<option value="' + u.id + '"' + (wo.apprenticeId===u.id?' selected':'') + '>' + esc(u.name) + ' (' + u.role + ')</option>';
+    }).join('');
     content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Tech Notes</span></div>' +
       '<div class="card-body">' +
       '<textarea class="fc" id="wod-tech-notes" placeholder="Enter tech notes for this work order..." style="min-height:100px;">' + esc(wo.techNotes||'') + '</textarea>' +
+      '<div style="margin-top:14px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;">' +
+      '<input type="checkbox" id="wod-has-apprentice"' + (wo.apprenticeId ? ' checked' : '') + ' onchange="toggleApprenticeSelect()"> Apprentice on site</label></div>' +
+      '<div id="wod-apprentice-wrap" style="margin-top:8px;' + (wo.apprenticeId ? '' : 'display:none;') + '">' +
+      '<label class="flbl">Select Apprentice</label>' +
+      '<select class="fc" id="wod-apprentice"><option value="">— Select Technician —</option>' + apprenticeOpts + '</select>' +
+      '</div>' +
       '<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="saveTechNotes()">Save Notes</button></div>' +
       '</div></div>';
+    makeSearchable('wod-apprentice');
   } else if (wo.techNotes) {
     content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Tech Notes</span></div>' +
       '<div class="card-body"><div style="font-size:14px;white-space:pre-wrap;">' + esc(wo.techNotes) + '</div></div></div>';
@@ -2546,7 +2557,10 @@ async function techUpdateStatus() {
   try {
     var tnEl = document.getElementById('wod-tech-notes');
     var tn = tnEl ? tnEl.value : (wo.techNotes||'');
-    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: newStatus, techNotes: tn }, 'PUT');
+    var hasApp = document.getElementById('wod-has-apprentice');
+    var appId = '';
+    if (hasApp && hasApp.checked) { var appSel = document.getElementById('wod-apprentice'); appId = appSel ? appSel.value : ''; }
+    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: newStatus, techNotes: tn, apprenticeId: appId }, 'PUT');
     var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
     if (idx>=0) db.workOrders[idx] = updated;
     var label = newStatus==='Completed'?'Complete':newStatus==='On Hold'?'Waiting on Material / Parts':'Not Complete';
@@ -2555,15 +2569,32 @@ async function techUpdateStatus() {
   } catch(e) { showToast(e.message,'error'); }
 }
 
+function toggleApprenticeSelect() {
+  var checked = document.getElementById('wod-has-apprentice').checked;
+  var wrap = document.getElementById('wod-apprentice-wrap');
+  if (wrap) wrap.style.display = checked ? '' : 'none';
+  if (!checked) {
+    var sel = document.getElementById('wod-apprentice');
+    if (sel) { sel.value = ''; var w = sel.closest('.ss-wrap'); if (w && w._ssReset) w._ssReset(); }
+  }
+}
+
 async function saveTechNotes() {
   var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
   if (!wo) return;
   var techNotes = document.getElementById('wod-tech-notes').value;
+  var hasApprentice = document.getElementById('wod-has-apprentice');
+  var apprenticeId = '';
+  if (hasApprentice && hasApprentice.checked) {
+    var appSel = document.getElementById('wod-apprentice');
+    apprenticeId = appSel ? appSel.value : '';
+  }
   try {
-    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: wo.status, techNotes: techNotes }, 'PUT');
+    var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: wo.status, techNotes: techNotes, apprenticeId: apprenticeId }, 'PUT');
     var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
     if (idx>=0) db.workOrders[idx] = updated;
     showToast('Tech notes saved','success');
+    renderWorkOrderDetail();
   } catch(e) { showToast(e.message,'error'); }
 }
 

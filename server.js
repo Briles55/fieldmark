@@ -119,6 +119,7 @@ db.exec(`
     laborEntries     TEXT DEFAULT '[]',
     notes            TEXT DEFAULT '',
     techNotes        TEXT DEFAULT '',
+    apprenticeId     TEXT DEFAULT '',
     createdAt        TEXT NOT NULL,
     updatedAt        TEXT NOT NULL
   );
@@ -157,6 +158,7 @@ try { db.exec("ALTER TABLE clients ADD COLUMN defaultRate TEXT DEFAULT ''"); } c
 try { db.exec("ALTER TABLE clients ADD COLUMN arNotes TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE service_requests ADD COLUMN poNumber TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE work_orders ADD COLUMN techNotes TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE work_orders ADD COLUMN apprenticeId TEXT DEFAULT ''"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -1091,8 +1093,9 @@ app.put('/api/work-orders/:id/close', requireAuth, (req, res) => {
     if (!linked || linked.c === 0) return res.status(400).json({ error: 'Cannot mark as Complete — no reports linked to this work order' });
   }
   const techNotes = req.body.techNotes !== undefined ? req.body.techNotes : wo.techNotes || '';
-  db.prepare('UPDATE work_orders SET status=?, techNotes=?, updatedAt=? WHERE id=?')
-    .run(status, techNotes, new Date().toISOString(), req.params.id);
+  const apprenticeId = req.body.apprenticeId !== undefined ? req.body.apprenticeId : wo.apprenticeId || '';
+  db.prepare('UPDATE work_orders SET status=?, techNotes=?, apprenticeId=?, updatedAt=? WHERE id=?')
+    .run(status, techNotes, apprenticeId, new Date().toISOString(), req.params.id);
   const updated = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
   try { updated.laborEntries = JSON.parse(updated.laborEntries); } catch(e) { updated.laborEntries = []; }
   res.json(updated);

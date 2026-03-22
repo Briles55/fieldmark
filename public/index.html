@@ -405,6 +405,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       Time Cards
     </button>
+    <button id="nav-invoices" class="nav-item" onclick="nav('invoices',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+      Invoices
+    </button>
     <button id="nav-service-requests" class="nav-item" onclick="nav('service-requests',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
       Service Requests
@@ -907,6 +911,41 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
       <div id="tc-toolbar" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;"></div>
       <div id="tc-content"></div>
+    </div>
+
+    <!-- INVOICES (admin only) -->
+    <div id="view-invoices" class="view">
+      <div class="ph">
+        <div><div class="ph-title">Invoices</div><div class="ph-sub" id="inv-list-sub"></div></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;">
+        <input class="fc" type="text" id="inv-filter-search" placeholder="Search invoices..." style="max-width:200px;" oninput="renderInvoicesView()">
+        <select class="fc" id="inv-filter-status" style="max-width:160px;" onchange="renderInvoicesView()">
+          <option value="">All Statuses</option><option>Draft</option><option>Sent</option><option>Paid</option><option>Void</option>
+        </select>
+        <select class="fc" id="inv-filter-client" style="max-width:180px;" onchange="renderInvoicesView()">
+          <option value="">All Clients</option>
+        </select>
+        <input class="fc" type="date" id="inv-filter-from" style="max-width:150px;" onchange="renderInvoicesView()">
+        <input class="fc" type="date" id="inv-filter-to" style="max-width:150px;" onchange="renderInvoicesView()">
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Invoice #</th><th>Client</th><th>WO #</th><th>Status</th><th>Total</th><th>Date</th><th>Due Date</th>
+        </tr></thead><tbody id="inv-list-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div id="view-invoice-detail" class="view">
+      <div class="ph">
+        <div>
+          <a href="#" onclick="event.preventDefault();nav('invoices')" style="font-size:12px;color:var(--accent);text-decoration:none;">&larr; Back to Invoices</a>
+          <div class="ph-title" id="invd-title"></div>
+          <div class="ph-sub" id="invd-sub"></div>
+        </div>
+        <div style="display:flex;gap:8px;" id="invd-actions"></div>
+      </div>
+      <div id="invd-content"></div>
     </div>
 
     <!-- FORM TEMPLATES (admin only) -->
@@ -1608,6 +1647,7 @@ function exitClientMode() {
   document.getElementById('nav-reports').style.display = '';
   document.getElementById('nav-work-orders').style.display = '';
   document.getElementById('nav-time-cards').style.display = '';
+  document.getElementById('nav-invoices').style.display = '';
   document.getElementById('nav-service-requests').style.display = '';
   document.getElementById('nav-form-templates').style.display = '';
 }
@@ -1732,6 +1772,7 @@ function applyRoleUI() {
   document.getElementById('nav-clients').style.display = '';
   document.getElementById('nav-work-orders').style.display = '';
   document.getElementById('nav-time-cards').style.display = '';
+  document.getElementById('nav-invoices').style.display = admin ? '' : 'none';
   document.getElementById('nav-service-requests').style.display = admin ? '' : 'none';
   document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';
@@ -1796,7 +1837,7 @@ const app = {
 
 // â”€â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function nav(viewName, navEl) {
-  if ((viewName === 'users' || viewName === 'form-templates' || viewName === 'form-builder' || viewName === 'service-requests' || viewName === 'service-request-detail') && !isAdmin()) {
+  if ((viewName === 'users' || viewName === 'form-templates' || viewName === 'form-builder' || viewName === 'service-requests' || viewName === 'service-request-detail' || viewName === 'invoices' || viewName === 'invoice-detail') && !isAdmin()) {
     // work-orders and work-order-detail are allowed for all staff
     showToast('Access restricted to administrators', 'error'); return;
   }
@@ -1818,7 +1859,7 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'work-orders':'nav-work-orders', 'time-cards':'nav-time-cards', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
+  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'work-orders':'nav-work-orders', 'time-cards':'nav-time-cards', invoices:'nav-invoices', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
   if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
 }
 
@@ -1917,6 +1958,16 @@ function renderView(name) {
       setNav('time-cards');
       if (isAdmin()) renderTimeCardsAdmin();
       else renderMyTimeCard();
+      break;
+    case 'invoices':
+      bc.innerHTML = '<span class="cur">Invoices</span>';
+      setNav('invoices');
+      renderInvoicesView();
+      break;
+    case 'invoice-detail':
+      bc.innerHTML = '<span onclick="nav(\'invoices\')">Invoices</span><span class="bc-sep">/</span><span class="cur">Invoice Detail</span>';
+      setNav('invoices');
+      renderInvoiceDetail();
       break;
     case 'service-requests':
       bc.innerHTML = '<span class="cur">Service Requests</span>';
@@ -2039,6 +2090,287 @@ function renderPortalReports(search) {
       <td>${r.status?`<span class="badge ${r.status==='Operational'?'bg':r.status==='Needs Attention'?'ba':'br'}">${esc(r.status)}</span>`:'\u2014'}</td>
     </tr>`;
   }).join('');
+}
+
+// ─── INVOICES ────────────────────────────────────────────────────────────────
+function renderInvoicesView() {
+  var list = db.invoices || [];
+  var search = (document.getElementById('inv-filter-search')?.value || '').toLowerCase();
+  var statusF = document.getElementById('inv-filter-status')?.value || '';
+  var clientF = document.getElementById('inv-filter-client')?.value || '';
+  var fromF = document.getElementById('inv-filter-from')?.value || '';
+  var toF = document.getElementById('inv-filter-to')?.value || '';
+
+  // Populate client filter
+  var clientSel = document.getElementById('inv-filter-client');
+  if (clientSel && clientSel.options.length <= 1) {
+    (db.clients || []).forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      clientSel.appendChild(opt);
+    });
+    if (clientF) clientSel.value = clientF;
+    makeSearchable('inv-filter-client');
+  }
+
+  if (statusF) list = list.filter(function(inv) { return inv.status === statusF; });
+  if (clientF) list = list.filter(function(inv) { return inv.clientId === clientF; });
+  if (fromF) list = list.filter(function(inv) { return (inv.createdAt || '').slice(0,10) >= fromF; });
+  if (toF) list = list.filter(function(inv) { return (inv.createdAt || '').slice(0,10) <= toF; });
+  if (search) {
+    list = list.filter(function(inv) {
+      var cl = db.clients.find(function(c) { return c.id === inv.clientId; });
+      var wo = (db.workOrders||[]).find(function(w) { return w.id === inv.woId; });
+      return (inv.invoiceNumber || '').toLowerCase().includes(search) ||
+        (cl?.name || '').toLowerCase().includes(search) ||
+        (wo?.woNumber || '').toLowerCase().includes(search);
+    });
+  }
+
+  document.getElementById('inv-list-sub').textContent = list.length + ' invoice' + (list.length !== 1 ? 's' : '');
+  var tbody = document.getElementById('inv-list-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-ico">\uD83D\uDCB0</div><div class="empty-title">No invoices found</div><div class="empty-desc">Invoices are auto-created when work orders are completed</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  for (var i = 0; i < list.length; i++) {
+    var inv = list[i];
+    var cl = db.clients.find(function(c) { return c.id === inv.clientId; });
+    var wo = (db.workOrders||[]).find(function(w) { return w.id === inv.woId; });
+    var sBadge = inv.status === 'Draft' ? 'bgr' : inv.status === 'Sent' ? 'bb' : inv.status === 'Paid' ? 'bg' : 'br';
+    var tr = document.createElement('tr');
+    tr.className = 'clickable';
+    (function(invId) { tr.onclick = function() { openInvoiceDetail(invId); }; })(inv.id);
+    var td1 = document.createElement('td'); var s1 = document.createElement('strong'); s1.textContent = inv.invoiceNumber; td1.appendChild(s1);
+    var td2 = document.createElement('td'); td2.textContent = cl ? cl.name : '\u2014';
+    var td3 = document.createElement('td'); td3.textContent = wo ? wo.woNumber : '\u2014';
+    var td4 = document.createElement('td'); var b4 = document.createElement('span'); b4.className = 'badge ' + sBadge; b4.textContent = inv.status; td4.appendChild(b4);
+    var td5 = document.createElement('td'); td5.textContent = '$' + (inv.total || 0).toFixed(2);
+    var td6 = document.createElement('td'); td6.textContent = inv.createdAt ? inv.createdAt.split('T')[0] : '';
+    var td7 = document.createElement('td'); td7.textContent = inv.dueDate || '\u2014';
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+    tr.appendChild(td5); tr.appendChild(td6); tr.appendChild(td7);
+    tbody.appendChild(tr);
+  }
+}
+
+function openInvoiceDetail(id) {
+  app.invoiceId = id;
+  showView('invoice-detail');
+  renderView('invoice-detail');
+}
+
+function renderInvoiceDetail() {
+  var inv = (db.invoices || []).find(function(x) { return x.id === app.invoiceId; });
+  if (!inv) { nav('invoices'); return; }
+  var cl = db.clients.find(function(c) { return c.id === inv.clientId; });
+  var wo = (db.workOrders || []).find(function(w) { return w.id === inv.woId; });
+  var loc = wo ? db.locations.find(function(l) { return l.id === wo.locationId; }) : null;
+  var eq = wo && wo.equipmentId ? db.equipment.find(function(e) { return e.id === wo.equipmentId; }) : null;
+  var items = inv.lineItems || [];
+
+  var sBadge = inv.status === 'Draft' ? 'bgr' : inv.status === 'Sent' ? 'bb' : inv.status === 'Paid' ? 'bg' : 'br';
+  document.getElementById('invd-title').textContent = inv.invoiceNumber;
+  document.getElementById('invd-sub').textContent = cl ? cl.name : '';
+
+  // Actions
+  var actDiv = document.getElementById('invd-actions');
+  actDiv.innerHTML = '';
+  var btnPdf = document.createElement('button'); btnPdf.className = 'btn btn-ghost btn-sm'; btnPdf.textContent = 'Preview PDF';
+  btnPdf.onclick = function() { window.open('/api/invoices/' + inv.id + '/pdf-view', '_blank'); };
+  actDiv.appendChild(btnPdf);
+  if (inv.status === 'Draft') {
+    var btnSend = document.createElement('button'); btnSend.className = 'btn btn-primary btn-sm'; btnSend.textContent = 'Send to Client';
+    btnSend.onclick = function() { sendInvoice(inv.id); };
+    actDiv.appendChild(btnSend);
+  }
+  if (inv.status === 'Sent') {
+    var btnPaid = document.createElement('button'); btnPaid.className = 'btn btn-sm'; btnPaid.style.cssText = 'background:var(--green);color:#fff;';
+    btnPaid.textContent = 'Mark as Paid';
+    btnPaid.onclick = function() { markInvoicePaid(inv.id); };
+    actDiv.appendChild(btnPaid);
+  }
+
+  var content = document.getElementById('invd-content');
+  content.innerHTML = '';
+
+  // Header card
+  content.innerHTML += '<div class="card"><div class="card-hd"><span class="card-title">Invoice Details</span><span class="badge ' + sBadge + '">' + esc(inv.status) + '</span></div>' +
+    '<div class="card-body"><div class="ig3">' +
+    '<div><div class="ii-lbl">Invoice Number</div><div class="ii-val"><strong>' + esc(inv.invoiceNumber) + '</strong></div></div>' +
+    '<div><div class="ii-lbl">Date</div><div class="ii-val">' + esc(inv.createdAt ? inv.createdAt.split('T')[0] : '') + '</div></div>' +
+    '<div><div class="ii-lbl">Due Date</div><div class="ii-val">' + esc(inv.dueDate || 'Upon Receipt') + '</div></div>' +
+    '<div><div class="ii-lbl">Payment Terms</div><div class="ii-val">' + esc(inv.paymentTerms || 'Due on Receipt') + '</div></div>' +
+    (inv.sentAt ? '<div><div class="ii-lbl">Sent</div><div class="ii-val">' + esc(inv.sentAt.split('T')[0]) + '</div></div>' : '') +
+    (inv.paidAt ? '<div><div class="ii-lbl">Paid</div><div class="ii-val">' + esc(inv.paidAt.split('T')[0]) + '</div></div>' : '') +
+    '</div></div></div>';
+
+  // Billing info card
+  if (cl) {
+    content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Bill To</span></div>' +
+      '<div class="card-body"><div class="ig3">' +
+      '<div><div class="ii-lbl">Client</div><div class="ii-val">' + esc(cl.name) + '</div></div>' +
+      '<div><div class="ii-lbl">Billing Contact</div><div class="ii-val">' + esc(cl.billingContact || '\u2014') + '</div></div>' +
+      '<div><div class="ii-lbl">Billing Email</div><div class="ii-val">' + esc(cl.billingEmail || '\u2014') + '</div></div>' +
+      '<div><div class="ii-lbl">Billing Phone</div><div class="ii-val">' + esc(cl.billingPhone || '\u2014') + '</div></div>' +
+      '<div><div class="ii-lbl">Account Number</div><div class="ii-val">' + esc(cl.accountNumber || '\u2014') + '</div></div>' +
+      '<div><div class="ii-lbl">Billing Address</div><div class="ii-val">' + esc(cl.billingAddress || '\u2014') + '</div></div>' +
+      '</div></div></div>';
+  }
+
+  // WO Summary card
+  if (wo) {
+    content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Work Order</span></div>' +
+      '<div class="card-body"><div class="ig3">' +
+      '<div><div class="ii-lbl">WO Number</div><div class="ii-val">' + esc(wo.woNumber) + '</div></div>' +
+      '<div><div class="ii-lbl">Location</div><div class="ii-val">' + esc(loc ? loc.buildingName : '\u2014') + '</div></div>' +
+      '<div><div class="ii-lbl">Equipment</div><div class="ii-val">' + esc(eq ? eq.name : '\u2014') + '</div></div>' +
+      '</div>' +
+      (wo.description ? '<div style="margin-top:8px;font-size:13px;color:var(--muted);">' + esc(wo.description) + '</div>' : '') +
+      '</div></div>';
+  }
+
+  // Line Items card (editable if Draft)
+  var editable = inv.status === 'Draft';
+  var liHtml = '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Line Items</span>';
+  if (editable) liHtml += '<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="addInvoiceLineItem()">+ Add Row</button>';
+  liHtml += '</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:80px;">Rate</th><th style="width:90px;">Amount</th>';
+  if (editable) liHtml += '<th style="width:40px;"></th>';
+  liHtml += '</tr></thead><tbody id="inv-items-tbody">';
+
+  for (var j = 0; j < items.length; j++) {
+    var li = items[j];
+    if (editable) {
+      liHtml += '<tr>' +
+        '<td><input class="fc inv-li-desc" type="text" value="' + esc(li.desc || '') + '" style="font-size:12px;padding:4px 6px;" oninput="calcInvoiceTotals()"></td>' +
+        '<td><input class="fc inv-li-qty" type="number" value="' + (li.qty || 0) + '" step="0.25" min="0" style="font-size:12px;padding:4px 6px;text-align:center;" oninput="calcInvoiceTotals()"></td>' +
+        '<td><input class="fc inv-li-rate" type="number" value="' + (li.rate || 0) + '" step="0.01" min="0" style="font-size:12px;padding:4px 6px;text-align:right;" oninput="calcInvoiceTotals()"></td>' +
+        '<td class="inv-li-amt" style="text-align:right;font-size:12px;">$' + (li.amount || 0).toFixed(2) + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm" style="color:var(--red);padding:2px 6px;" onclick="removeInvoiceLineItem(' + j + ')">&times;</button></td></tr>';
+    } else {
+      liHtml += '<tr><td style="font-size:12px;">' + esc(li.desc || '') + '</td><td style="text-align:center;font-size:12px;">' + (li.qty || 0) + '</td><td style="text-align:right;font-size:12px;">$' + (li.rate || 0).toFixed(2) + '</td><td style="text-align:right;font-size:12px;">$' + (li.amount || 0).toFixed(2) + '</td></tr>';
+    }
+  }
+  liHtml += '</tbody></table></div></div>';
+  content.innerHTML += liHtml;
+
+  // Totals card
+  var totalsHtml = '<div class="card" style="margin-top:16px;"><div class="card-body" style="max-width:350px;margin-left:auto;">' +
+    '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;"><span>Subtotal</span><span id="inv-subtotal">$' + (inv.subtotal || 0).toFixed(2) + '</span></div>';
+  if (editable) {
+    totalsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:14px;"><span>Tax Rate (%)</span><input class="fc" type="number" id="inv-tax-rate" value="' + ((inv.taxRate || 0) * 100).toFixed(1) + '" step="0.1" min="0" max="100" style="width:80px;font-size:13px;padding:4px 6px;text-align:right;" oninput="calcInvoiceTotals()"></div>';
+  }
+  totalsHtml += '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;"><span>Tax</span><span id="inv-tax-amt">$' + (inv.taxAmount || 0).toFixed(2) + '</span></div>' +
+    '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:18px;font-weight:700;border-top:2px solid var(--fg);"><span>Total</span><span id="inv-total">$' + (inv.total || 0).toFixed(2) + '</span></div>' +
+    '</div></div>';
+  content.innerHTML += totalsHtml;
+
+  // Notes
+  if (editable) {
+    content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-body">' +
+      '<div class="fg"><label class="flbl">Notes</label><textarea class="fc" id="inv-notes" placeholder="Invoice notes..." style="min-height:60px;">' + esc(inv.notes || '') + '</textarea></div>' +
+      '<div style="margin-top:10px;"><button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button></div>' +
+      '</div></div>';
+  } else if (inv.notes) {
+    content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-body"><div class="fg"><label class="flbl">Notes</label><div style="font-size:13px;white-space:pre-wrap;">' + esc(inv.notes) + '</div></div></div></div>';
+  }
+}
+
+function calcInvoiceTotals() {
+  var descs = document.querySelectorAll('.inv-li-desc');
+  var qtys = document.querySelectorAll('.inv-li-qty');
+  var rates = document.querySelectorAll('.inv-li-rate');
+  var amts = document.querySelectorAll('.inv-li-amt');
+  var subtotal = 0;
+  for (var i = 0; i < qtys.length; i++) {
+    var q = parseFloat(qtys[i].value) || 0;
+    var r = parseFloat(rates[i].value) || 0;
+    var amt = q * r;
+    if (amts[i]) amts[i].textContent = '$' + amt.toFixed(2);
+    subtotal += amt;
+  }
+  var taxRateEl = document.getElementById('inv-tax-rate');
+  var taxRate = taxRateEl ? (parseFloat(taxRateEl.value) || 0) / 100 : 0;
+  var taxAmt = subtotal * taxRate;
+  var total = subtotal + taxAmt;
+  var stEl = document.getElementById('inv-subtotal'); if (stEl) stEl.textContent = '$' + subtotal.toFixed(2);
+  var taEl = document.getElementById('inv-tax-amt'); if (taEl) taEl.textContent = '$' + taxAmt.toFixed(2);
+  var ttEl = document.getElementById('inv-total'); if (ttEl) ttEl.textContent = '$' + total.toFixed(2);
+}
+
+function addInvoiceLineItem() {
+  var tbody = document.getElementById('inv-items-tbody');
+  if (!tbody) return;
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><input class="fc inv-li-desc" type="text" value="" style="font-size:12px;padding:4px 6px;" oninput="calcInvoiceTotals()"></td>' +
+    '<td><input class="fc inv-li-qty" type="number" value="0" step="0.25" min="0" style="font-size:12px;padding:4px 6px;text-align:center;" oninput="calcInvoiceTotals()"></td>' +
+    '<td><input class="fc inv-li-rate" type="number" value="0" step="0.01" min="0" style="font-size:12px;padding:4px 6px;text-align:right;" oninput="calcInvoiceTotals()"></td>' +
+    '<td class="inv-li-amt" style="text-align:right;font-size:12px;">$0.00</td>' +
+    '<td><button class="btn btn-ghost btn-sm" style="color:var(--red);padding:2px 6px;" onclick="this.closest(\'tr\').remove();calcInvoiceTotals()">&times;</button></td>';
+  tbody.appendChild(tr);
+}
+
+function removeInvoiceLineItem(idx) {
+  var rows = document.querySelectorAll('#inv-items-tbody tr');
+  if (rows[idx]) rows[idx].remove();
+  calcInvoiceTotals();
+}
+
+async function saveInvoice() {
+  var inv = (db.invoices || []).find(function(x) { return x.id === app.invoiceId; });
+  if (!inv) return;
+  var descs = document.querySelectorAll('.inv-li-desc');
+  var qtys = document.querySelectorAll('.inv-li-qty');
+  var rates = document.querySelectorAll('.inv-li-rate');
+  var lineItems = [];
+  var subtotal = 0;
+  for (var i = 0; i < descs.length; i++) {
+    var q = parseFloat(qtys[i].value) || 0;
+    var r = parseFloat(rates[i].value) || 0;
+    var amt = q * r;
+    lineItems.push({ desc: descs[i].value, qty: q, rate: r, amount: amt });
+    subtotal += amt;
+  }
+  var taxRateEl = document.getElementById('inv-tax-rate');
+  var taxRate = taxRateEl ? (parseFloat(taxRateEl.value) || 0) / 100 : 0;
+  var taxAmount = subtotal * taxRate;
+  var total = subtotal + taxAmount;
+  var notes = document.getElementById('inv-notes')?.value || '';
+  try {
+    var updated = await apiPost('/api/invoices/' + inv.id, { lineItems: lineItems, subtotal: subtotal, taxRate: taxRate, taxAmount: taxAmount, total: total, notes: notes }, 'PUT');
+    var idx = (db.invoices || []).findIndex(function(x) { return x.id === inv.id; });
+    if (idx >= 0) db.invoices[idx] = updated;
+    showToast('Invoice saved', 'success');
+    renderInvoiceDetail();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function sendInvoice(id) {
+  var inv = (db.invoices || []).find(function(x) { return x.id === id; });
+  if (!inv) return;
+  var cl = db.clients.find(function(c) { return c.id === inv.clientId; });
+  if (!cl || !cl.billingEmail) { showToast('Client has no billing email configured', 'error'); return; }
+  if (!confirm('Send invoice ' + inv.invoiceNumber + ' to ' + cl.billingEmail + '?')) return;
+  try {
+    var updated = await apiPost('/api/invoices/' + id + '/send', {});
+    var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
+    if (idx >= 0) db.invoices[idx] = updated;
+    showToast('Invoice sent to ' + cl.billingEmail, 'success');
+    renderInvoiceDetail();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function markInvoicePaid(id) {
+  if (!confirm('Mark this invoice as paid?')) return;
+  try {
+    var updated = await apiPost('/api/invoices/' + id, { status: 'Paid' }, 'PUT');
+    var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
+    if (idx >= 0) db.invoices[idx] = updated;
+    showToast('Invoice marked as paid', 'success');
+    renderInvoiceDetail();
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ─── SERVICE REQUEST (Client Portal) ──────────────────────────────────────────
@@ -3536,11 +3868,13 @@ function renderDashboard() {
   const totalRpts = db.reports.length;
   const allWOs = db.workOrders||[];
   const adminOpenWOs = allWOs.filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
+  const pendingInvoices = (db.invoices||[]).filter(inv=>inv.status==='Draft').length;
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${totalClients}</div><div class="stat-lbl">Clients</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--green)">${totalLocs}</div><div class="stat-lbl">Locations</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--amber)">${totalEq}</div><div class="stat-lbl">Equipment</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${adminOpenWOs}</div><div class="stat-lbl">Open Work Orders</div></div>
+    <div class="stat-card" style="cursor:pointer;" onclick="nav('invoices')"><div class="stat-val" style="color:var(--amber)">${pendingInvoices}</div><div class="stat-lbl">Pending Invoices</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--muted)">${totalRpts}</div><div class="stat-lbl">Reports</div></div>
   `;
   const recent = [...db.reports].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);

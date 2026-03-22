@@ -134,6 +134,25 @@ db.exec(`
     createdAt   TEXT NOT NULL,
     UNIQUE(userId, weekStart)
   );
+  CREATE TABLE IF NOT EXISTS invoices (
+    id              TEXT PRIMARY KEY,
+    invoiceNumber   TEXT UNIQUE NOT NULL,
+    woId            TEXT NOT NULL,
+    clientId        TEXT NOT NULL,
+    status          TEXT DEFAULT 'Draft',
+    lineItems       TEXT DEFAULT '[]',
+    subtotal        REAL DEFAULT 0,
+    taxRate         REAL DEFAULT 0,
+    taxAmount       REAL DEFAULT 0,
+    total           REAL DEFAULT 0,
+    notes           TEXT DEFAULT '',
+    paymentTerms    TEXT DEFAULT '',
+    dueDate         TEXT DEFAULT '',
+    sentAt          TEXT DEFAULT '',
+    paidAt          TEXT DEFAULT '',
+    createdAt       TEXT NOT NULL,
+    updatedAt       TEXT NOT NULL
+  );
 `);
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
@@ -329,6 +348,68 @@ function nextWONumber() {
   return prefix + String(seq).padStart(4, '0');
 }
 
+function nextInvoiceNumber() {
+  const year = new Date().getFullYear();
+  const prefix = 'INV-' + year + '-';
+  const row = db.prepare("SELECT invoiceNumber FROM invoices WHERE invoiceNumber LIKE ? ORDER BY invoiceNumber DESC LIMIT 1").get(prefix + '%');
+  let seq = 1;
+  if (row) {
+    const parts = row.invoiceNumber.split('-');
+    seq = parseInt(parts[2], 10) + 1;
+  }
+  return prefix + String(seq).padStart(4, '0');
+}
+
+function createInvoiceForWO(woId) {
+  const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(woId);
+  if (!wo) return null;
+  const client = db.prepare('SELECT * FROM clients WHERE id=?').get(wo.clientId);
+  if (!client) return null;
+
+  // Build line items from labor entries
+  let labor = [];
+  try { labor = JSON.parse(wo.laborEntries); } catch(e) { labor = []; }
+  const rate = parseFloat(client.defaultRate) || 0;
+  const lineItems = labor.map(l => ({
+    desc: 'Labor: ' + (l.tech || 'Technician') + (l.desc ? ' — ' + l.desc : ''),
+    qty: parseFloat(l.hours) || 0,
+    rate: rate,
+    amount: (parseFloat(l.hours) || 0) * rate
+  }));
+
+  // Add parts from linked reports
+  const reports = db.prepare("SELECT parts FROM reports WHERE workOrderNumber=?").all(wo.woNumber);
+  reports.forEach(r => {
+    if (r.parts && r.parts.trim()) {
+      lineItems.push({ desc: 'Parts / Materials: ' + r.parts.trim(), qty: 1, rate: 0, amount: 0 });
+    }
+  });
+
+  const subtotal = lineItems.reduce((s, li) => s + li.amount, 0);
+  const id = genId();
+  const invNum = nextInvoiceNumber();
+  const now = new Date().toISOString();
+
+  // Calculate due date from payment terms
+  let dueDate = '';
+  const terms = client.paymentTerms || '';
+  const netMatch = terms.match(/(\d+)/);
+  if (netMatch) {
+    const days = parseInt(netMatch[1], 10);
+    const due = new Date();
+    due.setDate(due.getDate() + days);
+    dueDate = due.toISOString().split('T')[0];
+  }
+
+  db.prepare(`INSERT INTO invoices (id, invoiceNumber, woId, clientId, status, lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, sentAt, paidAt, createdAt, updatedAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, invNum, woId, wo.clientId, 'Draft', JSON.stringify(lineItems), subtotal, 0, 0, subtotal, '', terms, dueDate, '', '', now, now);
+
+  const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(id);
+  try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; }
+  return inv;
+}
+
 function getWeekStartServer(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const day = d.getDay();
@@ -520,7 +601,9 @@ app.get('/api/data', requireAuth, (req, res) => {
   workOrders.forEach(wo => { try { wo.laborEntries = JSON.parse(wo.laborEntries); } catch { wo.laborEntries = []; } });
   const users = db.prepare('SELECT id,username,name,role,createdAt FROM users ORDER BY name').all();
   const timeCards = db.prepare('SELECT * FROM time_cards ORDER BY weekStart DESC').all();
-  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users, timeCards });
+  const invoices = req.session.user.role === 'admin' ? db.prepare('SELECT * FROM invoices ORDER BY createdAt DESC').all() : [];
+  invoices.forEach(inv => { try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; } });
+  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users, timeCards, invoices });
 });
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
@@ -911,6 +994,230 @@ window.onload = function() {
   res.send(h);
 });
 
+// ─── INVOICES ─────────────────────────────────────────────────────────────────
+app.get('/api/invoices', requireAdmin, (req, res) => {
+  const invoices = db.prepare('SELECT * FROM invoices ORDER BY createdAt DESC').all();
+  invoices.forEach(inv => { try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; } });
+  res.json(invoices);
+});
+
+app.post('/api/invoices', requireAdmin, (req, res) => {
+  const { woId } = req.body;
+  if (!woId) return res.status(400).json({ error: 'Work order ID required' });
+  const existing = db.prepare('SELECT id FROM invoices WHERE woId=?').get(woId);
+  if (existing) return res.status(400).json({ error: 'Invoice already exists for this work order' });
+  const inv = createInvoiceForWO(woId);
+  if (!inv) return res.status(400).json({ error: 'Could not create invoice — work order or client not found' });
+  res.json(inv);
+});
+
+app.put('/api/invoices/:id', requireAdmin, (req, res) => {
+  const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
+  if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+  const { lineItems, subtotal, taxRate, taxAmount, total, notes, paymentTerms, dueDate, status } = req.body;
+  const now = new Date().toISOString();
+  let newStatus = status !== undefined ? status : inv.status;
+  let sentAt = inv.sentAt;
+  let paidAt = inv.paidAt;
+  if (newStatus === 'Sent' && !inv.sentAt) sentAt = now;
+  if (newStatus === 'Paid' && !inv.paidAt) paidAt = now;
+  db.prepare(`UPDATE invoices SET lineItems=?, subtotal=?, taxRate=?, taxAmount=?, total=?, notes=?, paymentTerms=?, dueDate=?, status=?, sentAt=?, paidAt=?, updatedAt=? WHERE id=?`)
+    .run(
+      lineItems !== undefined ? JSON.stringify(lineItems) : inv.lineItems,
+      subtotal !== undefined ? subtotal : inv.subtotal,
+      taxRate !== undefined ? taxRate : inv.taxRate,
+      taxAmount !== undefined ? taxAmount : inv.taxAmount,
+      total !== undefined ? total : inv.total,
+      notes !== undefined ? notes : inv.notes,
+      paymentTerms !== undefined ? paymentTerms : inv.paymentTerms,
+      dueDate !== undefined ? dueDate : inv.dueDate,
+      newStatus, sentAt, paidAt, now, req.params.id
+    );
+  const updated = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
+  try { updated.lineItems = JSON.parse(updated.lineItems); } catch(e) { updated.lineItems = []; }
+  res.json(updated);
+});
+
+// ─── INVOICE PDF VIEW ─────────────────────────────────────────────────────────
+function renderInvoiceHtml(inv) {
+  const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(inv.woId);
+  const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(inv.clientId);
+  const loc = wo ? db.prepare('SELECT * FROM locations WHERE id=?').get(wo.locationId) : null;
+  const eq = wo && wo.equipmentId ? db.prepare('SELECT * FROM equipment WHERE id=?').get(wo.equipmentId) : null;
+  let items = [];
+  try { items = typeof inv.lineItems === 'string' ? JSON.parse(inv.lineItems) : inv.lineItems || []; } catch(e) { items = []; }
+
+  function e(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function money(n) { return '$' + (parseFloat(n)||0).toFixed(2); }
+
+  let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoice ${e(inv.invoiceNumber)}</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Arial, Helvetica, sans-serif; }
+@media print { body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+@page { margin: 12mm 10mm; size: letter; }
+</style></head><body>
+<div style="max-width:760px;margin:0 auto;padding:20px 28px 40px;font-size:13px;line-height:1.5;color:#1a1a1a;">`;
+
+  // LOGO HEADER
+  const hasLogo = cl && cl.logo && cl.logo.length > 50;
+  h += `<table style="width:100%;margin-bottom:20px;"><tr>`;
+  h += `<td style="vertical-align:middle;"><div style="font-size:22px;font-weight:700;color:#c0392b;">FieldMark</div><div style="font-size:11px;color:#666;">Service Management</div></td>`;
+  if (hasLogo) h += `<td style="text-align:right;vertical-align:middle;"><img src="${cl.logo}" style="max-height:50px;max-width:140px;"></td>`;
+  h += `</tr></table>`;
+
+  // INVOICE HEADER
+  h += `<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+<tr><th colspan="2" style="background:#c0392b;color:#fff;font-size:16px;font-weight:700;text-align:center;padding:10px;">INVOICE</th></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;width:50%;">Invoice Number</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(inv.invoiceNumber)}</td></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;">Date</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(inv.createdAt ? inv.createdAt.split('T')[0] : '')}</td></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;">Due Date</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(inv.dueDate||'Upon Receipt')}</td></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;">Work Order</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(wo?wo.woNumber:'')}</td></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;">Payment Terms</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(inv.paymentTerms||'Due on Receipt')}</td></tr>
+</table>`;
+
+  // BILL TO
+  h += `<div style="font-size:15px;font-weight:700;margin:16px 0 8px;color:#1a1a1a;">Bill To</div>`;
+  h += `<table style="width:100%;margin-bottom:20px;">
+<tr><td style="padding:4px 0;font-size:13px;font-weight:700;">${e(cl?cl.name:'')}</td></tr>`;
+  if (cl && cl.billingContact) h += `<tr><td style="padding:2px 0;font-size:12px;">Attn: ${e(cl.billingContact)}</td></tr>`;
+  if (cl && cl.billingAddress) h += `<tr><td style="padding:2px 0;font-size:12px;">${e(cl.billingAddress)}</td></tr>`;
+  if (cl && cl.billingEmail) h += `<tr><td style="padding:2px 0;font-size:12px;">${e(cl.billingEmail)}</td></tr>`;
+  if (cl && cl.billingPhone) h += `<tr><td style="padding:2px 0;font-size:12px;">${e(cl.billingPhone)}</td></tr>`;
+  if (cl && cl.accountNumber) h += `<tr><td style="padding:2px 0;font-size:12px;">Account: ${e(cl.accountNumber)}</td></tr>`;
+  h += `</table>`;
+
+  // SERVICE DETAILS
+  if (wo) {
+    h += `<div style="font-size:15px;font-weight:700;margin:16px 0 8px;color:#1a1a1a;">Service Details</div>`;
+    h += `<table style="width:100%;margin-bottom:20px;font-size:12px;">
+<tr><td style="padding:3px 0;font-weight:600;width:120px;">Location:</td><td>${e(loc?loc.buildingName:'')}</td></tr>
+<tr><td style="padding:3px 0;font-weight:600;">Equipment:</td><td>${e(eq?eq.name:'')}</td></tr>
+<tr><td style="padding:3px 0;font-weight:600;">Description:</td><td>${e(wo.description||'')}</td></tr>
+</table>`;
+  }
+
+  // LINE ITEMS TABLE
+  h += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+<tr style="background:#333;color:#fff;">
+<th style="padding:8px 10px;text-align:left;font-size:12px;">Description</th>
+<th style="padding:8px 10px;text-align:center;font-size:12px;width:60px;">Qty</th>
+<th style="padding:8px 10px;text-align:right;font-size:12px;width:80px;">Rate</th>
+<th style="padding:8px 10px;text-align:right;font-size:12px;width:90px;">Amount</th>
+</tr>`;
+  items.forEach((li, i) => {
+    const bg = i % 2 === 0 ? '#fff' : '#f8f8f8';
+    h += `<tr style="background:${bg};">
+<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid #eee;">${e(li.desc)}</td>
+<td style="padding:6px 10px;font-size:12px;text-align:center;border-bottom:1px solid #eee;">${li.qty}</td>
+<td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(li.rate)}</td>
+<td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(li.amount)}</td>
+</tr>`;
+  });
+  h += `</table>`;
+
+  // TOTALS
+  h += `<table style="width:300px;margin-left:auto;margin-bottom:20px;">
+<tr><td style="padding:4px 10px;font-size:13px;font-weight:600;">Subtotal</td><td style="padding:4px 10px;font-size:13px;text-align:right;">${money(inv.subtotal)}</td></tr>`;
+  if (inv.taxRate > 0) {
+    h += `<tr><td style="padding:4px 10px;font-size:13px;font-weight:600;">Tax (${(inv.taxRate*100).toFixed(1)}%)</td><td style="padding:4px 10px;font-size:13px;text-align:right;">${money(inv.taxAmount)}</td></tr>`;
+  }
+  h += `<tr style="border-top:2px solid #333;"><td style="padding:8px 10px;font-size:15px;font-weight:700;">Total</td><td style="padding:8px 10px;font-size:15px;font-weight:700;text-align:right;">${money(inv.total)}</td></tr>
+</table>`;
+
+  // NOTES
+  if (inv.notes) {
+    h += `<div style="margin:16px 0;padding:10px;background:#f5f5f5;border-radius:6px;font-size:12px;"><strong>Notes:</strong> ${e(inv.notes)}</div>`;
+  }
+
+  // FOOTER
+  h += `<div style="margin-top:40px;padding-top:16px;border-top:1px solid #ddd;text-align:center;">
+<div style="color:#c0392b;font-size:14px;font-weight:700;font-style:italic;">Thank you for your business!</div>
+<div style="color:#999;font-size:10px;margin-top:6px;">Generated by FieldMark &bull; www.field-mark.app</div>
+</div></div>
+<script>
+window.onload = function() {
+  var imgs = document.querySelectorAll("img");
+  var total = imgs.length;
+  if (total === 0) { setTimeout(function(){ window.print(); }, 300); return; }
+  var loaded = 0, done = false;
+  function check() { loaded++; if (!done && loaded >= total) { done = true; setTimeout(function(){ window.print(); }, 500); } }
+  for (var i = 0; i < imgs.length; i++) {
+    if (imgs[i].complete && imgs[i].naturalWidth > 0) { check(); }
+    else { imgs[i].onload = check; imgs[i].onerror = check; }
+  }
+  setTimeout(function(){ if (!done) { done = true; window.print(); } }, 8000);
+};
+<\/script></body></html>`;
+  return h;
+}
+
+app.get('/api/invoices/:id/pdf-view', requireAuth, (req, res) => {
+  const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
+  if (!inv) return res.status(404).send('Invoice not found');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(renderInvoiceHtml(inv));
+});
+
+app.post('/api/invoices/:id/send', requireAdmin, async (req, res) => {
+  const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
+  if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+  const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(inv.clientId);
+  if (!cl || !cl.billingEmail) return res.status(400).json({ error: 'Client has no billing email address configured' });
+  const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(inv.woId);
+  const cfg = getEmailSettings();
+  if (!cfg.enabled || !cfg.smtpUser || !cfg.smtpPass) return res.status(400).json({ error: 'Email not configured — check Settings' });
+
+  try {
+    const fromName = cfg.fromName || 'FieldMark';
+    const attachments = [];
+
+    // Try to generate PDF attachments (requires html-pdf-node + Puppeteer on server)
+    try {
+      const htmlPdfNode = require('html-pdf-node');
+      const invoiceHtml = renderInvoiceHtml(inv);
+      const invoicePdf = await htmlPdfNode.generatePdf({ content: invoiceHtml }, { format: 'Letter', printBackground: true });
+      attachments.push({ filename: inv.invoiceNumber + '.pdf', content: invoicePdf });
+    } catch(pdfErr) {
+      console.log('PDF generation not available, sending email without attachment:', pdfErr.message);
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com', port: 587, secure: false,
+      auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
+    });
+
+    await transporter.sendMail({
+      from: `"${fromName}" <${cfg.smtpUser}>`,
+      to: cl.billingEmail,
+      subject: `Invoice ${inv.invoiceNumber} — ${fromName}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+<h2 style="color:#c0392b;">Invoice ${inv.invoiceNumber}</h2>
+<p>Dear ${cl.billingContact || cl.name},</p>
+<p>Please find ${attachments.length ? 'attached ' : ''}your invoice for work order ${wo?wo.woNumber:''}.</p>
+<table style="width:100%;margin:20px 0;border-collapse:collapse;">
+<tr><td style="padding:6px;font-weight:700;border-bottom:1px solid #ddd;">Invoice Total</td><td style="padding:6px;border-bottom:1px solid #ddd;text-align:right;">$${(inv.total||0).toFixed(2)}</td></tr>
+<tr><td style="padding:6px;font-weight:700;border-bottom:1px solid #ddd;">Due Date</td><td style="padding:6px;border-bottom:1px solid #ddd;text-align:right;">${inv.dueDate||'Upon Receipt'}</td></tr>
+<tr><td style="padding:6px;font-weight:700;border-bottom:1px solid #ddd;">Payment Terms</td><td style="padding:6px;border-bottom:1px solid #ddd;text-align:right;">${inv.paymentTerms||'Due on Receipt'}</td></tr>
+</table>
+<p>Thank you for your business!</p>
+<div style="margin-top:30px;color:#999;font-size:11px;">Generated by FieldMark &bull; www.field-mark.app</div>
+</div>`,
+      attachments: attachments.length ? attachments : undefined,
+    });
+
+    // Update status to Sent
+    const now = new Date().toISOString();
+    db.prepare('UPDATE invoices SET status=?, sentAt=?, updatedAt=? WHERE id=?').run('Sent', now, now, inv.id);
+    const updated = db.prepare('SELECT * FROM invoices WHERE id=?').get(inv.id);
+    try { updated.lineItems = JSON.parse(updated.lineItems); } catch(e) { updated.lineItems = []; }
+    res.json(updated);
+  } catch(err) {
+    console.error('Invoice send error:', err);
+    res.status(500).json({ error: 'Failed to send invoice: ' + err.message });
+  }
+});
+
 // ─── SERVICE REQUESTS ─────────────────────────────────────────────────────────
 app.post('/api/service-requests', requireClientAuth, async (req, res) => {
   const cfg = getEmailSettings();
@@ -1096,6 +1403,11 @@ app.put('/api/work-orders/:id/close', requireAuth, (req, res) => {
   const apprenticeId = req.body.apprenticeId !== undefined ? req.body.apprenticeId : wo.apprenticeId || '';
   db.prepare('UPDATE work_orders SET status=?, techNotes=?, apprenticeId=?, updatedAt=? WHERE id=?')
     .run(status, techNotes, apprenticeId, new Date().toISOString(), req.params.id);
+  // Auto-create draft invoice when completed
+  if (status === 'Completed') {
+    const existingInv = db.prepare('SELECT id FROM invoices WHERE woId=?').get(req.params.id);
+    if (!existingInv) { try { createInvoiceForWO(req.params.id); } catch(e) {} }
+  }
   const updated = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
   try { updated.laborEntries = JSON.parse(updated.laborEntries); } catch(e) { updated.laborEntries = []; }
   res.json(updated);

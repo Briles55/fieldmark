@@ -807,11 +807,8 @@ app.get('/api/reports/:id/photos', requireAuth, (req, res) => {
   res.json(row);
 });
 
-// ─── PDF VIEW (server-rendered HTML with photos) ──────────────────────────────
-app.get('/api/reports/:id/pdf-view', requireAuth, (req, res) => {
-  const r = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id);
-  if (!r) return res.status(404).send('Report not found');
-
+// ─── REPORT HTML RENDERING (reusable for PDF view and invoice embedding) ──────
+function renderReportSection(r) {
   const eq = r.equipmentId ? db.prepare('SELECT * FROM equipment WHERE id=?').get(r.equipmentId) : null;
   const loc = eq && eq.locationId ? db.prepare('SELECT * FROM locations WHERE id=?').get(eq.locationId) : null;
   const cl = loc && loc.clientId ? db.prepare('SELECT * FROM clients WHERE id=?').get(loc.clientId) : null;
@@ -828,33 +825,10 @@ app.get('/api/reports/:id/pdf-view', requireAuth, (req, res) => {
   if (loc && loc.state) locAddr += ' ' + loc.state;
   const eqName = eq ? eq.name || 'Equipment' : 'Equipment';
 
-  let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>FieldMark Report</title>
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: Arial, Helvetica, sans-serif; }
-@media print { body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
-@page { margin: 12mm 10mm; size: letter; }
-</style></head><body>
-<div style="max-width:760px;margin:0 auto;padding:20px 28px 40px;font-size:13px;line-height:1.5;color:#1a1a1a;">`;
+  let h = '';
 
-  // LOGO + DATE HEADER
-  h += `<table style="width:100%;margin-bottom:14px;"><tr>
-<td style="vertical-align:middle;">
-<div style="display:flex;align-items:center;gap:10px;">
-<div style="width:36px;height:36px;background:rgba(59,130,246,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;">
-<svg width="20" height="20" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-</div>
-<div>
-<div style="font-size:20px;font-weight:700;color:#3b82f6;letter-spacing:-.5px;">FieldMark</div>
-<div style="font-size:10px;color:#888;">Service Management Platform</div>
-</div>
-</div>
-</td>
-<td style="text-align:right;vertical-align:middle;">
-${cl && cl.logo && cl.logo.length > 50 ? `<img src="${cl.logo}" style="max-height:44px;max-width:160px;object-fit:contain;margin-bottom:4px;display:block;margin-left:auto;">` : ''}
-<div style="color:#c0392b;font-size:13px;font-weight:600;">${e(dateStr)}</div>
-</td>
-</tr></table>`;
+  // DATE LINE
+  h += `<div style="color:#c0392b;font-size:13px;margin-bottom:10px;font-weight:600;">${e(dateStr)}</div>`;
 
   // RED HEADER BAR TABLE
   h += `<table style="width:100%;border-collapse:collapse;margin-bottom:0;">
@@ -890,16 +864,14 @@ ${cl && cl.logo && cl.logo.length > 50 ? `<img src="${cl.logo}" style="max-heigh
 <td style="padding:5px 10px;font-size:12px;color:#555;">${e(locName)}${locAddr ? '<br>' + e(locAddr) : ''}</td>
 </tr></table>`;
 
-  // EQUIPMENT PHOTO — from equipment profile
-  const hasEqPhoto = eq && eq.photo && eq.photo.length > 50;
-  if (hasEqPhoto) {
+  // EQUIPMENT PHOTO
+  if (eq && eq.photo && eq.photo.length > 50) {
     h += `<div style="text-align:center;margin:20px 0 10px;">
 <img src="${eq.photo}" style="max-width:280px;max-height:220px;border:1px solid #ccc;border-radius:4px;display:block;margin:0 auto;">
-<div style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Equipment Photo</div>
-</div>`;
+<div style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Equipment Photo</div></div>`;
   }
 
-  // PHOTOS — served directly from DB, no client-side manipulation
+  // SERVICE CALL PHOTOS
   const hasBefore = r.photoBefore && r.photoBefore.length > 50;
   const hasAfter = r.photoAfter && r.photoAfter.length > 50;
   if (hasBefore || hasAfter) {
@@ -960,8 +932,7 @@ ${cl && cl.logo && cl.logo.length > 50 ? `<img src="${cl.logo}" style="max-heigh
   }
 
   // NAMEPLATE
-  const hasNameplate = r.photoNameplate && r.photoNameplate.length > 50;
-  if (hasNameplate) {
+  if (r.photoNameplate && r.photoNameplate.length > 50) {
     h += `<div style="font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;">Additional Images</div>`;
     h += `<table style="width:100%;"><tr>
 <td style="width:50%;text-align:center;padding:8px;vertical-align:top;">
@@ -970,29 +941,51 @@ ${cl && cl.logo && cl.logo.length > 50 ? `<img src="${cl.logo}" style="max-heigh
 </td><td style="width:50%;"></td></tr></table>`;
   }
 
+  return h;
+}
+
+// ─── PDF VIEW (server-rendered HTML with photos) ──────────────────────────────
+app.get('/api/reports/:id/pdf-view', requireAuth, (req, res) => {
+  const r = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id);
+  if (!r) return res.status(404).send('Report not found');
+
+  const eq = r.equipmentId ? db.prepare('SELECT * FROM equipment WHERE id=?').get(r.equipmentId) : null;
+  const loc = eq && eq.locationId ? db.prepare('SELECT * FROM locations WHERE id=?').get(eq.locationId) : null;
+  const cl = loc && loc.clientId ? db.prepare('SELECT * FROM clients WHERE id=?').get(loc.clientId) : null;
+
+  // Use shared renderReportSection for the body, wrap in full HTML document
+  let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>FieldMark Report</title>
+<style>* { margin:0; padding:0; box-sizing:border-box; } body { font-family: Arial, Helvetica, sans-serif; }
+@media print { body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+@page { margin: 12mm 10mm; size: letter; }</style></head><body>
+<div style="max-width:760px;margin:0 auto;padding:20px 28px 40px;font-size:13px;line-height:1.5;color:#1a1a1a;">`;
+
+  // LOGO HEADER
+  h += `<table style="width:100%;margin-bottom:14px;"><tr>
+<td style="vertical-align:middle;"><div style="display:flex;align-items:center;gap:10px;">
+<div style="width:36px;height:36px;background:rgba(59,130,246,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+<svg width="20" height="20" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+</div><div><div style="font-size:20px;font-weight:700;color:#3b82f6;letter-spacing:-.5px;">FieldMark</div>
+<div style="font-size:10px;color:#888;">Service Management Platform</div></div></div></td>
+<td style="text-align:right;vertical-align:middle;">
+${cl && cl.logo && cl.logo.length > 50 ? `<img src="${cl.logo}" style="max-height:44px;max-width:160px;object-fit:contain;margin-bottom:4px;display:block;margin-left:auto;">` : ''}
+</td></tr></table>`;
+
+  h += renderReportSection(r);
+
   // FOOTER
   h += `<div style="margin-top:40px;padding-top:16px;border-top:1px solid #ddd;text-align:center;">
 <div style="color:#c0392b;font-size:16px;font-weight:700;font-style:italic;">Thank you for choosing us - we truly appreciate your trust.</div>
 <div style="color:#999;font-size:10px;margin-top:6px;">Generated by FieldMark &bull; www.field-mark.app</div>
 </div></div>
-<script>
-window.onload = function() {
-  var imgs = document.querySelectorAll("img");
-  var total = imgs.length;
-  if (total === 0) { setTimeout(function(){ window.print(); }, 300); return; }
-  var loaded = 0, done = false;
-  function check() { loaded++; if (!done && loaded >= total) { done = true; setTimeout(function(){ window.print(); }, 500); } }
-  for (var i = 0; i < imgs.length; i++) {
-    if (imgs[i].complete && imgs[i].naturalWidth > 0) { check(); }
-    else { imgs[i].onload = check; imgs[i].onerror = check; }
-  }
-  setTimeout(function(){ if (!done) { done = true; window.print(); } }, 8000);
-};
-<\/script></body></html>`;
+<script>window.onload=function(){var imgs=document.querySelectorAll("img");var total=imgs.length;if(total===0){setTimeout(function(){window.print();},300);return;}var loaded=0,done=false;function check(){loaded++;if(!done&&loaded>=total){done=true;setTimeout(function(){window.print();},500);}}for(var i=0;i<imgs.length;i++){if(imgs[i].complete&&imgs[i].naturalWidth>0){check();}else{imgs[i].onload=check;imgs[i].onerror=check;}}setTimeout(function(){if(!done){done=true;window.print();}},8000);};<\/script></body></html>`;
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(h);
 });
+
+// Old report rendering code removed — now uses renderReportSection()
+// (kept as comment for reference — the full report body is in renderReportSection above)
 
 // ─── INVOICES ─────────────────────────────────────────────────────────────────
 app.get('/api/invoices', requireAdmin, (req, res) => {
@@ -1128,6 +1121,19 @@ body { font-family: Arial, Helvetica, sans-serif; }
   // NOTES
   if (inv.notes) {
     h += `<div style="margin:16px 0;padding:10px;background:#f5f5f5;border-radius:6px;font-size:12px;"><strong>Notes:</strong> ${e(inv.notes)}</div>`;
+  }
+
+  // LINKED SERVICE REPORTS
+  if (wo) {
+    const linkedReports = db.prepare("SELECT * FROM reports WHERE workOrderNumber=?").all(wo.woNumber);
+    if (linkedReports.length > 0) {
+      linkedReports.forEach((report, idx) => {
+        h += `<div style="page-break-before:always;"></div>`;
+        h += `<div style="background:#c0392b;color:#fff;font-size:16px;font-weight:700;text-align:center;padding:10px;margin-bottom:16px;">SERVICE REPORT ${idx + 1} of ${linkedReports.length}</div>`;
+        h += renderReportSection(report);
+        h += `<div style="margin-top:30px;padding-top:12px;border-top:1px solid #ddd;text-align:center;color:#999;font-size:10px;">End of Service Report ${idx + 1}</div>`;
+      });
+    }
   }
 
   // FOOTER

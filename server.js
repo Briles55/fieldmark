@@ -153,6 +153,15 @@ db.exec(`
     createdAt       TEXT NOT NULL,
     updatedAt       TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS warranty_credits (
+    id          TEXT PRIMARY KEY,
+    invoiceId   TEXT NOT NULL,
+    clientId    TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    amount      REAL DEFAULT 0,
+    fiscalYear  INTEGER NOT NULL,
+    createdAt   TEXT NOT NULL
+  );
 `);
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
@@ -1038,6 +1047,82 @@ app.put('/api/invoices/:id', requireAdmin, (req, res) => {
   const updated = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
   try { updated.lineItems = JSON.parse(updated.lineItems); } catch(e) { updated.lineItems = []; }
   res.json(updated);
+});
+
+// ─── WARRANTY ─────────────────────────────────────────────────────────────────
+app.post('/api/invoices/:id/warranty', requireAdmin, (req, res) => {
+  const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
+  if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+  const { type, items } = req.body; // type: 'full' or 'partial', items: [{desc, amount}]
+  const fiscalYear = new Date().getFullYear();
+  const now = new Date().toISOString();
+  let lineItems = [];
+  try { lineItems = typeof inv.lineItems === 'string' ? JSON.parse(inv.lineItems) : inv.lineItems || []; } catch(e) { lineItems = []; }
+
+  if (type === 'full') {
+    // Full invoice to warranty
+    db.prepare('INSERT INTO warranty_credits (id, invoiceId, clientId, description, amount, fiscalYear, createdAt) VALUES (?,?,?,?,?,?,?)')
+      .run(genId(), inv.id, inv.clientId, 'Full invoice ' + inv.invoiceNumber, inv.total || 0, fiscalYear, now);
+    db.prepare('UPDATE invoices SET status=?, updatedAt=? WHERE id=?').run('Warranty', now, inv.id);
+  } else if (type === 'partial' && Array.isArray(items) && items.length > 0) {
+    // Partial — add warranty credit line items with negative amounts
+    let totalCredit = 0;
+    items.forEach(item => {
+      const amt = Math.abs(parseFloat(item.amount) || 0);
+      if (amt <= 0) return;
+      totalCredit += amt;
+      db.prepare('INSERT INTO warranty_credits (id, invoiceId, clientId, description, amount, fiscalYear, createdAt) VALUES (?,?,?,?,?,?,?)')
+        .run(genId(), inv.id, inv.clientId, item.desc || 'Warranty credit', amt, fiscalYear, now);
+      lineItems.push({ desc: 'Warranty Credit: ' + (item.desc || ''), qty: 1, rate: -amt, amount: -amt });
+    });
+    const newSubtotal = lineItems.reduce((s, li) => s + (li.amount || 0), 0);
+    const newTaxAmt = newSubtotal * (inv.taxRate || 0);
+    const newTotal = newSubtotal + newTaxAmt;
+    db.prepare('UPDATE invoices SET lineItems=?, subtotal=?, taxAmount=?, total=?, updatedAt=? WHERE id=?')
+      .run(JSON.stringify(lineItems), newSubtotal, newTaxAmt, newTotal, now, inv.id);
+  } else {
+    return res.status(400).json({ error: 'Invalid warranty request — specify type (full/partial) and items' });
+  }
+
+  const updated = db.prepare('SELECT * FROM invoices WHERE id=?').get(inv.id);
+  try { updated.lineItems = JSON.parse(updated.lineItems); } catch(e) { updated.lineItems = []; }
+  res.json(updated);
+});
+
+app.get('/api/warranty', requireAdmin, (req, res) => {
+  const year = req.query.year ? parseInt(req.query.year) : null;
+  const clientId = req.query.clientId || null;
+  let sql = 'SELECT * FROM warranty_credits WHERE 1=1';
+  const params = [];
+  if (year) { sql += ' AND fiscalYear=?'; params.push(year); }
+  if (clientId) { sql += ' AND clientId=?'; params.push(clientId); }
+  sql += ' ORDER BY createdAt DESC';
+  const credits = db.prepare(sql).all(...params);
+  res.json(credits);
+});
+
+app.get('/api/clients/:id/billing-summary', requireAdmin, (req, res) => {
+  const clientId = req.params.id;
+  const invoices = db.prepare('SELECT * FROM invoices WHERE clientId=? ORDER BY createdAt DESC').all(clientId);
+  const warrantyCreds = db.prepare('SELECT * FROM warranty_credits WHERE clientId=? ORDER BY createdAt DESC').all(clientId);
+
+  // Yearly breakdown
+  const years = {};
+  invoices.forEach(inv => {
+    const yr = inv.createdAt ? parseInt(inv.createdAt.slice(0, 4)) : new Date().getFullYear();
+    if (!years[yr]) years[yr] = { year: yr, billed: 0, billedCount: 0, warranty: 0 };
+    if (inv.status === 'Paid') { years[yr].billed += inv.paymentAmount || inv.total || 0; years[yr].billedCount++; }
+  });
+  warrantyCreds.forEach(wc => {
+    if (!years[wc.fiscalYear]) years[wc.fiscalYear] = { year: wc.fiscalYear, billed: 0, billedCount: 0, warranty: 0 };
+    years[wc.fiscalYear].warranty += wc.amount || 0;
+  });
+
+  const yearlyBreakdown = Object.values(years).sort((a, b) => b.year - a.year);
+  const totalBilled = yearlyBreakdown.reduce((s, y) => s + y.billed, 0);
+  const totalWarranty = yearlyBreakdown.reduce((s, y) => s + y.warranty, 0);
+
+  res.json({ yearlyBreakdown, totalBilled, totalWarranty, warrantyCreds });
 });
 
 // ─── INVOICE PDF VIEW ─────────────────────────────────────────────────────────

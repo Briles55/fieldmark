@@ -531,6 +531,14 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div class="card-hd"><span class="card-title">Accounts Receivable</span></div>
         <div class="card-body"><div class="ig3" id="client-ar-info"></div></div>
       </div>
+      <div class="card admin-only" style="margin-bottom:20px;" id="client-billing-card">
+        <div class="card-hd"><span class="card-title">Total Billed</span></div>
+        <div class="card-body" id="client-billing-content"><div style="text-align:center;color:var(--muted);font-size:13px;">Loading...</div></div>
+      </div>
+      <div class="card admin-only" style="margin-bottom:20px;" id="client-warranty-card">
+        <div class="card-hd"><span class="card-title">Warranty Credits</span></div>
+        <div class="card-body" id="client-warranty-content"><div style="text-align:center;color:var(--muted);font-size:13px;">Loading...</div></div>
+      </div>
       <div class="card">
         <div class="card-hd">
           <span class="card-title">Locations</span>
@@ -921,7 +929,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;">
         <input class="fc" type="text" id="inv-filter-search" placeholder="Search invoices..." style="max-width:200px;" oninput="renderInvoicesView()">
         <select class="fc" id="inv-filter-status" style="max-width:160px;" onchange="renderInvoicesView()">
-          <option value="">All Statuses</option><option value="Awaiting">Awaiting Payment</option><option>Paid</option><option>Draft</option><option>Sent</option><option>Void</option>
+          <option value="">All Statuses</option><option value="Awaiting">Awaiting Payment</option><option>Paid</option><option>Warranty</option><option>Draft</option><option>Sent</option><option>Void</option>
         </select>
         <select class="fc" id="inv-filter-client" style="max-width:180px;" onchange="renderInvoicesView()">
           <option value="">All Clients</option>
@@ -2140,7 +2148,7 @@ function renderInvoicesView() {
     var inv = list[i];
     var cl = db.clients.find(function(c) { return c.id === inv.clientId; });
     var wo = (db.workOrders||[]).find(function(w) { return w.id === inv.woId; });
-    var sBadge = inv.status === 'Draft' ? 'bgr' : inv.status === 'Sent' ? 'bb' : inv.status === 'Paid' ? 'bg' : 'br';
+    var sBadge = inv.status === 'Draft' ? 'bgr' : inv.status === 'Sent' ? 'bb' : inv.status === 'Paid' ? 'bg' : inv.status === 'Warranty' ? 'ba' : 'br';
     var tr = document.createElement('tr');
     tr.className = 'clickable';
     (function(invId) { tr.onclick = function() { openInvoiceDetail(invId); }; })(inv.id);
@@ -2172,7 +2180,7 @@ function renderInvoiceDetail() {
   var eq = wo && wo.equipmentId ? db.equipment.find(function(e) { return e.id === wo.equipmentId; }) : null;
   var items = inv.lineItems || [];
 
-  var sBadge = inv.status === 'Draft' ? 'bgr' : inv.status === 'Sent' ? 'bb' : inv.status === 'Paid' ? 'bg' : 'br';
+  var sBadge = inv.status === 'Draft' ? 'bgr' : inv.status === 'Sent' ? 'bb' : inv.status === 'Paid' ? 'bg' : inv.status === 'Warranty' ? 'ba' : 'br';
   document.getElementById('invd-title').textContent = inv.invoiceNumber;
   document.getElementById('invd-sub').textContent = cl ? cl.name : '';
 
@@ -2192,6 +2200,12 @@ function renderInvoiceDetail() {
     btnPaid.textContent = 'Mark as Paid';
     btnPaid.onclick = function() { markInvoicePaid(inv.id); };
     actDiv.appendChild(btnPaid);
+  }
+  if (inv.status === 'Draft' || inv.status === 'Sent') {
+    var btnWarr = document.createElement('button'); btnWarr.className = 'btn btn-sm'; btnWarr.style.cssText = 'background:var(--amber);color:#fff;';
+    btnWarr.textContent = 'Move to Warranty';
+    btnWarr.onclick = function() { openWarrantyModal(inv.id); };
+    actDiv.appendChild(btnWarr);
   }
 
   var content = document.getElementById('invd-content');
@@ -2415,6 +2429,84 @@ async function submitPayment(id) {
     if (idx >= 0) db.invoices[idx] = updated;
     closeGenericModal();
     showToast('Payment recorded', 'success');
+    renderInvoiceDetail();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ─── WARRANTY ────────────────────────────────────────────────────────────────
+function openWarrantyModal(id) {
+  var inv = (db.invoices || []).find(function(x) { return x.id === id; });
+  if (!inv) return;
+  var items = inv.lineItems || [];
+  var itemRows = items.map(function(li, i) {
+    if (li.amount < 0) return ''; // skip existing warranty credits
+    return '<tr>' +
+      '<td style="padding:6px;"><input type="checkbox" class="warr-cb" data-idx="' + i + '"></td>' +
+      '<td style="padding:6px;font-size:12px;">' + esc(li.desc) + '</td>' +
+      '<td style="padding:6px;text-align:right;font-size:12px;">$' + (li.amount || 0).toFixed(2) + '</td>' +
+      '<td style="padding:6px;"><input class="fc warr-amt" type="number" step="0.01" min="0" value="' + (li.amount || 0).toFixed(2) + '" style="width:90px;font-size:12px;padding:4px 6px;text-align:right;" disabled></td>' +
+      '</tr>';
+  }).join('');
+
+  var modal = document.getElementById('generic-modal') || createGenericModal();
+  modal.querySelector('.modal-title').textContent = 'Move to Warranty — ' + inv.invoiceNumber;
+  modal.querySelector('.modal-body').innerHTML =
+    '<div style="margin-bottom:16px;">' +
+    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:500;padding:10px;background:var(--amber);color:#fff;border-radius:8px;">' +
+    '<input type="radio" name="warr-type" value="full" checked onchange="toggleWarrantyItems()"> Full Invoice — $' + (inv.total || 0).toFixed(2) + ' to warranty</label>' +
+    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:500;padding:10px;margin-top:8px;border:1px solid var(--border);border-radius:8px;">' +
+    '<input type="radio" name="warr-type" value="partial" onchange="toggleWarrantyItems()"> Select specific items</label>' +
+    '</div>' +
+    '<div id="warr-items-wrap" style="display:none;">' +
+    '<table class="tbl" style="font-size:12px;"><thead><tr><th style="width:30px;"></th><th>Description</th><th style="width:80px;text-align:right;">Value</th><th style="width:100px;">Credit Amount</th></tr></thead>' +
+    '<tbody>' + itemRows + '</tbody></table></div>' +
+    '<input type="hidden" id="warr-inv-id" value="' + id + '">';
+  modal.querySelector('.modal-footer').innerHTML =
+    '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
+    '<button class="btn btn-primary" style="background:var(--amber);" onclick="submitWarranty()">Apply Warranty</button>';
+  modal.style.display = 'flex';
+
+  // Enable amount inputs when checkbox is checked
+  document.querySelectorAll('.warr-cb').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var row = cb.closest('tr');
+      var amtInput = row.querySelector('.warr-amt');
+      amtInput.disabled = !cb.checked;
+    });
+  });
+}
+
+function toggleWarrantyItems() {
+  var isPartial = document.querySelector('input[name="warr-type"]:checked')?.value === 'partial';
+  var wrap = document.getElementById('warr-items-wrap');
+  if (wrap) wrap.style.display = isPartial ? '' : 'none';
+}
+
+async function submitWarranty() {
+  var id = document.getElementById('warr-inv-id').value;
+  var wType = document.querySelector('input[name="warr-type"]:checked')?.value || 'full';
+  var data = { type: wType };
+
+  if (wType === 'partial') {
+    var items = [];
+    document.querySelectorAll('.warr-cb:checked').forEach(function(cb) {
+      var row = cb.closest('tr');
+      var desc = row.querySelectorAll('td')[1].textContent;
+      var amt = parseFloat(row.querySelector('.warr-amt').value) || 0;
+      if (amt > 0) items.push({ desc: desc, amount: amt });
+    });
+    if (items.length === 0) { showToast('Select at least one item to credit', 'error'); return; }
+    data.items = items;
+  }
+
+  if (!confirm(wType === 'full' ? 'Move the full invoice to warranty?' : 'Apply selected warranty credits?')) return;
+
+  try {
+    var updated = await apiPost('/api/invoices/' + id + '/warranty', data);
+    var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
+    if (idx >= 0) db.invoices[idx] = updated;
+    closeGenericModal();
+    showToast('Warranty applied', 'success');
     renderInvoiceDetail();
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -3915,12 +4007,14 @@ function renderDashboard() {
   const allWOs = db.workOrders||[];
   const adminOpenWOs = allWOs.filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
   const pendingInvoices = (db.invoices||[]).filter(inv=>inv.status==='Draft').length;
+  const warrantyInvoices = (db.invoices||[]).filter(inv=>inv.status==='Warranty').length;
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${totalClients}</div><div class="stat-lbl">Clients</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--green)">${totalLocs}</div><div class="stat-lbl">Locations</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--amber)">${totalEq}</div><div class="stat-lbl">Equipment</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${adminOpenWOs}</div><div class="stat-lbl">Open Work Orders</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="nav('invoices')"><div class="stat-val" style="color:var(--amber)">${pendingInvoices}</div><div class="stat-lbl">Pending Invoices</div></div>
+    <div class="stat-card" style="cursor:pointer;" onclick="document.getElementById('inv-filter-status').value='Warranty';nav('invoices')"><div class="stat-val" style="color:var(--amber)">${warrantyInvoices}</div><div class="stat-lbl">Warranty This Year</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--muted)">${totalRpts}</div><div class="stat-lbl">Reports</div></div>
   `;
   const recent = [...db.reports].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
@@ -4032,8 +4126,49 @@ function renderClientDetail() {
       <div><div class="ii-lbl">Billing Address</div><div class="ii-val">${esc(c.billingAddress||'\u2014')}</div></div>
       ${c.arNotes ? `<div style="grid-column:1/-1"><div class="ii-lbl">AR Notes</div><div class="ii-val" style="font-weight:400;color:var(--muted)">${esc(c.arNotes)}</div></div>` : ''}
     `;
+    // Load billing summary
+    loadClientBillingSummary(c.id);
   }
   renderLocationsTable();
+}
+
+async function loadClientBillingSummary(clientId) {
+  try {
+    var data = await apiGet('/api/clients/' + clientId + '/billing-summary');
+    // Total Billed card
+    var billingEl = document.getElementById('client-billing-content');
+    if (billingEl && data.yearlyBreakdown.length > 0) {
+      var rows = data.yearlyBreakdown.map(function(y) {
+        return '<tr><td style="padding:6px 10px;font-size:13px;">' + y.year + '</td>' +
+          '<td style="padding:6px 10px;font-size:13px;text-align:center;">' + y.billedCount + '</td>' +
+          '<td style="padding:6px 10px;font-size:13px;text-align:right;font-weight:600;">$' + y.billed.toFixed(2) + '</td></tr>';
+      }).join('');
+      billingEl.innerHTML = '<table class="tbl" style="width:100%;"><thead><tr><th>Year</th><th style="text-align:center;"># Invoices</th><th style="text-align:right;">Total Billed</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+        '<tfoot><tr style="border-top:2px solid var(--fg);"><td style="padding:8px 10px;font-weight:700;">Total</td><td></td><td style="padding:8px 10px;text-align:right;font-weight:700;font-size:15px;">$' + data.totalBilled.toFixed(2) + '</td></tr></tfoot></table>';
+    } else if (billingEl) {
+      billingEl.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">No paid invoices yet</div>';
+    }
+
+    // Warranty Credits card
+    var warrantyEl = document.getElementById('client-warranty-content');
+    if (warrantyEl && data.warrantyCreds && data.warrantyCreds.length > 0) {
+      var wRows = data.warrantyCreds.map(function(wc) {
+        var invNum = '';
+        var inv = (db.invoices || []).find(function(x) { return x.id === wc.invoiceId; });
+        if (inv) invNum = inv.invoiceNumber;
+        return '<tr><td style="padding:6px 10px;font-size:13px;">' + wc.fiscalYear + '</td>' +
+          '<td style="padding:6px 10px;font-size:13px;">' + esc(wc.description) + '</td>' +
+          '<td style="padding:6px 10px;font-size:13px;">' + esc(invNum) + '</td>' +
+          '<td style="padding:6px 10px;font-size:13px;text-align:right;font-weight:600;">$' + (wc.amount || 0).toFixed(2) + '</td></tr>';
+      }).join('');
+      warrantyEl.innerHTML = '<table class="tbl" style="width:100%;"><thead><tr><th>Year</th><th>Description</th><th>Invoice #</th><th style="text-align:right;">Amount</th></tr></thead>' +
+        '<tbody>' + wRows + '</tbody>' +
+        '<tfoot><tr style="border-top:2px solid var(--fg);"><td style="padding:8px 10px;font-weight:700;" colspan="3">Total Warranty Credits</td><td style="padding:8px 10px;text-align:right;font-weight:700;font-size:15px;">$' + data.totalWarranty.toFixed(2) + '</td></tr></tfoot></table>';
+    } else if (warrantyEl) {
+      warrantyEl.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">No warranty credits</div>';
+    }
+  } catch(e) { console.error('Billing summary error:', e); }
 }
 
 function renderLocationsTable() {

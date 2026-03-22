@@ -1031,9 +1031,10 @@ app.post('/api/work-orders', requireAdmin, (req, res) => {
   const id = genId();
   const woNumber = nextWONumber();
   const now = new Date().toISOString();
+  const assignedArr = Array.isArray(assignedTo) ? JSON.stringify(assignedTo) : (assignedTo ? JSON.stringify([assignedTo]) : '[]');
   db.prepare(`INSERT INTO work_orders (id,woNumber,clientId,locationId,equipmentId,description,status,priority,assignedTo,serviceRequestId,laborEntries,notes,createdAt,updatedAt)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, woNumber, clientId, locationId, equipmentId||'', description||'', 'Open', priority||'Normal', assignedTo||'', serviceRequestId||'', '[]', '', now, now);
+    .run(id, woNumber, clientId, locationId, equipmentId||'', description||'', 'Open', priority||'Normal', assignedArr, serviceRequestId||'', '[]', '', now, now);
   const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(id);
   try { wo.laborEntries = JSON.parse(wo.laborEntries); } catch { wo.laborEntries = []; }
   res.json(wo);
@@ -1044,11 +1045,15 @@ app.put('/api/work-orders/:id', requireAdmin, (req, res) => {
   if (!wo) return res.status(404).json({ error: 'Work order not found' });
   const { status, priority, assignedTo, description, notes, laborEntries } = req.body;
   const now = new Date().toISOString();
+  let assignedVal = wo.assignedTo;
+  if (assignedTo !== undefined) {
+    assignedVal = Array.isArray(assignedTo) ? JSON.stringify(assignedTo) : JSON.stringify([assignedTo].filter(Boolean));
+  }
   db.prepare(`UPDATE work_orders SET status=?, priority=?, assignedTo=?, description=?, notes=?, laborEntries=?, updatedAt=? WHERE id=?`)
     .run(
       status !== undefined ? status : wo.status,
       priority !== undefined ? priority : wo.priority,
-      assignedTo !== undefined ? assignedTo : wo.assignedTo,
+      assignedVal,
       description !== undefined ? description : wo.description,
       notes !== undefined ? notes : wo.notes,
       laborEntries !== undefined ? JSON.stringify(laborEntries) : wo.laborEntries,
@@ -1074,8 +1079,10 @@ app.put('/api/work-orders/:id/close', requireAuth, (req, res) => {
   const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id);
   if (!wo) return res.status(404).json({ error: 'Work order not found' });
   const user = req.session.user;
-  if (user.role !== 'admin' && wo.assignedTo !== user.id) {
-    return res.status(403).json({ error: 'Only the assigned technician or an admin can update this work order' });
+  let assignedList = [];
+  try { assignedList = JSON.parse(wo.assignedTo); } catch(e) { assignedList = wo.assignedTo ? [wo.assignedTo] : []; }
+  if (user.role !== 'admin' && !assignedList.includes(user.id)) {
+    return res.status(403).json({ error: 'Only an assigned technician or an admin can update this work order' });
   }
   const allowed = ['Completed', 'On Hold', 'Open'];
   const status = allowed.includes(req.body.status) ? req.body.status : 'Completed';

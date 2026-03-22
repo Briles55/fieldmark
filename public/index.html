@@ -1627,6 +1627,12 @@ function updateSidebarUser() {
 }
 
 function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+function getAssignedIds(wo) {
+  if (!wo || !wo.assignedTo) return [];
+  if (Array.isArray(wo.assignedTo)) return wo.assignedTo;
+  try { var arr = JSON.parse(wo.assignedTo); if (Array.isArray(arr)) return arr; return arr ? [arr] : []; } catch(e) { return wo.assignedTo ? [wo.assignedTo] : []; }
+}
+function isAssignedTo(wo, userId) { return getAssignedIds(wo).indexOf(userId) >= 0; }
 
 function applyRoleUI() {
   if (isClient()) return; // client portal mode manages its own nav visibility
@@ -2210,18 +2216,19 @@ function renderWorkOrders(search) {
   const priorityFilter = document.getElementById('wo-filter-priority')?.value || '';
   let list = (db.workOrders||[]).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   // Techs only see work orders assigned to them
-  if (!isAdmin() && currentUser) list = list.filter(wo => wo.assignedTo === currentUser.id);
+  if (!isAdmin() && currentUser) list = list.filter(function(wo) { return isAssignedTo(wo, currentUser.id); });
   if (statusFilter) list = list.filter(wo => wo.status === statusFilter);
   if (priorityFilter) list = list.filter(wo => wo.priority === priorityFilter);
   if (search) {
     list = list.filter(wo => {
       const cl = db.clients.find(c=>c.id===wo.clientId);
       const loc = db.locations.find(l=>l.id===wo.locationId);
-      const assignee = (db.users||[]).find(u=>u.id===wo.assignedTo);
+      const aIds = getAssignedIds(wo);
+      const aNames = aIds.map(function(aid){var u=(db.users||[]).find(function(x){return x.id===aid;});return u?u.name:'';}).join(' ');
       return (wo.woNumber||'').toLowerCase().includes(search) ||
         (cl?.name||'').toLowerCase().includes(search) ||
         (loc?.buildingName||'').toLowerCase().includes(search) ||
-        (assignee?.name||'').toLowerCase().includes(search) ||
+        aNames.toLowerCase().includes(search) ||
         (wo.description||'').toLowerCase().includes(search);
     });
   }
@@ -2237,7 +2244,8 @@ function renderWorkOrders(search) {
     var wo = list[i];
     var cl = db.clients.find(function(c){return c.id===wo.clientId;});
     var loc = db.locations.find(function(l){return l.id===wo.locationId;});
-    var assignee = (db.users||[]).find(function(u){return u.id===wo.assignedTo;});
+    var woAssignedIds = getAssignedIds(wo);
+    var woAssigneeNames = woAssignedIds.map(function(aid){var u=(db.users||[]).find(function(x){return x.id===aid;});return u?u.name:'Unknown';});
     var statusBadge = wo.status==='Open'?'bb':wo.status==='In Progress'?'ba':wo.status==='Completed'?'bg':wo.status==='On Hold'?'bgr':'br';
     var priBadge = wo.priority==='Emergency'?'br':wo.priority==='High'?'ba':wo.priority==='Normal'?'bb':'bgr';
     var tr = document.createElement('tr');
@@ -2262,7 +2270,7 @@ function renderWorkOrders(search) {
     pBadge.textContent = wo.priority;
     td5.appendChild(pBadge);
     var td6 = document.createElement('td');
-    td6.textContent = assignee ? assignee.name : '\u2014';
+    td6.textContent = woAssigneeNames.length ? woAssigneeNames.join(', ') : '\u2014';
     var td7 = document.createElement('td');
     td7.textContent = fmtDT(wo.createdAt);
     tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
@@ -2282,7 +2290,8 @@ function renderWorkOrderDetail() {
   var cl = db.clients.find(function(c){return c.id===wo.clientId;});
   var loc = db.locations.find(function(l){return l.id===wo.locationId;});
   var eq = wo.equipmentId ? db.equipment.find(function(e){return e.id===wo.equipmentId;}) : null;
-  var assignee = (db.users||[]).find(function(u){return u.id===wo.assignedTo;});
+  var assignedIds = getAssignedIds(wo);
+  var assigneeNames = assignedIds.map(function(aid) { var u = (db.users||[]).find(function(x){return x.id===aid;}); return u ? u.name : 'Unknown'; });
   var sr = wo.serviceRequestId ? (db.serviceRequests||[]).find(function(s){return s.id===wo.serviceRequestId;}) : null;
   var statusBadge = wo.status==='Open'?'bb':wo.status==='In Progress'?'ba':wo.status==='Completed'?'bg':wo.status==='On Hold'?'bgr':'br';
   var priBadge = wo.priority==='Emergency'?'br':wo.priority==='High'?'ba':wo.priority==='Normal'?'bb':'bgr';
@@ -2325,9 +2334,10 @@ function renderWorkOrderDetail() {
     laborHtml = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px;">No labor entries yet</div>';
   }
 
-  // Tech options for assign dropdown
-  var techOpts = (db.users||[]).map(function(u) {
-    return '<option value="' + u.id + '"' + (wo.assignedTo===u.id?' selected':'') + '>' + esc(u.name) + ' (' + u.role + ')</option>';
+  // Tech checkboxes for multi-assign
+  var techCheckboxes = (db.users||[]).map(function(u) {
+    var checked = assignedIds.indexOf(u.id) >= 0 ? ' checked' : '';
+    return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;cursor:pointer;font-size:13px;"><input type="checkbox" class="wod-assign-cb" value="' + u.id + '"' + checked + '> ' + esc(u.name) + ' <span style="color:var(--muted);font-size:11px;">(' + u.role + ')</span></label>';
   }).join('');
 
   var content = document.getElementById('wod-content');
@@ -2341,7 +2351,7 @@ function renderWorkOrderDetail() {
     '<div><div class="ii-lbl">Location</div><div class="ii-val">' + esc(loc?.buildingName||'\u2014') + (loc?.address?' \u2022 '+esc(loc.address):'') + '</div></div>' +
     '<div><div class="ii-lbl">Equipment</div><div class="ii-val">' + (eq?esc(eq.name)+(eq.model?' \u2014 '+esc(eq.model):''):'\u2014') + '</div></div>' +
     '<div><div class="ii-lbl">Priority</div><div class="ii-val"><span class="badge ' + priBadge + '">' + esc(wo.priority) + '</span></div></div>' +
-    '<div><div class="ii-lbl">Assigned To</div><div class="ii-val">' + esc(assignee?.name||'Unassigned') + '</div></div>' +
+    '<div><div class="ii-lbl">Assigned To</div><div class="ii-val">' + (assigneeNames.length ? esc(assigneeNames.join(', ')) : 'Unassigned') + '</div></div>' +
     '<div><div class="ii-lbl">Created</div><div class="ii-val">' + fmtDT(wo.createdAt) + '</div></div>' +
     '<div><div class="ii-lbl">Updated</div><div class="ii-val">' + fmtDT(wo.updatedAt) + '</div></div>' +
     (sr ? '<div><div class="ii-lbl">Service Request</div><div class="ii-val"><a href="#" onclick="event.preventDefault();openServiceRequestDetail(\'' + sr.id + '\')">View Request</a></div></div>' : '') +
@@ -2350,7 +2360,7 @@ function renderWorkOrderDetail() {
     '</div></div>';
 
   // Tech Notes card (visible to assigned tech & admin)
-  var canEditTechNotes = isAdmin() || (currentUser && wo.assignedTo === currentUser.id);
+  var canEditTechNotes = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id));
   if (canEditTechNotes) {
     content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Tech Notes</span></div>' +
       '<div class="card-body">' +
@@ -2370,7 +2380,7 @@ function renderWorkOrderDetail() {
     '<button class="btn btn-ghost btn-sm" onclick="addLaborEntry()" style="margin-left:auto;">+ Add Entry</button></div><div class="tbl-wrap">' + laborHtml + '</div></div>';
 
   // Update Status (assigned tech or admin)
-  var canUpdateStatus = isAdmin() || (currentUser && wo.assignedTo === currentUser.id);
+  var canUpdateStatus = isAdmin() || (currentUser && isAssignedTo(wo, currentUser.id));
   if (canUpdateStatus) {
     content.innerHTML += '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Update Status</span></div>' +
       '<div class="card-body"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
@@ -2401,7 +2411,7 @@ function renderWorkOrderDetail() {
       '<option' + (wo.priority==='High'?' selected':'') + '>High</option>' +
       '<option' + (wo.priority==='Emergency'?' selected':'') + '>Emergency</option>' +
       '</select></div>' +
-      '<div class="fg"><label class="flbl">Assigned To</label><select class="fc" id="wod-assigned"><option value="">Unassigned</option>' + techOpts + '</select></div>' +
+      '<div class="fg"><label class="flbl">Assigned To</label><div id="wod-assign-list" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;max-height:160px;overflow-y:auto;">' + techCheckboxes + '</div></div>' +
       '</div>' +
       '<div class="fg"><label class="flbl">Notes</label><textarea class="fc" id="wod-notes" placeholder="Internal notes..." style="min-height:60px;">' + esc(wo.notes||'') + '</textarea></div>' +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
@@ -2468,7 +2478,7 @@ async function updateWorkOrder() {
   var data = {
     status: document.getElementById('wod-status').value,
     priority: document.getElementById('wod-priority').value,
-    assignedTo: document.getElementById('wod-assigned').value,
+    assignedTo: Array.from(document.querySelectorAll('.wod-assign-cb:checked')).map(function(cb){return cb.value;}),
     notes: document.getElementById('wod-notes').value
   };
   try {
@@ -2501,8 +2511,8 @@ function openWorkOrderModal(prefill) {
   var clientOpts = db.clients.map(function(c) {
     return '<option value="' + c.id + '"' + (prefill.clientId===c.id?' selected':'') + '>' + esc(c.name) + '</option>';
   }).join('');
-  var techOpts = (db.users||[]).map(function(u) {
-    return '<option value="' + u.id + '">' + esc(u.name) + ' (' + u.role + ')</option>';
+  var techCbs = (db.users||[]).map(function(u) {
+    return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;cursor:pointer;font-size:13px;"><input type="checkbox" class="wo-m-assign-cb" value="' + u.id + '"> ' + esc(u.name) + ' <span style="color:var(--muted);font-size:11px;">(' + u.role + ')</span></label>';
   }).join('');
 
   var modal = document.getElementById('generic-modal') || createGenericModal();
@@ -2518,7 +2528,7 @@ function openWorkOrderModal(prefill) {
     '<option' + (prefill.priority==='High'?' selected':'') + '>High</option>' +
     '<option' + (prefill.priority==='Emergency'?' selected':'') + '>Emergency</option>' +
     '</select></div>' +
-    '<div class="fg"><label class="flbl">Assigned To</label><select class="fc" id="wo-m-assigned"><option value="">Unassigned</option>' + techOpts + '</select></div></div>' +
+    '<div class="fg"><label class="flbl">Assigned To</label><div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;max-height:160px;overflow-y:auto;">' + techCbs + '</div></div></div>' +
     '<input type="hidden" id="wo-m-sr-id" value="' + (prefill.serviceRequestId||'') + '">';
 
   modal.querySelector('.modal-footer').innerHTML =
@@ -2606,7 +2616,7 @@ async function submitWorkOrder() {
     equipmentId: document.getElementById('wo-m-equipment').value || '',
     description: document.getElementById('wo-m-desc').value.trim(),
     priority: document.getElementById('wo-m-priority').value,
-    assignedTo: document.getElementById('wo-m-assigned').value,
+    assignedTo: Array.from(document.querySelectorAll('.wo-m-assign-cb:checked')).map(function(cb){return cb.value;}),
     serviceRequestId: document.getElementById('wo-m-sr-id').value || ''
   };
   try {
@@ -2953,7 +2963,7 @@ function openAddTimeEntryModal(dateStr) {
   });
   // For techs, only show their assigned WOs
   if (!isAdmin() && currentUser) {
-    woList = woList.filter(function(wo) { return wo.assignedTo === currentUser.id; });
+    woList = woList.filter(function(wo) { return isAssignedTo(wo, currentUser.id); });
   }
   var woOpts = woList.map(function(wo) {
     var loc = db.locations.find(function(l) { return l.id === wo.locationId; });
@@ -3352,7 +3362,7 @@ function renderDashboard() {
 
   // Technician dashboard — three tiles only
   if (!isAdmin()) {
-    var myWOs = (db.workOrders||[]).filter(function(wo){return wo.assignedTo===currentUser?.id;});
+    var myWOs = (db.workOrders||[]).filter(function(wo){return isAssignedTo(wo, currentUser?.id);});
     var openWOs = myWOs.filter(function(wo){return wo.status==='Open'||wo.status==='In Progress';}).length;
     var onHoldWOs = myWOs.filter(function(wo){return wo.status==='On Hold';}).length;
     document.getElementById('dash-stats').innerHTML = '';

@@ -539,6 +539,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div class="card-hd"><span class="card-title">Warranty Credits</span></div>
         <div class="card-body" id="client-warranty-content"><div style="text-align:center;color:var(--muted);font-size:13px;">Loading...</div></div>
       </div>
+      <div class="card admin-only" style="margin-bottom:20px;cursor:pointer;" id="client-outstanding-card" onclick="toggleClientOutstanding()">
+        <div class="card-hd"><span class="card-title">Outstanding Invoices</span><span class="badge br" id="client-outstanding-badge">$0.00</span></div>
+        <div class="card-body" id="client-outstanding-content" style="display:none;"></div>
+      </div>
       <div class="card admin-only" style="margin-bottom:20px;" id="client-history-card">
         <div class="card-hd"><span class="card-title">Work Order & Invoice History</span></div>
         <div class="card-body" id="client-history-content"><div style="text-align:center;color:var(--muted);font-size:13px;">Loading...</div></div>
@@ -4133,6 +4137,7 @@ function renderClientDetail() {
     // Load billing summary
     loadClientBillingSummary(c.id);
     renderClientHistory(c.id);
+    renderClientOutstanding(c.id);
   }
   renderLocationsTable();
 }
@@ -4174,6 +4179,53 @@ async function loadClientBillingSummary(clientId) {
       warrantyEl.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">No warranty credits</div>';
     }
   } catch(e) { console.error('Billing summary error:', e); }
+}
+
+function renderClientOutstanding(clientId) {
+  var badge = document.getElementById('client-outstanding-badge');
+  var el = document.getElementById('client-outstanding-content');
+  if (!badge || !el) return;
+
+  var unpaid = (db.invoices || []).filter(function(inv) {
+    return inv.clientId === clientId && (inv.status === 'Draft' || inv.status === 'Sent');
+  });
+  var total = unpaid.reduce(function(s, inv) { return s + (inv.total || 0); }, 0);
+
+  badge.textContent = '$' + total.toFixed(2);
+  if (total > 0) badge.className = 'badge br'; else badge.className = 'badge bg';
+
+  if (unpaid.length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">No outstanding invoices</div>';
+    return;
+  }
+
+  var html = '<table class="tbl" style="width:100%;"><thead><tr>' +
+    '<th>Invoice #</th><th>WO #</th><th>Status</th><th>Date</th><th>Due Date</th><th style="text-align:right;">Amount</th>' +
+    '</tr></thead><tbody>';
+  unpaid.sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  unpaid.forEach(function(inv) {
+    var wo = (db.workOrders || []).find(function(w) { return w.id === inv.woId; });
+    var sBadge = inv.status === 'Draft' ? 'bgr' : 'bb';
+    var overdue = inv.dueDate && inv.dueDate < new Date().toISOString().split('T')[0];
+    html += '<tr class="clickable" onclick="openInvoiceDetail(\'' + inv.id + '\')">' +
+      '<td style="font-size:12px;"><strong>' + esc(inv.invoiceNumber) + '</strong></td>' +
+      '<td style="font-size:12px;">' + esc(wo ? wo.woNumber : '\u2014') + '</td>' +
+      '<td><span class="badge ' + sBadge + '">' + esc(inv.status) + '</span></td>' +
+      '<td style="font-size:12px;">' + esc(inv.createdAt ? inv.createdAt.split('T')[0] : '') + '</td>' +
+      '<td style="font-size:12px;' + (overdue ? 'color:var(--red);font-weight:600;' : '') + '">' + esc(inv.dueDate || '\u2014') + (overdue ? ' (Overdue)' : '') + '</td>' +
+      '<td style="font-size:12px;text-align:right;font-weight:600;">$' + (inv.total || 0).toFixed(2) + '</td>' +
+      '</tr>';
+  });
+  html += '</tbody><tfoot><tr style="border-top:2px solid var(--fg);">' +
+    '<td colspan="5" style="padding:8px 10px;font-weight:700;">Total Outstanding</td>' +
+    '<td style="padding:8px 10px;text-align:right;font-weight:700;font-size:15px;color:var(--red);">$' + total.toFixed(2) + '</td>' +
+    '</tr></tfoot></table>';
+  el.innerHTML = html;
+}
+
+function toggleClientOutstanding() {
+  var el = document.getElementById('client-outstanding-content');
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
 function renderClientHistory(clientId) {

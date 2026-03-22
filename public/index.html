@@ -1263,7 +1263,19 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           <div class="fg"><label class="flbl">Tax ID / GST Number</label><input class="fc" type="text" id="c-ar-taxid" placeholder="Tax ID"></div>
           <div class="fg"><label class="flbl">Credit Limit</label><input class="fc" type="text" id="c-ar-creditlimit" placeholder="$0.00"></div>
         </div>
-        <div class="fg"><label class="flbl">Default Hourly Rate</label><input class="fc" type="text" id="c-ar-rate" placeholder="$0.00" style="max-width:200px;"></div>
+        <div style="margin-top:12px;margin-bottom:8px;font-size:14px;font-weight:600;color:var(--fg);">Service Hourly Rates</div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">Plumber</label><input class="fc" type="text" id="c-rate-plumber" placeholder="$0.00"></div>
+          <div class="fg"><label class="flbl">HVAC B Gas Fitter Tech</label><input class="fc" type="text" id="c-rate-hvacb" placeholder="$0.00"></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">HVAC A Gas Fitter Tech</label><input class="fc" type="text" id="c-rate-hvaca" placeholder="$0.00"></div>
+          <div class="fg"><label class="flbl">Electrician</label><input class="fc" type="text" id="c-rate-electrician" placeholder="$0.00"></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label class="flbl">Apprentice</label><input class="fc" type="text" id="c-rate-apprentice" placeholder="$0.00"></div>
+          <div class="fg"><label class="flbl">Default Rate (fallback)</label><input class="fc" type="text" id="c-ar-rate" placeholder="$0.00"></div>
+        </div>
         <div class="fg"><label class="flbl">AR Notes</label><textarea class="fc" id="c-ar-notes" placeholder="Billing instructions, special terms, etc."></textarea></div>
       </div>
     </div>
@@ -4161,7 +4173,12 @@ function renderClientDetail() {
       <div><div class="ii-lbl">PO Required</div><div class="ii-val">${poLabel}</div></div>
       <div><div class="ii-lbl">Tax ID / GST</div><div class="ii-val">${esc(c.taxId||'\u2014')}</div></div>
       <div><div class="ii-lbl">Credit Limit</div><div class="ii-val">${esc(c.creditLimit||'\u2014')}</div></div>
-      <div><div class="ii-lbl">Default Hourly Rate</div><div class="ii-val">${esc(c.defaultRate||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Plumber Rate</div><div class="ii-val">${esc(c.ratePlumber||'\u2014')}</div></div>
+      <div><div class="ii-lbl">HVAC B Gas Fitter</div><div class="ii-val">${esc(c.rateHvacB||'\u2014')}</div></div>
+      <div><div class="ii-lbl">HVAC A Gas Fitter</div><div class="ii-val">${esc(c.rateHvacA||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Electrician Rate</div><div class="ii-val">${esc(c.rateElectrician||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Apprentice Rate</div><div class="ii-val">${esc(c.rateApprentice||'\u2014')}</div></div>
+      <div><div class="ii-lbl">Default Rate</div><div class="ii-val">${esc(c.defaultRate||'\u2014')}</div></div>
       <div><div class="ii-lbl">Billing Address</div><div class="ii-val">${esc(c.billingAddress||'\u2014')}</div></div>
       ${c.arNotes ? `<div style="grid-column:1/-1"><div class="ii-lbl">AR Notes</div><div class="ii-val" style="font-weight:400;color:var(--muted)">${esc(c.arNotes)}</div></div>` : ''}
     `;
@@ -5265,6 +5282,11 @@ function openClientModal(id) {
   document.getElementById('c-ar-creditlimit').value = c?.creditLimit||'';
   document.getElementById('c-ar-account').value = c?.accountNumber||'';
   document.getElementById('c-ar-rate').value = c?.defaultRate||'';
+  document.getElementById('c-rate-plumber').value = c?.ratePlumber||'';
+  document.getElementById('c-rate-hvacb').value = c?.rateHvacB||'';
+  document.getElementById('c-rate-hvaca').value = c?.rateHvacA||'';
+  document.getElementById('c-rate-electrician').value = c?.rateElectrician||'';
+  document.getElementById('c-rate-apprentice').value = c?.rateApprentice||'';
   document.getElementById('c-ar-notes').value = c?.arNotes||'';
   openModal('modal-client');
 }
@@ -5307,7 +5329,9 @@ async function saveClient() {
   if (!name) { showToast('Company name is required','error'); return; }
   const data = { name, phone: document.getElementById('c-phone').value.trim(), email: document.getElementById('c-email').value.trim(), address: document.getElementById('c-address').value.trim(), city: document.getElementById('c-city').value.trim(), state: document.getElementById('c-state').value.trim(), notes: document.getElementById('c-notes').value.trim(), logo: app._clientLogo || '',
     billingContact: document.getElementById('c-ar-contact').value.trim(), billingEmail: document.getElementById('c-ar-email').value.trim(), billingPhone: document.getElementById('c-ar-phone').value.trim(), billingAddress: document.getElementById('c-ar-address').value.trim(), paymentTerms: document.getElementById('c-ar-terms').value, poRequired: document.getElementById('c-ar-po').value,
-    taxId: document.getElementById('c-ar-taxid').value.trim(), creditLimit: document.getElementById('c-ar-creditlimit').value.trim(), accountNumber: document.getElementById('c-ar-account').value.trim(), defaultRate: document.getElementById('c-ar-rate').value.trim(), arNotes: document.getElementById('c-ar-notes').value.trim() };
+    taxId: document.getElementById('c-ar-taxid').value.trim(), creditLimit: document.getElementById('c-ar-creditlimit').value.trim(), accountNumber: document.getElementById('c-ar-account').value.trim(), defaultRate: document.getElementById('c-ar-rate').value.trim(),
+    ratePlumber: document.getElementById('c-rate-plumber').value.trim(), rateHvacB: document.getElementById('c-rate-hvacb').value.trim(), rateHvacA: document.getElementById('c-rate-hvaca').value.trim(), rateElectrician: document.getElementById('c-rate-electrician').value.trim(), rateApprentice: document.getElementById('c-rate-apprentice').value.trim(),
+    arNotes: document.getElementById('c-ar-notes').value.trim() };
   const portalPass = document.getElementById('c-portal-pass').value;
   if (portalPass) data.portalPassword = portalPass;
   try {

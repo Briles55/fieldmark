@@ -996,7 +996,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;">
         <input class="fc" type="text" id="qt-filter-search" placeholder="Search quotes..." style="max-width:200px;" oninput="renderQuotesView()">
         <select class="fc" id="qt-filter-status" style="max-width:160px;" onchange="renderQuotesView()">
-          <option value="">All Statuses</option><option>Draft</option><option>Sent</option><option>Approved</option><option>Declined</option><option>Expired</option>
+          <option value="">All Statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option>Draft</option><option>Sent</option><option>Declined</option><option>Expired</option>
         </select>
         <select class="fc" id="qt-filter-client" style="max-width:180px;" onchange="renderQuotesView()">
           <option value="">All Clients</option>
@@ -2880,7 +2880,9 @@ function renderQuotesView() {
     makeSearchable('qt-filter-client');
   }
   var filtered = quotes.filter(function(q) {
-    if (statusF && q.status !== statusF) return false;
+    if (statusF === 'pending' && q.status !== 'Draft' && q.status !== 'Sent') return false;
+    else if (statusF === 'approved' && q.status !== 'Approved') return false;
+    else if (statusF && statusF !== 'pending' && statusF !== 'approved' && q.status !== statusF) return false;
     if (clientF && q.clientId !== clientF) return false;
     if (search) {
       var cl = (db.clients || []).find(function(c) { return c.id === q.clientId; });
@@ -5004,14 +5006,17 @@ function renderDashboard() {
   const adminOpenWOs = allWOs.filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
   const pendingInvoices = (db.invoices||[]).filter(inv=>inv.status==='Draft').length;
   const warrantyInvoices = (db.invoices||[]).filter(inv=>inv.status==='Warranty').length;
-  const pendingQuotes = (db.quotes||[]).filter(q=>q.status==='Sent').length;
+  const allQuotes = db.quotes||[];
+  const pendingQuotes = allQuotes.filter(q=>q.status==='Sent'||q.status==='Draft').length;
+  const approvedQuotes = allQuotes.filter(q=>q.status==='Approved').length;
+  const totalQuotes = allQuotes.length;
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${totalClients}</div><div class="stat-lbl">Clients</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--green)">${totalLocs}</div><div class="stat-lbl">Locations</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--amber)">${totalEq}</div><div class="stat-lbl">Equipment</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${adminOpenWOs}</div><div class="stat-lbl">Open Work Orders</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="nav('invoices')"><div class="stat-val" style="color:var(--amber)">${pendingInvoices}</div><div class="stat-lbl">Pending Invoices</div></div>
-    <div class="stat-card" style="cursor:pointer;" onclick="nav('quotes')"><div class="stat-val" style="color:#3b82f6">${pendingQuotes}</div><div class="stat-lbl">Pending Quotes</div></div>
+    <div class="stat-card" style="cursor:pointer;" onclick="openDashQuotes()"><div class="stat-val" style="color:#3b82f6">${totalQuotes}</div><div class="stat-lbl">Quotes</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="document.getElementById('inv-filter-status').value='Warranty';nav('invoices')"><div class="stat-val" style="color:var(--amber)">${warrantyInvoices}</div><div class="stat-lbl">Warranty This Year</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--muted)">${totalRpts}</div><div class="stat-lbl">Reports</div></div>
   `;
@@ -5048,6 +5053,22 @@ function renderDashboard() {
       </div>`;
     }).join('');
   }
+}
+
+function openDashQuotes() {
+  var allQ = db.quotes || [];
+  var pending = allQ.filter(function(q) { return q.status === 'Sent' || q.status === 'Draft'; }).length;
+  var approved = allQ.filter(function(q) { return q.status === 'Approved'; }).length;
+  var h = '<div style=”padding:20px;”>';
+  h += '<div style=”display:grid;grid-template-columns:1fr 1fr;gap:16px;”>';
+  h += '<div class=”stat-card” style=”cursor:pointer;padding:30px 20px;text-align:center;” onclick=”closeModal(\'modal-dash-quotes\');document.getElementById(\'qt-filter-status\').value=\'pending\';nav(\'quotes\')”>';
+  h += '<div class=”stat-val” style=”color:var(--amber);font-size:32px;”>' + pending + '</div>';
+  h += '<div class=”stat-lbl” style=”font-size:14px;margin-top:6px;”>Pending Quotes</div></div>';
+  h += '<div class=”stat-card” style=”cursor:pointer;padding:30px 20px;text-align:center;” onclick=”closeModal(\'modal-dash-quotes\');document.getElementById(\'qt-filter-status\').value=\'approved\';nav(\'quotes\')”>';
+  h += '<div class=”stat-val” style=”color:var(--green);font-size:32px;”>' + approved + '</div>';
+  h += '<div class=”stat-lbl” style=”font-size:14px;margin-top:6px;”>Approved Quotes</div></div>';
+  h += '</div></div>';
+  openModal('modal-dash-quotes', 'Quotes', h);
 }
 
 // â”€â”€â”€ CLIENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

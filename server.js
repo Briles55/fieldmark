@@ -262,6 +262,8 @@ try { db.exec("ALTER TABLE clients ADD COLUMN rateHvacB TEXT DEFAULT ''"); } cat
 try { db.exec("ALTER TABLE clients ADD COLUMN rateHvacA TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN rateElectrician TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN rateApprentice TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE equipment ADD COLUMN replacementBudget REAL DEFAULT 0"); } catch(e) {}
+try { db.exec("ALTER TABLE equipment ADD COLUMN ashraeLifeYears INTEGER DEFAULT 0"); } catch(e) {}
 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -867,19 +869,19 @@ app.delete('/api/locations/:id', requireAdmin, (req, res) => {
 
 // ─── EQUIPMENT ────────────────────────────────────────────────────────────────
 app.post('/api/equipment', requireAdmin, (req, res) => {
-  const { locationId, name, model, serial, yearInstalled, type, notes, formTemplateId, photo } = req.body;
+  const { locationId, name, model, serial, yearInstalled, type, notes, formTemplateId, photo, replacementBudget, ashraeLifeYears } = req.body;
   if (!locationId || !name) return res.status(400).json({ error: 'locationId and name required' });
   const id = genId();
-  db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,formTemplateId,photo,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photo||'', new Date().toISOString());
+  db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,formTemplateId,photo,replacementBudget,ashraeLifeYears,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photo||'', parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, new Date().toISOString());
   res.json(db.prepare('SELECT * FROM equipment WHERE id=?').get(id));
 });
 
 app.put('/api/equipment/:id', requireAdmin, (req, res) => {
-  const { name, model, serial, yearInstalled, type, notes, formTemplateId, photo } = req.body;
+  const { name, model, serial, yearInstalled, type, notes, formTemplateId, photo, replacementBudget, ashraeLifeYears } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=?,formTemplateId=?,photo=? WHERE id=?')
-    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photo||'', req.params.id);
+  db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=?,formTemplateId=?,photo=?,replacementBudget=?,ashraeLifeYears=? WHERE id=?')
+    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photo||'', parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, req.params.id);
   res.json(db.prepare('SELECT * FROM equipment WHERE id=?').get(req.params.id));
 });
 
@@ -2575,6 +2577,96 @@ setInterval(() => {
     });
   } catch(err) { console.error('Quote follow-up check error:', err.message); }
 }, 60 * 60 * 1000); // Every hour
+
+// ─── EQUIPMENT EOL NOTIFICATION ──────────────────────────────────────────────
+// Check once daily for equipment approaching end of life (within 3 years)
+// Notify clients via email — only sends once per equipment per year
+setInterval(() => {
+  try {
+    const cfg = getEmailSettings();
+    if (!cfg.enabled || !cfg.smtpUser || !cfg.smtpPass) return;
+    const currentYear = new Date().getFullYear();
+    const allEquipment = db.prepare('SELECT * FROM equipment WHERE yearInstalled IS NOT NULL AND ashraeLifeYears > 0').all();
+    if (allEquipment.length === 0) return;
+
+    // Group by client
+    const clientEquipment = {};
+    allEquipment.forEach(eq => {
+      const eolYear = eq.yearInstalled + eq.ashraeLifeYears;
+      const remaining = eolYear - currentYear;
+      if (remaining > 3) return; // Not yet approaching EOL
+      const loc = db.prepare('SELECT * FROM locations WHERE id=?').get(eq.locationId);
+      if (!loc) return;
+      const clientId = loc.clientId;
+      if (!clientEquipment[clientId]) clientEquipment[clientId] = [];
+      clientEquipment[clientId].push({ eq, loc, eolYear, remaining });
+    });
+
+    const fromName = cfg.fromName || 'FieldMark';
+    const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+
+    // Check last notification date per client to avoid spamming
+    try { db.exec("CREATE TABLE IF NOT EXISTS eol_notifications (clientId TEXT PRIMARY KEY, lastSentYear INTEGER DEFAULT 0)"); } catch(e) {}
+
+    Object.keys(clientEquipment).forEach(async (clientId) => {
+      try {
+        const lastSent = db.prepare('SELECT lastSentYear FROM eol_notifications WHERE clientId=?').get(clientId);
+        if (lastSent && lastSent.lastSentYear >= currentYear) return; // Already notified this year
+
+        const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(clientId);
+        if (!cl || !cl.email) return;
+
+        const items = clientEquipment[clientId];
+        const approaching = items.filter(i => i.remaining > 0);
+        const past = items.filter(i => i.remaining <= 0);
+        if (approaching.length === 0 && past.length === 0) return;
+
+        let eqRows = '';
+        const allItems = [...past, ...approaching];
+        let totalBudget = 0;
+        allItems.forEach(i => {
+          const status = i.remaining <= 0 ? '<span style="color:#ef4444;font-weight:600;">Past EOL</span>' : '<span style="color:#f59e0b;font-weight:600;">' + i.remaining + ' yr(s) remaining</span>';
+          totalBudget += (i.eq.replacementBudget || 0);
+          eqRows += '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;">' + (i.eq.name||'') + '</td>' +
+            '<td style="padding:6px 10px;border-bottom:1px solid #eee;">' + (i.loc.buildingName||'') + '</td>' +
+            '<td style="padding:6px 10px;border-bottom:1px solid #eee;">' + (i.eq.type||'') + '</td>' +
+            '<td style="padding:6px 10px;border-bottom:1px solid #eee;">' + i.eolYear + '</td>' +
+            '<td style="padding:6px 10px;border-bottom:1px solid #eee;">' + status + '</td>' +
+            '<td style="padding:6px 10px;border-bottom:1px solid #eee;font-weight:600;">' + (i.eq.replacementBudget > 0 ? '$' + i.eq.replacementBudget.toFixed(2) : '—') + '</td></tr>';
+        });
+
+        await transporter.sendMail({
+          from: `"${fromName}" <${cfg.smtpUser}>`,
+          to: cl.email,
+          subject: `Equipment Lifecycle Notice — ${cl.name}`,
+          html: `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
+<div style="background:#3b82f6;color:#fff;padding:20px;text-align:center;">
+<div style="font-size:22px;font-weight:700;">${fromName}</div>
+<div style="font-size:13px;margin-top:4px;">Equipment Lifecycle Notice</div>
+</div>
+<div style="padding:24px;background:#fff;">
+<p style="font-size:14px;color:#333;">The following equipment at your facilities is approaching or has reached its expected end of life based on ASHRAE standards:</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:12px;">
+<tr style="background:#333;color:#fff;"><th style="padding:8px 10px;text-align:left;">Equipment</th><th style="padding:8px 10px;text-align:left;">Location</th><th style="padding:8px 10px;text-align:left;">Type</th><th style="padding:8px 10px;">EOL Year</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;">Repl. Budget</th></tr>
+${eqRows}
+</table>
+<div style="text-align:right;font-size:14px;font-weight:700;margin-top:8px;">Estimated Total Replacement Budget: $${totalBudget.toFixed(2)}</div>
+<p style="font-size:13px;color:#666;margin-top:16px;">We recommend planning for equipment replacement to avoid unexpected failures. Log in to your FieldMark client portal to view detailed lifecycle information.</p>
+</div>
+<div style="padding:12px;text-align:center;background:#f5f5f5;color:#999;font-size:11px;">${fromName} &bull; www.field-mark.app</div>
+</div>`
+        });
+
+        // Record notification
+        const existing = db.prepare('SELECT clientId FROM eol_notifications WHERE clientId=?').get(clientId);
+        if (existing) db.prepare('UPDATE eol_notifications SET lastSentYear=? WHERE clientId=?').run(currentYear, clientId);
+        else db.prepare('INSERT INTO eol_notifications (clientId, lastSentYear) VALUES (?,?)').run(clientId, currentYear);
+
+        console.log('EOL notification sent to ' + cl.name + ' (' + cl.email + ')');
+      } catch(err) { console.error('EOL notification error for client ' + clientId + ':', err.message); }
+    });
+  } catch(err) { console.error('EOL check error:', err.message); }
+}, 24 * 60 * 60 * 1000); // Every 24 hours
 
 // ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

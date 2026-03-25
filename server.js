@@ -220,9 +220,13 @@ db.exec(`
     followUpSentAt  TEXT DEFAULT '',
     createdBy       TEXT DEFAULT '',
     createdAt       TEXT NOT NULL,
-    updatedAt       TEXT NOT NULL
+    updatedAt       TEXT NOT NULL,
+    hideBreakdown   INTEGER DEFAULT 0
   );
 `);
+
+// Migration: add hideBreakdown column if missing
+try { db.exec(`ALTER TABLE quotes ADD COLUMN hideBreakdown INTEGER DEFAULT 0`); } catch(e) { /* already exists */ }
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
 try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } catch(e) {}
@@ -1328,18 +1332,18 @@ app.delete('/api/purchase-orders/:id', requireAdmin, (req, res) => {
 // ─── QUOTES ──────────────────────────────────────────────────────────────────
 
 app.post('/api/quotes', requireAdmin, (req, res) => {
-  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil } = req.body;
+  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil, hideBreakdown } = req.body;
   if (!clientId) return res.status(400).json({ error: 'Client required' });
   let labor = Array.isArray(laborEntries) ? laborEntries : [];
   let parts = Array.isArray(partsEntries) ? partsEntries : [];
   const totals = calcQuoteTotals(labor, parts);
   const now = new Date().toISOString();
   const id = genId();
-  db.prepare(`INSERT INTO quotes (id, quoteNumber, clientId, locationId, status, scopeOfWork, inclusions, exclusions, laborEntries, partsEntries, laborSubtotal, laborTotal, partsSubtotal, partsTotal, grandTotal, recipients, notes, validUntil, createdBy, createdAt, updatedAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+  db.prepare(`INSERT INTO quotes (id, quoteNumber, clientId, locationId, status, scopeOfWork, inclusions, exclusions, laborEntries, partsEntries, laborSubtotal, laborTotal, partsSubtotal, partsTotal, grandTotal, recipients, notes, validUntil, hideBreakdown, createdBy, createdAt, updatedAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, nextQuoteNumber(), clientId, locationId || '', 'Draft', scopeOfWork || '', inclusions || '', exclusions || '',
       JSON.stringify(labor), JSON.stringify(parts), totals.laborSubtotal, totals.laborTotal, totals.partsSubtotal, totals.partsTotal, totals.grandTotal,
-      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', req.session.user.name || '', now, now);
+      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', hideBreakdown ? 1 : 0, req.session.user.name || '', now, now);
   const q = db.prepare('SELECT * FROM quotes WHERE id=?').get(id);
   try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
   try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
@@ -1359,15 +1363,15 @@ app.get('/api/quotes/:id', requireAuth, (req, res) => {
 app.put('/api/quotes/:id', requireAdmin, (req, res) => {
   const existing = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Quote not found' });
-  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil } = req.body;
+  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil, hideBreakdown } = req.body;
   let labor = Array.isArray(laborEntries) ? laborEntries : [];
   let parts = Array.isArray(partsEntries) ? partsEntries : [];
   const totals = calcQuoteTotals(labor, parts);
   const now = new Date().toISOString();
-  db.prepare(`UPDATE quotes SET clientId=?, locationId=?, scopeOfWork=?, inclusions=?, exclusions=?, laborEntries=?, partsEntries=?, laborSubtotal=?, laborTotal=?, partsSubtotal=?, partsTotal=?, grandTotal=?, recipients=?, notes=?, validUntil=?, updatedAt=? WHERE id=?`)
+  db.prepare(`UPDATE quotes SET clientId=?, locationId=?, scopeOfWork=?, inclusions=?, exclusions=?, laborEntries=?, partsEntries=?, laborSubtotal=?, laborTotal=?, partsSubtotal=?, partsTotal=?, grandTotal=?, recipients=?, notes=?, validUntil=?, hideBreakdown=?, updatedAt=? WHERE id=?`)
     .run(clientId || existing.clientId, locationId || '', scopeOfWork || '', inclusions || '', exclusions || '',
       JSON.stringify(labor), JSON.stringify(parts), totals.laborSubtotal, totals.laborTotal, totals.partsSubtotal, totals.partsTotal, totals.grandTotal,
-      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', now, req.params.id);
+      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', hideBreakdown ? 1 : 0, now, req.params.id);
   const q = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
   try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
   try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
@@ -1647,8 +1651,15 @@ body { font-family: Arial, Helvetica, sans-serif; }
   }
 
   // COST BREAKDOWN TABLE
-  h += `<div style="font-size:15px;font-weight:700;margin:16px 0 8px;color:#1a1a1a;">Cost Breakdown</div>`;
-  h += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+  if (qt.hideBreakdown) {
+    // Grand total only — no line-item breakdown
+    h += `<div style="margin:24px 0;padding:20px;background:#f8f9fa;border-radius:8px;text-align:center;">
+<div style="font-size:13px;color:#666;margin-bottom:6px;">Quote Total</div>
+<div style="font-size:28px;font-weight:700;color:#1a1a1a;">${money(qt.grandTotal)}</div>
+</div>`;
+  } else {
+    h += `<div style="font-size:15px;font-weight:700;margin:16px 0 8px;color:#1a1a1a;">Cost Breakdown</div>`;
+    h += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
 <tr style="background:#333;color:#fff;">
 <th style="padding:8px 10px;text-align:left;font-size:12px;">Description</th>
 <th style="padding:8px 10px;text-align:center;font-size:12px;width:60px;">Qty/Hrs</th>
@@ -1656,53 +1667,54 @@ body { font-family: Arial, Helvetica, sans-serif; }
 <th style="padding:8px 10px;text-align:right;font-size:12px;width:90px;">Amount</th>
 </tr>`;
 
-  // LABOR rows
-  let rowIdx = 0;
-  if (labor.length > 0) {
-    h += `<tr style="background:#e8f0fe;"><td colspan="4" style="padding:6px 10px;font-size:12px;font-weight:700;color:#3b82f6;">Labor</td></tr>`;
-    labor.forEach(l => {
-      const hrs = parseFloat(l.hours) || 0;
-      const baseRate = parseFloat(l.rate) || 0;
-      const mkup = parseFloat(l.markup) || 0;
-      const clientRate = Math.round(baseRate * (1 + mkup / 100) * 100) / 100;
-      const lineTotal = Math.round(hrs * clientRate * 100) / 100;
-      const bg = rowIdx % 2 === 0 ? '#fff' : '#f8f8f8';
-      h += `<tr style="background:${bg};">
+    // LABOR rows
+    let rowIdx = 0;
+    if (labor.length > 0) {
+      h += `<tr style="background:#e8f0fe;"><td colspan="4" style="padding:6px 10px;font-size:12px;font-weight:700;color:#3b82f6;">Labor</td></tr>`;
+      labor.forEach(l => {
+        const hrs = parseFloat(l.hours) || 0;
+        const baseRate = parseFloat(l.rate) || 0;
+        const mkup = parseFloat(l.markup) || 0;
+        const clientRate = Math.round(baseRate * (1 + mkup / 100) * 100) / 100;
+        const lineTotal = Math.round(hrs * clientRate * 100) / 100;
+        const bg = rowIdx % 2 === 0 ? '#fff' : '#f8f8f8';
+        h += `<tr style="background:${bg};">
 <td style="padding:6px 10px;font-size:12px;border-bottom:1px solid #eee;">${e(l.trade || 'Labor')}</td>
 <td style="padding:6px 10px;font-size:12px;text-align:center;border-bottom:1px solid #eee;">${hrs}</td>
 <td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(clientRate)}/hr</td>
 <td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(lineTotal)}</td>
 </tr>`;
-      rowIdx++;
-    });
-    h += `<tr style="background:#f0f0f0;"><td colspan="3" style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">Labor Subtotal</td><td style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">${money(qt.laborTotal)}</td></tr>`;
-  }
+        rowIdx++;
+      });
+      h += `<tr style="background:#f0f0f0;"><td colspan="3" style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">Labor Subtotal</td><td style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">${money(qt.laborTotal)}</td></tr>`;
+    }
 
-  // PARTS rows
-  if (parts.length > 0) {
-    h += `<tr style="background:#e8f0fe;"><td colspan="4" style="padding:6px 10px;font-size:12px;font-weight:700;color:#3b82f6;">Parts & Materials</td></tr>`;
-    rowIdx = 0;
-    parts.forEach(p => {
-      const qty = parseFloat(p.qty) || 0;
-      const baseCost = parseFloat(p.unitCost) || 0;
-      const mkup = parseFloat(p.markup) || 0;
-      const clientPrice = Math.round(baseCost * (1 + mkup / 100) * 100) / 100;
-      const lineTotal = Math.round(qty * clientPrice * 100) / 100;
-      const bg = rowIdx % 2 === 0 ? '#fff' : '#f8f8f8';
-      h += `<tr style="background:${bg};">
+    // PARTS rows
+    if (parts.length > 0) {
+      h += `<tr style="background:#e8f0fe;"><td colspan="4" style="padding:6px 10px;font-size:12px;font-weight:700;color:#3b82f6;">Parts & Materials</td></tr>`;
+      rowIdx = 0;
+      parts.forEach(p => {
+        const qty = parseFloat(p.qty) || 0;
+        const baseCost = parseFloat(p.unitCost) || 0;
+        const mkup = parseFloat(p.markup) || 0;
+        const clientPrice = Math.round(baseCost * (1 + mkup / 100) * 100) / 100;
+        const lineTotal = Math.round(qty * clientPrice * 100) / 100;
+        const bg = rowIdx % 2 === 0 ? '#fff' : '#f8f8f8';
+        h += `<tr style="background:${bg};">
 <td style="padding:6px 10px;font-size:12px;border-bottom:1px solid #eee;">${e(p.description || 'Parts')}</td>
 <td style="padding:6px 10px;font-size:12px;text-align:center;border-bottom:1px solid #eee;">${qty}</td>
 <td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(clientPrice)}</td>
 <td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(lineTotal)}</td>
 </tr>`;
-      rowIdx++;
-    });
-    h += `<tr style="background:#f0f0f0;"><td colspan="3" style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">Parts & Materials Subtotal</td><td style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">${money(qt.partsTotal)}</td></tr>`;
-  }
+        rowIdx++;
+      });
+      h += `<tr style="background:#f0f0f0;"><td colspan="3" style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">Parts & Materials Subtotal</td><td style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">${money(qt.partsTotal)}</td></tr>`;
+    }
 
-  // GRAND TOTAL
-  h += `<tr style="border-top:2px solid #333;"><td colspan="3" style="padding:10px;font-size:16px;font-weight:700;text-align:right;">Total</td><td style="padding:10px;font-size:16px;font-weight:700;text-align:right;">${money(qt.grandTotal)}</td></tr>
+    // GRAND TOTAL
+    h += `<tr style="border-top:2px solid #333;"><td colspan="3" style="padding:10px;font-size:16px;font-weight:700;text-align:right;">Total</td><td style="padding:10px;font-size:16px;font-weight:700;text-align:right;">${money(qt.grandTotal)}</td></tr>
 </table>`;
+  }
 
   // INCLUSIONS
   if (qt.inclusions) {

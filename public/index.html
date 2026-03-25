@@ -3125,6 +3125,11 @@ function renderQuoteBuilder() {
   h += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="text-align:right;">';
   h += '<div style="font-size:22px;font-weight:700;" id="qb-grand-total">$0.00</div>';
   h += '<div style="font-size:11px;color:#999;">Grand Total (after markup)</div>';
+  h += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:left;">';
+  h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">';
+  h += '<input type="checkbox" id="qb-hide-breakdown"' + (q && q.hideBreakdown ? ' checked' : '') + ' style="width:16px;height:16px;accent-color:var(--accent);">';
+  h += 'Hide cost breakdown on client quote (show grand total only)</label>';
+  h += '</div>';
   h += '</div></div>';
 
   // Actions
@@ -3315,7 +3320,9 @@ function qbCollectData() {
     if (text) recipients.push(text);
   });
 
-  return { clientId: clientId, locationId: locationId, scopeOfWork: scopeOfWork, laborEntries: laborEntries, partsEntries: partsEntries, inclusions: inclusions, exclusions: exclusions, recipients: recipients, notes: notes, validUntil: validUntil };
+  var hideBreakdown = document.getElementById('qb-hide-breakdown').checked ? 1 : 0;
+
+  return { clientId: clientId, locationId: locationId, scopeOfWork: scopeOfWork, laborEntries: laborEntries, partsEntries: partsEntries, inclusions: inclusions, exclusions: exclusions, recipients: recipients, notes: notes, validUntil: validUntil, hideBreakdown: hideBreakdown };
 }
 
 async function saveQuote(andSend, andPreview) {

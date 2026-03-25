@@ -1214,6 +1214,24 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           </div>
         </div>
         <div class="card">
+          <div class="card-hd"><span class="card-title">Labor Burden Rates</span></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+              Set the actual hourly cost (burden) for each trade. This is used to calculate true gross profit on quotes. Include wages, benefits, insurance, and overhead.
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="fg"><label class="flbl">Plumber</label><input class="fc" type="text" inputmode="decimal" id="lb-plumber" placeholder="$0.00"></div>
+              <div class="fg"><label class="flbl">HVAC B Gas Fitter Tech</label><input class="fc" type="text" inputmode="decimal" id="lb-hvacb" placeholder="$0.00"></div>
+              <div class="fg"><label class="flbl">HVAC A Gas Fitter Tech</label><input class="fc" type="text" inputmode="decimal" id="lb-hvaca" placeholder="$0.00"></div>
+              <div class="fg"><label class="flbl">Electrician</label><input class="fc" type="text" inputmode="decimal" id="lb-electrician" placeholder="$0.00"></div>
+              <div class="fg"><label class="flbl">Apprentice</label><input class="fc" type="text" inputmode="decimal" id="lb-apprentice" placeholder="$0.00"></div>
+            </div>
+            <div style="margin-top:12px;">
+              <button class="btn btn-primary" onclick="saveLaborBurden()">Save Labor Burden</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-hd"><span class="card-title">Wholesalers</span>
             <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="openWholesalerModal()">+ Add</button>
           </div>
@@ -1575,6 +1593,10 @@ async function apiPost(url, body, method='POST') {
 async function loadDB() {
   const data = await apiGet('/api/data');
   db = data;
+  // Load labor burden for admin users
+  if (currentUser && currentUser.role === 'admin') {
+    try { db.laborBurden = await apiGet('/api/labor-burden'); } catch(e) { db.laborBurden = {}; }
+  }
 }
 
 function esc(s) { const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
@@ -3001,22 +3023,44 @@ function renderQuoteDetail() {
     h += '</div></div>';
   }
 
-  // Totals
-  var totalBase = (q.laborSubtotal || 0) + (q.partsSubtotal || 0);
+  // Totals — calculate true GP using labor burden
   var totalClient = q.grandTotal || 0;
-  var grossProfit = totalClient - totalBase;
-  var gpPercent = totalClient > 0 ? (grossProfit / totalClient * 100) : 0;
+  var laborBurdenCost = 0;
+  var lb = db.laborBurden || {};
+  var burdenMap = { 'Plumber': lb.plumber || 0, 'HVAC B Gas Fitter': lb.hvacb || 0, 'HVAC A Gas Fitter': lb.hvaca || 0, 'Electrician': lb.electrician || 0, 'Apprentice': lb.apprentice || 0 };
+  labor.forEach(function(l) {
+    var hrs = parseFloat(l.hours) || 0;
+    var burden = burdenMap[l.trade] || 0;
+    laborBurdenCost += Math.round(hrs * burden * 100) / 100;
+  });
+  var trueCost = laborBurdenCost + (q.partsSubtotal || 0);
+  var trueGP = totalClient - trueCost;
+  var trueGPpct = totalClient > 0 ? (trueGP / totalClient * 100) : 0;
+  var hasBurden = laborBurdenCost > 0;
+
   h += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="text-align:right;">';
   h += '<div style="font-size:13px;">Labor: <strong>$' + (q.laborTotal || 0).toFixed(2) + '</strong></div>';
   h += '<div style="font-size:13px;">Parts & Materials: <strong>$' + (q.partsTotal || 0).toFixed(2) + '</strong></div>';
   h += '<div style="font-size:18px;font-weight:700;margin-top:8px;padding-top:8px;border-top:2px solid #333;">Grand Total: $' + totalClient.toFixed(2) + '</div>';
-  h += '<div style="margin-top:10px;padding:8px 14px;background:#f0fdf4;border-radius:6px;display:inline-block;">';
-  h += '<span style="font-size:12px;color:#666;">Base Cost: $' + totalBase.toFixed(2) + '</span>';
-  h += '<span style="margin:0 8px;color:#ccc;">|</span>';
-  h += '<span style="font-size:12px;color:#666;">Gross Profit: <strong style="color:#22c55e;">$' + grossProfit.toFixed(2) + '</strong></span>';
-  h += '<span style="margin:0 8px;color:#ccc;">|</span>';
-  h += '<span style="font-size:13px;font-weight:700;color:#22c55e;">' + gpPercent.toFixed(1) + '% GP</span>';
-  h += '</div>';
+  if (hasBurden) {
+    h += '<div style="margin-top:10px;padding:8px 14px;background:#f0fdf4;border-radius:6px;display:inline-block;">';
+    h += '<span style="font-size:12px;color:#666;">Labor Burden: $' + laborBurdenCost.toFixed(2) + '</span>';
+    h += '<span style="margin:0 8px;color:#ccc;">|</span>';
+    h += '<span style="font-size:12px;color:#666;">True Cost: $' + trueCost.toFixed(2) + '</span>';
+    h += '<span style="margin:0 8px;color:#ccc;">|</span>';
+    h += '<span style="font-size:12px;color:#666;">Gross Profit: <strong style="color:' + (trueGP >= 0 ? '#22c55e' : '#ef4444') + ';">$' + trueGP.toFixed(2) + '</strong></span>';
+    h += '<span style="margin:0 8px;color:#ccc;">|</span>';
+    h += '<span style="font-size:13px;font-weight:700;color:' + (trueGPpct >= 0 ? '#22c55e' : '#ef4444') + ';">' + trueGPpct.toFixed(1) + '% GP</span>';
+    h += '</div>';
+  } else {
+    var markupGP = totalClient - ((q.laborSubtotal || 0) + (q.partsSubtotal || 0));
+    var markupGPpct = totalClient > 0 ? (markupGP / totalClient * 100) : 0;
+    h += '<div style="margin-top:10px;padding:8px 14px;background:#fef3cd;border-radius:6px;display:inline-block;">';
+    h += '<span style="font-size:12px;color:#856404;">Markup Profit: $' + markupGP.toFixed(2) + ' (' + markupGPpct.toFixed(1) + '%)</span>';
+    h += '<span style="margin:0 8px;color:#ccc;">|</span>';
+    h += '<span style="font-size:11px;color:#856404;">Set labor burden in Settings for true GP</span>';
+    h += '</div>';
+  }
   h += '</div></div>';
 
   // Inclusions / Exclusions
@@ -3082,7 +3126,7 @@ function renderQuoteBuilder() {
 
   // Labor
   h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Labor</span><button class="btn btn-sm btn-outline" onclick="qbAddLabor()">+ Add Trade</button></div><div class="card-body">';
-  h += '<table class="tbl" style="font-size:12px;" id="qb-labor-table"><thead><tr><th>Trade</th><th style="width:70px;">Hours</th><th style="width:90px;">Base Rate</th><th style="width:80px;">Markup %</th><th style="width:100px;">Client Rate</th><th style="width:100px;">Line Total</th><th style="width:40px;"></th></tr></thead>';
+  h += '<table class="tbl" style="font-size:12px;" id="qb-labor-table"><thead><tr><th>Trade</th><th style="width:70px;">Hours</th><th style="width:90px;">Base Rate</th><th style="width:80px;">Markup %</th><th style="width:100px;">Client Rate</th><th style="width:100px;">Line Total</th><th style="width:80px;">Burden</th><th style="width:40px;"></th></tr></thead>';
   h += '<tbody id="qb-labor-tbody">';
   labor.forEach(function(l, i) { h += qbLaborRowHtml(l, i); });
   h += '</tbody></table>';
@@ -3125,6 +3169,7 @@ function renderQuoteBuilder() {
   h += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="text-align:right;">';
   h += '<div style="font-size:22px;font-weight:700;" id="qb-grand-total">$0.00</div>';
   h += '<div style="font-size:11px;color:#999;">Grand Total (after markup)</div>';
+  h += '<div id="qb-gp-display" style="margin-top:10px;padding:8px 14px;background:#f0fdf4;border-radius:6px;display:none;"></div>';
   h += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:left;">';
   h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">';
   h += '<input type="checkbox" id="qb-hide-breakdown"' + (q && q.hideBreakdown ? ' checked' : '') + ' style="width:16px;height:16px;accent-color:var(--accent);">';
@@ -3164,6 +3209,7 @@ function qbLaborRowHtml(l, idx) {
     '<td><input class="fc" type="text" inputmode="decimal" value="' + (l ? l.markup || 0 : 0) + '" oninput="qbRecalc()" style="font-size:12px;"></td>' +
     '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-l-clientrate">—</td>' +
     '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-l-total">—</td>' +
+    '<td style="text-align:right;font-size:11px;color:#999;" class="qb-l-burden">—</td>' +
     '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();qbRecalc();" style="padding:2px 6px;">&times;</button></td>' +
     '</tr>';
 }
@@ -3251,21 +3297,27 @@ function qbRemoveRecipient(el) {
 }
 
 function qbRecalc() {
-  var laborTotal = 0, laborBase = 0;
+  var laborTotal = 0, laborBase = 0, laborBurdenTotal = 0;
   document.querySelectorAll('.qb-labor-row').forEach(function(row) {
+    var sel = row.querySelector('select');
+    var trade = sel ? sel.value : '';
     var inputs = row.querySelectorAll('input');
     var hours = parseFloat(inputs[0].value) || 0;
     var rate = parseFloat(inputs[1].value) || 0;
     var markup = parseFloat(inputs[2].value) || 0;
     var clientRate = Math.round(rate * (1 + markup / 100) * 100) / 100;
     var lineTotal = Math.round(hours * clientRate * 100) / 100;
+    var burden = getLaborBurden(trade);
+    var burdenCost = Math.round(hours * burden * 100) / 100;
     row.querySelector('.qb-l-clientrate').textContent = '$' + clientRate.toFixed(2) + '/hr';
     row.querySelector('.qb-l-total').textContent = '$' + lineTotal.toFixed(2);
+    row.querySelector('.qb-l-burden').textContent = burden > 0 ? '$' + burden.toFixed(2) + '/hr' : '—';
     laborBase += Math.round(hours * rate * 100) / 100;
+    laborBurdenTotal += burdenCost;
     laborTotal += lineTotal;
   });
   var ltDiv = document.getElementById('qb-labor-totals');
-  if (ltDiv) ltDiv.innerHTML = '<span style="color:#999;">Base: $' + laborBase.toFixed(2) + '</span> &rarr; <strong>Total: $' + laborTotal.toFixed(2) + '</strong>';
+  if (ltDiv) ltDiv.innerHTML = '<span style="color:#999;">Base: $' + laborBase.toFixed(2) + '</span> &rarr; <strong>Total: $' + laborTotal.toFixed(2) + '</strong>' + (laborBurdenTotal > 0 ? ' <span style="color:#999;margin-left:8px;">| Burden: $' + laborBurdenTotal.toFixed(2) + '</span>' : '');
 
   var partsTotal = 0, partsBase = 0;
   document.querySelectorAll('.qb-part-row').forEach(function(row) {
@@ -3283,8 +3335,27 @@ function qbRecalc() {
   var ptDiv = document.getElementById('qb-parts-totals');
   if (ptDiv) ptDiv.innerHTML = '<span style="color:#999;">Base: $' + partsBase.toFixed(2) + '</span> &rarr; <strong>Total: $' + partsTotal.toFixed(2) + '</strong>';
 
+  var grandTotal = laborTotal + partsTotal;
+  var trueCost = laborBurdenTotal + partsBase;
+  var trueGP = grandTotal - trueCost;
+  var trueGPpct = grandTotal > 0 ? (trueGP / grandTotal * 100) : 0;
+
   var gtDiv = document.getElementById('qb-grand-total');
-  if (gtDiv) gtDiv.textContent = '$' + (laborTotal + partsTotal).toFixed(2);
+  if (gtDiv) gtDiv.textContent = '$' + grandTotal.toFixed(2);
+
+  var gpDiv = document.getElementById('qb-gp-display');
+  if (gpDiv) {
+    if (laborBurdenTotal > 0) {
+      gpDiv.style.display = '';
+      gpDiv.innerHTML = '<span style="font-size:12px;color:#666;">True Cost: $' + trueCost.toFixed(2) + '</span>' +
+        '<span style="margin:0 8px;color:#ccc;">|</span>' +
+        '<span style="font-size:12px;color:#666;">Gross Profit: <strong style="color:#22c55e;">$' + trueGP.toFixed(2) + '</strong></span>' +
+        '<span style="margin:0 8px;color:#ccc;">|</span>' +
+        '<span style="font-size:13px;font-weight:700;color:' + (trueGPpct >= 0 ? '#22c55e' : '#ef4444') + ';">' + trueGPpct.toFixed(1) + '% GP</span>';
+    } else {
+      gpDiv.style.display = 'none';
+    }
+  }
 }
 
 function qbCollectData() {
@@ -6494,6 +6565,16 @@ async function renderSettingsView() {
     document.getElementById('from-name').value = cfg.fromName || '';
     document.getElementById('app-url').value = cfg.appUrl || '';
   } catch(err) { /* first time, no settings yet */ }
+  // Load labor burden
+  try {
+    const lb = await apiGet('/api/labor-burden');
+    db.laborBurden = lb;
+    document.getElementById('lb-plumber').value = lb.plumber || '';
+    document.getElementById('lb-hvacb').value = lb.hvacb || '';
+    document.getElementById('lb-hvaca').value = lb.hvaca || '';
+    document.getElementById('lb-electrician').value = lb.electrician || '';
+    document.getElementById('lb-apprentice').value = lb.apprentice || '';
+  } catch(e) { db.laborBurden = {}; }
   renderWholesalersTable();
   renderSubcontractorsTable();
 }
@@ -6502,6 +6583,34 @@ async function saveEmailConfig() {
   const cfg = { enabled: document.getElementById('email-enabled').checked, smtpUser: document.getElementById('smtp-user').value.trim(), smtpPass: document.getElementById('smtp-pass').value.trim(), fromName: document.getElementById('from-name').value.trim(), appUrl: document.getElementById('app-url').value.trim() };
   try { await apiPost('/api/settings', cfg); showToast('Email settings saved', 'success'); } catch(err) { showToast(err.message, 'error'); }
 }
+async function saveLaborBurden() {
+  if (!isAdmin()) return;
+  var data = {
+    plumber: parseFloat(document.getElementById('lb-plumber').value) || 0,
+    hvacb: parseFloat(document.getElementById('lb-hvacb').value) || 0,
+    hvaca: parseFloat(document.getElementById('lb-hvaca').value) || 0,
+    electrician: parseFloat(document.getElementById('lb-electrician').value) || 0,
+    apprentice: parseFloat(document.getElementById('lb-apprentice').value) || 0
+  };
+  try {
+    var result = await apiPost('/api/labor-burden', data);
+    db.laborBurden = result;
+    showToast('Labor burden rates saved', 'success');
+  } catch(e) { showToast(e.message || 'Error saving labor burden', 'error'); }
+}
+
+function getLaborBurden(trade) {
+  var lb = db.laborBurden || {};
+  var map = {
+    'Plumber': lb.plumber || 0,
+    'HVAC B Gas Fitter': lb.hvacb || 0,
+    'HVAC A Gas Fitter': lb.hvaca || 0,
+    'Electrician': lb.electrician || 0,
+    'Apprentice': lb.apprentice || 0
+  };
+  return map[trade] || 0;
+}
+
 async function sendTestEmail() {
   const addr = document.getElementById('test-email-addr').value.trim();
   if (!addr) { showToast('Enter a test email address', 'error'); return; }

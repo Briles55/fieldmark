@@ -2434,6 +2434,26 @@ app.post('/api/settings', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── LABOR BURDEN ─────────────────────────────────────────────────────────────
+app.get('/api/labor-burden', requireAdmin, (req, res) => {
+  const row = db.prepare("SELECT value FROM settings WHERE key='laborBurden'").get();
+  res.json(row ? JSON.parse(row.value) : {});
+});
+
+app.post('/api/labor-burden', requireAdmin, (req, res) => {
+  const burden = {
+    plumber: parseFloat(req.body.plumber) || 0,
+    hvacb: parseFloat(req.body.hvacb) || 0,
+    hvaca: parseFloat(req.body.hvaca) || 0,
+    electrician: parseFloat(req.body.electrician) || 0,
+    apprentice: parseFloat(req.body.apprentice) || 0,
+  };
+  const existing = db.prepare("SELECT key FROM settings WHERE key='laborBurden'").get();
+  if (existing) db.prepare("UPDATE settings SET value=? WHERE key='laborBurden'").run(JSON.stringify(burden));
+  else db.prepare("INSERT INTO settings (key,value) VALUES ('laborBurden',?)").run(JSON.stringify(burden));
+  res.json(burden);
+});
+
 // ─── TEST EMAIL ───────────────────────────────────────────────────────────────
 app.post('/api/email/test', requireAdmin, async (req, res) => {
   const cfg = getEmailSettings();

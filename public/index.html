@@ -110,7 +110,8 @@ select.fc{cursor:pointer;}
 .ss-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13.5px;font-family:inherit;cursor:pointer;}
 .ss-input:focus{outline:none;border-color:var(--accent);}
 .ss-input::placeholder{color:var(--muted);opacity:.7;}
-.ss-list{display:none;position:absolute;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:9999;margin-top:2px;}
+.ss-list{display:none;position:absolute;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:99999;margin-top:2px;}
+.card:has(.ss-list[style*="block"]){overflow:visible!important;}
 .ss-item{padding:8px 12px;font-size:13px;cursor:pointer;color:var(--text);}
 .ss-item:hover,.ss-item.active{background:var(--accent);color:#fff;}
 .ss-item.ss-empty{color:var(--muted);font-style:italic;cursor:default;}
@@ -1848,15 +1849,19 @@ function makeSearchable(selectId) {
 
   function ssOpenCard() {
     var card = wrapper.closest('.card');
-    if (card) { card.style.overflow = 'visible'; card.style.zIndex = '100'; }
+    if (card) { card.style.overflow = 'visible'; card.style.zIndex = '10000'; card.style.position = 'relative'; }
     var cb = wrapper.closest('.card-body');
     if (cb) cb.style.overflow = 'visible';
+    var formGrp = wrapper.closest('.form-group, div[style*="grid"], div[style*="flex"]');
+    if (formGrp) formGrp.style.overflow = 'visible';
   }
   function ssCloseCard() {
     var card = wrapper.closest('.card');
     if (card) { card.style.overflow = ''; card.style.zIndex = ''; }
     var cb = wrapper.closest('.card-body');
     if (cb) cb.style.overflow = '';
+    var formGrp = wrapper.closest('.form-group, div[style*="grid"], div[style*="flex"]');
+    if (formGrp) formGrp.style.overflow = '';
   }
 
   input.addEventListener('focus', function() {

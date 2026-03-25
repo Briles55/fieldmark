@@ -3112,15 +3112,17 @@ function renderQuoteBuilder() {
 
   document.getElementById('qb-content').innerHTML = h;
   setTimeout(function() {
-    makeSearchable('qb-client');
-    makeSearchable('qb-location');
+    var cs = document.getElementById('qb-client');
+    var ls = document.getElementById('qb-location');
+    if (cs) makeSearchable('qb-client');
+    if (ls) makeSearchable('qb-location');
     qbRecalc();
     // Pre-populate billing email if new quote and client is selected
     if (!q) {
-      var cid = document.getElementById('qb-client').value;
+      var cid = cs ? cs.value : '';
       if (cid) qbClientChanged();
     }
-  }, 50);
+  }, 100);
 }
 
 function qbLaborRowHtml(l, idx) {

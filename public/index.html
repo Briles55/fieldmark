@@ -3128,9 +3128,9 @@ function qbLaborRowHtml(l, idx) {
   var opts = trades.map(function(t) { return '<option' + (l && l.trade === t ? ' selected' : '') + '>' + t + '</option>'; }).join('');
   return '<tr class="qb-labor-row">' +
     '<td><select class="fc" onchange="qbRecalc()" style="font-size:12px;"><option value="">Select...</option>' + opts + '</select></td>' +
-    '<td><input class="fc" type="number" min="0" step="0.5" value="' + (l ? l.hours || '' : '') + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
-    '<td><input class="fc" type="number" min="0" step="0.01" value="' + (l ? l.rate || '' : '') + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
-    '<td><input class="fc" type="number" min="0" step="0.1" value="' + (l ? l.markup || 0 : 0) + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="text" inputmode="decimal" value="' + (l ? l.hours || '' : '') + '" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="text" inputmode="decimal" value="' + (l ? l.rate || '' : '') + '" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="text" inputmode="decimal" value="' + (l ? l.markup || 0 : 0) + '" oninput="qbRecalc()" style="font-size:12px;"></td>' +
     '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-l-clientrate">—</td>' +
     '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-l-total">—</td>' +
     '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();qbRecalc();" style="padding:2px 6px;">&times;</button></td>' +
@@ -3140,9 +3140,9 @@ function qbLaborRowHtml(l, idx) {
 function qbPartRowHtml(p, idx) {
   return '<tr class="qb-part-row">' +
     '<td><input class="fc" type="text" value="' + esc(p ? p.description || '' : '') + '" placeholder="Part description..." style="font-size:12px;"></td>' +
-    '<td><input class="fc" type="number" min="0" step="1" value="' + (p ? p.qty || '' : '') + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
-    '<td><input class="fc" type="number" min="0" step="0.01" value="' + (p ? p.unitCost || '' : '') + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
-    '<td><input class="fc" type="number" min="0" step="0.1" value="' + (p ? p.markup || 0 : 0) + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="text" inputmode="decimal" value="' + (p ? p.qty || '' : '') + '" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="text" inputmode="decimal" value="' + (p ? p.unitCost || '' : '') + '" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="text" inputmode="decimal" value="' + (p ? p.markup || 0 : 0) + '" oninput="qbRecalc()" style="font-size:12px;"></td>' +
     '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-p-clientprice">—</td>' +
     '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-p-total">—</td>' +
     '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();qbRecalc();" style="padding:2px 6px;">&times;</button></td>' +

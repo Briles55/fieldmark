@@ -195,6 +195,33 @@ db.exec(`
     createdAt       TEXT NOT NULL,
     updatedAt       TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS quotes (
+    id              TEXT PRIMARY KEY,
+    quoteNumber     TEXT UNIQUE NOT NULL,
+    clientId        TEXT NOT NULL,
+    locationId      TEXT DEFAULT '',
+    status          TEXT DEFAULT 'Draft',
+    scopeOfWork     TEXT DEFAULT '',
+    inclusions      TEXT DEFAULT '',
+    exclusions      TEXT DEFAULT '',
+    laborEntries    TEXT DEFAULT '[]',
+    partsEntries    TEXT DEFAULT '[]',
+    laborSubtotal   REAL DEFAULT 0,
+    laborTotal      REAL DEFAULT 0,
+    partsSubtotal   REAL DEFAULT 0,
+    partsTotal      REAL DEFAULT 0,
+    grandTotal      REAL DEFAULT 0,
+    recipients      TEXT DEFAULT '[]',
+    notes           TEXT DEFAULT '',
+    validUntil      TEXT DEFAULT '',
+    sentAt          TEXT DEFAULT '',
+    approvedAt      TEXT DEFAULT '',
+    approvedBy      TEXT DEFAULT '',
+    followUpSentAt  TEXT DEFAULT '',
+    createdBy       TEXT DEFAULT '',
+    createdAt       TEXT NOT NULL,
+    updatedAt       TEXT NOT NULL
+  );
 `);
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
@@ -423,6 +450,49 @@ function nextPONumber() {
     seq = parseInt(parts[2], 10) + 1;
   }
   return prefix + String(seq).padStart(4, '0');
+}
+
+function nextQuoteNumber() {
+  const year = new Date().getFullYear();
+  const prefix = 'QTE-' + year + '-';
+  const row = db.prepare("SELECT quoteNumber FROM quotes WHERE quoteNumber LIKE ? ORDER BY quoteNumber DESC LIMIT 1").get(prefix + '%');
+  let seq = 1;
+  if (row) {
+    const parts = row.quoteNumber.split('-');
+    seq = parseInt(parts[2], 10) + 1;
+  }
+  return prefix + String(seq).padStart(4, '0');
+}
+
+function calcQuoteTotals(laborEntries, partsEntries) {
+  let laborSubtotal = 0, laborTotal = 0;
+  laborEntries.forEach(e => {
+    const base = (parseFloat(e.hours) || 0) * (parseFloat(e.rate) || 0);
+    const marked = base * (1 + (parseFloat(e.markup) || 0) / 100);
+    laborSubtotal += Math.round(base * 100) / 100;
+    laborTotal += Math.round(marked * 100) / 100;
+    e.total = Math.round(marked * 100) / 100;
+  });
+  let partsSubtotal = 0, partsTotal = 0;
+  partsEntries.forEach(e => {
+    const base = (parseFloat(e.qty) || 0) * (parseFloat(e.unitCost) || 0);
+    const marked = base * (1 + (parseFloat(e.markup) || 0) / 100);
+    partsSubtotal += Math.round(base * 100) / 100;
+    partsTotal += Math.round(marked * 100) / 100;
+    e.total = Math.round(marked * 100) / 100;
+  });
+  return {
+    laborSubtotal: Math.round(laborSubtotal * 100) / 100,
+    laborTotal: Math.round(laborTotal * 100) / 100,
+    partsSubtotal: Math.round(partsSubtotal * 100) / 100,
+    partsTotal: Math.round(partsTotal * 100) / 100,
+    grandTotal: Math.round((laborTotal + partsTotal) * 100) / 100
+  };
+}
+
+function generateQuoteToken(quoteId) {
+  const secret = process.env.SESSION_SECRET || 'fieldmark-secret';
+  return crypto.createHmac('sha256', secret).update(quoteId).digest('hex').slice(0, 16);
 }
 
 function createInvoiceForWO(woId) {
@@ -666,7 +736,18 @@ app.get('/api/client-data', requireClientAuth, (req, res) => {
   }
   const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
   formTemplates.forEach(t => { try { t.fields = JSON.parse(t.fields); } catch { t.fields = []; } });
-  res.json({ locations, equipment, reports, formTemplates });
+  // Client-visible quotes — strip internal data
+  const quotes = db.prepare("SELECT * FROM quotes WHERE clientId=? AND status IN ('Sent','Approved') ORDER BY createdAt DESC").all(clientId);
+  quotes.forEach(q => {
+    try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
+    // Strip internal pricing: replace with client-facing rates
+    q.laborEntries = q.laborEntries.map(l => ({ trade: l.trade, hours: l.hours, rate: Math.round((parseFloat(l.rate)||0) * (1 + (parseFloat(l.markup)||0)/100) * 100)/100, total: l.total }));
+    try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
+    q.partsEntries = q.partsEntries.map(p => ({ description: p.description, qty: p.qty, unitPrice: Math.round((parseFloat(p.unitCost)||0) * (1 + (parseFloat(p.markup)||0)/100) * 100)/100, total: p.total }));
+    try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
+    delete q.laborSubtotal; delete q.partsSubtotal; delete q.notes;
+  });
+  res.json({ locations, equipment, reports, formTemplates, quotes });
 });
 
 // ─── DATA (full load) ─────────────────────────────────────────────────────────
@@ -689,7 +770,13 @@ app.get('/api/data', requireAuth, (req, res) => {
   invoices.forEach(inv => { try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; } });
   const wholesalers = db.prepare('SELECT * FROM wholesalers ORDER BY name').all();
   const subcontractors = db.prepare('SELECT * FROM subcontractors ORDER BY name').all();
-  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users, timeCards, invoices, wholesalers, subcontractors });
+  const quotes = req.session.user.role === 'admin' ? db.prepare('SELECT * FROM quotes ORDER BY createdAt DESC').all() : [];
+  quotes.forEach(q => {
+    try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
+    try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
+    try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
+  });
+  res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users, timeCards, invoices, wholesalers, subcontractors, quotes });
 });
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
@@ -1238,6 +1325,61 @@ app.delete('/api/purchase-orders/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── QUOTES ──────────────────────────────────────────────────────────────────
+
+app.post('/api/quotes', requireAdmin, (req, res) => {
+  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil } = req.body;
+  if (!clientId) return res.status(400).json({ error: 'Client required' });
+  let labor = Array.isArray(laborEntries) ? laborEntries : [];
+  let parts = Array.isArray(partsEntries) ? partsEntries : [];
+  const totals = calcQuoteTotals(labor, parts);
+  const now = new Date().toISOString();
+  const id = genId();
+  db.prepare(`INSERT INTO quotes (id, quoteNumber, clientId, locationId, status, scopeOfWork, inclusions, exclusions, laborEntries, partsEntries, laborSubtotal, laborTotal, partsSubtotal, partsTotal, grandTotal, recipients, notes, validUntil, createdBy, createdAt, updatedAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, nextQuoteNumber(), clientId, locationId || '', 'Draft', scopeOfWork || '', inclusions || '', exclusions || '',
+      JSON.stringify(labor), JSON.stringify(parts), totals.laborSubtotal, totals.laborTotal, totals.partsSubtotal, totals.partsTotal, totals.grandTotal,
+      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', req.session.user.name || '', now, now);
+  const q = db.prepare('SELECT * FROM quotes WHERE id=?').get(id);
+  try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
+  try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
+  try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
+  res.json(q);
+});
+
+app.get('/api/quotes/:id', requireAuth, (req, res) => {
+  const q = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  if (!q) return res.status(404).json({ error: 'Quote not found' });
+  try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
+  try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
+  try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
+  res.json(q);
+});
+
+app.put('/api/quotes/:id', requireAdmin, (req, res) => {
+  const existing = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Quote not found' });
+  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil } = req.body;
+  let labor = Array.isArray(laborEntries) ? laborEntries : [];
+  let parts = Array.isArray(partsEntries) ? partsEntries : [];
+  const totals = calcQuoteTotals(labor, parts);
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE quotes SET clientId=?, locationId=?, scopeOfWork=?, inclusions=?, exclusions=?, laborEntries=?, partsEntries=?, laborSubtotal=?, laborTotal=?, partsSubtotal=?, partsTotal=?, grandTotal=?, recipients=?, notes=?, validUntil=?, updatedAt=? WHERE id=?`)
+    .run(clientId || existing.clientId, locationId || '', scopeOfWork || '', inclusions || '', exclusions || '',
+      JSON.stringify(labor), JSON.stringify(parts), totals.laborSubtotal, totals.laborTotal, totals.partsSubtotal, totals.partsTotal, totals.grandTotal,
+      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', now, req.params.id);
+  const q = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
+  try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
+  try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
+  res.json(q);
+});
+
+app.delete('/api/quotes/:id', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM quotes WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 // ─── WARRANTY ─────────────────────────────────────────────────────────────────
 app.post('/api/invoices/:id/warranty', requireAdmin, (req, res) => {
   const inv = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);
@@ -1446,6 +1588,339 @@ app.get('/api/invoices/:id/pdf-view', requireAuth, (req, res) => {
   if (!inv) return res.status(404).send('Invoice not found');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(renderInvoiceHtml(inv));
+});
+
+// ─── QUOTE PDF ───────────────────────────────────────────────────────────────
+
+function renderQuoteHtml(qt) {
+  const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(qt.clientId);
+  const loc = qt.locationId ? db.prepare('SELECT * FROM locations WHERE id=?').get(qt.locationId) : null;
+  let labor = [];
+  try { labor = typeof qt.laborEntries === 'string' ? JSON.parse(qt.laborEntries) : qt.laborEntries || []; } catch(e) { labor = []; }
+  let parts = [];
+  try { parts = typeof qt.partsEntries === 'string' ? JSON.parse(qt.partsEntries) : qt.partsEntries || []; } catch(e) { parts = []; }
+
+  function e(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function money(n) { return '$' + (parseFloat(n)||0).toFixed(2); }
+  function nl2br(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+
+  let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Quote ${e(qt.quoteNumber)}</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Arial, Helvetica, sans-serif; }
+@media print { body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+@page { margin: 12mm 10mm; size: letter; }
+</style></head><body>
+<div style="max-width:760px;margin:0 auto;padding:20px 28px 40px;font-size:13px;line-height:1.5;color:#1a1a1a;">`;
+
+  // LOGO HEADER
+  const hasLogo = cl && cl.logo && cl.logo.length > 50;
+  h += `<table style="width:100%;margin-bottom:20px;"><tr>`;
+  h += `<td style="vertical-align:middle;"><div style="font-size:22px;font-weight:700;color:#3b82f6;">FieldMark</div><div style="font-size:11px;color:#666;">Service Management</div></td>`;
+  if (hasLogo) h += `<td style="text-align:right;vertical-align:middle;"><img src="${cl.logo}" style="max-height:50px;max-width:140px;"></td>`;
+  h += `</tr></table>`;
+
+  // QUOTE HEADER
+  h += `<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+<tr><th colspan="2" style="background:#3b82f6;color:#fff;font-size:16px;font-weight:700;text-align:center;padding:10px;">QUOTE</th></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;width:50%;">Quote Number</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(qt.quoteNumber)}</td></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;">Date</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(qt.createdAt ? qt.createdAt.split('T')[0] : '')}</td></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;">Valid Until</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(qt.validUntil || 'N/A')}</td></tr>
+<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;">Client</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(cl?cl.name:'')}</td></tr>`;
+  if (loc) h += `<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:700;">Location</td><td style="padding:6px 12px;border:1px solid #ddd;">${e(loc.buildingName||'')}</td></tr>`;
+  h += `</table>`;
+
+  // PREPARED FOR
+  h += `<div style="font-size:15px;font-weight:700;margin:16px 0 8px;color:#1a1a1a;">Prepared For</div>`;
+  h += `<table style="width:100%;margin-bottom:20px;">
+<tr><td style="padding:4px 0;font-size:13px;font-weight:700;">${e(cl?cl.name:'')}</td></tr>`;
+  if (cl && cl.billingContact) h += `<tr><td style="padding:2px 0;font-size:12px;">Attn: ${e(cl.billingContact)}</td></tr>`;
+  if (cl && cl.address) h += `<tr><td style="padding:2px 0;font-size:12px;">${e(cl.address)}</td></tr>`;
+  if (cl && cl.email) h += `<tr><td style="padding:2px 0;font-size:12px;">${e(cl.email)}</td></tr>`;
+  if (cl && cl.phone) h += `<tr><td style="padding:2px 0;font-size:12px;">${e(cl.phone)}</td></tr>`;
+  h += `</table>`;
+
+  // SCOPE OF WORK
+  if (qt.scopeOfWork) {
+    h += `<div style="font-size:15px;font-weight:700;margin:16px 0 8px;color:#1a1a1a;">Scope of Work</div>`;
+    h += `<div style="margin-bottom:20px;padding:10px 14px;background:#f8f9fa;border-radius:6px;font-size:12px;line-height:1.6;">${nl2br(qt.scopeOfWork)}</div>`;
+  }
+
+  // COST BREAKDOWN TABLE
+  h += `<div style="font-size:15px;font-weight:700;margin:16px 0 8px;color:#1a1a1a;">Cost Breakdown</div>`;
+  h += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+<tr style="background:#333;color:#fff;">
+<th style="padding:8px 10px;text-align:left;font-size:12px;">Description</th>
+<th style="padding:8px 10px;text-align:center;font-size:12px;width:60px;">Qty/Hrs</th>
+<th style="padding:8px 10px;text-align:right;font-size:12px;width:80px;">Rate</th>
+<th style="padding:8px 10px;text-align:right;font-size:12px;width:90px;">Amount</th>
+</tr>`;
+
+  // LABOR rows
+  let rowIdx = 0;
+  if (labor.length > 0) {
+    h += `<tr style="background:#e8f0fe;"><td colspan="4" style="padding:6px 10px;font-size:12px;font-weight:700;color:#3b82f6;">Labor</td></tr>`;
+    labor.forEach(l => {
+      const hrs = parseFloat(l.hours) || 0;
+      const baseRate = parseFloat(l.rate) || 0;
+      const mkup = parseFloat(l.markup) || 0;
+      const clientRate = Math.round(baseRate * (1 + mkup / 100) * 100) / 100;
+      const lineTotal = Math.round(hrs * clientRate * 100) / 100;
+      const bg = rowIdx % 2 === 0 ? '#fff' : '#f8f8f8';
+      h += `<tr style="background:${bg};">
+<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid #eee;">${e(l.trade || 'Labor')}</td>
+<td style="padding:6px 10px;font-size:12px;text-align:center;border-bottom:1px solid #eee;">${hrs}</td>
+<td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(clientRate)}/hr</td>
+<td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(lineTotal)}</td>
+</tr>`;
+      rowIdx++;
+    });
+    h += `<tr style="background:#f0f0f0;"><td colspan="3" style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">Labor Subtotal</td><td style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">${money(qt.laborTotal)}</td></tr>`;
+  }
+
+  // PARTS rows
+  if (parts.length > 0) {
+    h += `<tr style="background:#e8f0fe;"><td colspan="4" style="padding:6px 10px;font-size:12px;font-weight:700;color:#3b82f6;">Parts & Materials</td></tr>`;
+    rowIdx = 0;
+    parts.forEach(p => {
+      const qty = parseFloat(p.qty) || 0;
+      const baseCost = parseFloat(p.unitCost) || 0;
+      const mkup = parseFloat(p.markup) || 0;
+      const clientPrice = Math.round(baseCost * (1 + mkup / 100) * 100) / 100;
+      const lineTotal = Math.round(qty * clientPrice * 100) / 100;
+      const bg = rowIdx % 2 === 0 ? '#fff' : '#f8f8f8';
+      h += `<tr style="background:${bg};">
+<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid #eee;">${e(p.description || 'Parts')}</td>
+<td style="padding:6px 10px;font-size:12px;text-align:center;border-bottom:1px solid #eee;">${qty}</td>
+<td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(clientPrice)}</td>
+<td style="padding:6px 10px;font-size:12px;text-align:right;border-bottom:1px solid #eee;">${money(lineTotal)}</td>
+</tr>`;
+      rowIdx++;
+    });
+    h += `<tr style="background:#f0f0f0;"><td colspan="3" style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">Parts & Materials Subtotal</td><td style="padding:6px 10px;font-size:12px;font-weight:600;text-align:right;">${money(qt.partsTotal)}</td></tr>`;
+  }
+
+  // GRAND TOTAL
+  h += `<tr style="border-top:2px solid #333;"><td colspan="3" style="padding:10px;font-size:16px;font-weight:700;text-align:right;">Total</td><td style="padding:10px;font-size:16px;font-weight:700;text-align:right;">${money(qt.grandTotal)}</td></tr>
+</table>`;
+
+  // INCLUSIONS
+  if (qt.inclusions) {
+    h += `<div style="font-size:15px;font-weight:700;margin:20px 0 8px;color:#1a1a1a;">Inclusions</div>`;
+    h += `<div style="margin-bottom:16px;padding:10px 14px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:4px;font-size:12px;line-height:1.6;">${nl2br(qt.inclusions)}</div>`;
+  }
+
+  // EXCLUSIONS
+  if (qt.exclusions) {
+    h += `<div style="font-size:15px;font-weight:700;margin:20px 0 8px;color:#1a1a1a;">Exclusions</div>`;
+    h += `<div style="margin-bottom:16px;padding:10px 14px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:4px;font-size:12px;line-height:1.6;">${nl2br(qt.exclusions)}</div>`;
+  }
+
+  // FOOTER
+  h += `<div style="margin-top:40px;padding-top:16px;border-top:1px solid #ddd;text-align:center;">
+<div style="color:#3b82f6;font-size:14px;font-weight:700;">Thank you for considering FieldMark!</div>
+<div style="color:#666;font-size:11px;margin-top:6px;">This quote is valid until ${e(qt.validUntil || 'further notice')}.</div>
+<div style="color:#999;font-size:10px;margin-top:6px;">Generated by FieldMark &bull; www.field-mark.app</div>
+</div></div>
+<script>
+window.onload = function() {
+  var imgs = document.querySelectorAll("img");
+  var total = imgs.length;
+  if (total === 0) { setTimeout(function(){ window.print(); }, 300); return; }
+  var loaded = 0, done = false;
+  function check() { loaded++; if (!done && loaded >= total) { done = true; setTimeout(function(){ window.print(); }, 500); } }
+  for (var i = 0; i < imgs.length; i++) {
+    if (imgs[i].complete && imgs[i].naturalWidth > 0) { check(); }
+    else { imgs[i].onload = check; imgs[i].onerror = check; }
+  }
+  setTimeout(function(){ if (!done) { done = true; window.print(); } }, 8000);
+};
+<\/script></body></html>`;
+  return h;
+}
+
+app.get('/api/quotes/:id/pdf-view', requireAuth, (req, res) => {
+  const qt = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  if (!qt) return res.status(404).send('Quote not found');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(renderQuoteHtml(qt));
+});
+
+// Token-based quote view for clients (no auth required)
+app.get('/api/quotes/:id/client-view', (req, res) => {
+  const qt = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  if (!qt) return res.status(404).send('Quote not found');
+  const expectedToken = generateQuoteToken(qt.id);
+  if (req.query.token !== expectedToken) return res.status(403).send('Invalid or expired link');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(renderQuoteHtml(qt));
+});
+
+// Token-based quote approval from email link (no auth required)
+app.get('/api/quotes/:id/approve-link', (req, res) => {
+  const qt = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  if (!qt) return res.status(404).send('Quote not found');
+  const expectedToken = generateQuoteToken(qt.id);
+  if (req.query.token !== expectedToken) return res.status(403).send('Invalid or expired link');
+  if (qt.status === 'Approved') {
+    return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Quote Already Approved</title></head><body style="font-family:Arial,sans-serif;text-align:center;padding:60px 20px;">
+<div style="max-width:500px;margin:0 auto;"><div style="font-size:48px;margin-bottom:16px;">&#10003;</div>
+<h1 style="color:#22c55e;">Quote Already Approved</h1>
+<p style="color:#666;margin-top:12px;">Quote ${qt.quoteNumber} was already approved on ${qt.approvedAt ? qt.approvedAt.split('T')[0] : 'a previous date'}.</p>
+<p style="color:#999;margin-top:20px;font-size:12px;">FieldMark &bull; www.field-mark.app</p></div></body></html>`);
+  }
+  if (qt.status !== 'Sent') {
+    return res.status(400).send('This quote cannot be approved at this time.');
+  }
+  const now = new Date().toISOString();
+  db.prepare("UPDATE quotes SET status='Approved', approvedAt=?, approvedBy='client', updatedAt=? WHERE id=?").run(now, now, qt.id);
+
+  // Send admin notification email
+  try {
+    const cfg = getEmailSettings();
+    if (cfg.enabled && cfg.smtpUser && cfg.smtpPass) {
+      const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(qt.clientId);
+      const fromName = cfg.fromName || 'FieldMark';
+      const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+      transporter.sendMail({
+        from: `"${fromName}" <${cfg.smtpUser}>`,
+        to: cfg.smtpUser,
+        subject: `Quote ${qt.quoteNumber} Approved — ${cl ? cl.name : 'Client'}`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+<div style="background:#22c55e;color:#fff;padding:20px;text-align:center;font-size:18px;font-weight:700;">Quote Approved!</div>
+<div style="padding:20px;background:#f9f9f9;">
+<p><strong>Quote:</strong> ${qt.quoteNumber}</p>
+<p><strong>Client:</strong> ${cl ? cl.name : 'Unknown'}</p>
+<p><strong>Total:</strong> $${(qt.grandTotal||0).toFixed(2)}</p>
+<p><strong>Approved:</strong> ${now.split('T')[0]} via email link</p>
+</div>
+<div style="padding:12px;text-align:center;color:#999;font-size:11px;">FieldMark &bull; www.field-mark.app</div>
+</div>`
+      });
+    }
+  } catch(err) { console.error('Quote approval notification error:', err.message); }
+
+  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Quote Approved</title></head><body style="font-family:Arial,sans-serif;text-align:center;padding:60px 20px;">
+<div style="max-width:500px;margin:0 auto;"><div style="font-size:48px;margin-bottom:16px;">&#10003;</div>
+<h1 style="color:#22c55e;">Quote Approved!</h1>
+<p style="color:#666;margin-top:12px;">Thank you! Quote ${qt.quoteNumber} has been approved. Our team has been notified and will be in touch shortly.</p>
+<p style="color:#999;margin-top:20px;font-size:12px;">FieldMark &bull; www.field-mark.app</p></div></body></html>`);
+});
+
+// Client portal quote approval
+app.post('/api/quotes/:id/approve', requireClientAuth, (req, res) => {
+  const qt = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  if (!qt) return res.status(404).json({ error: 'Quote not found' });
+  if (qt.status !== 'Sent') return res.status(400).json({ error: 'Quote cannot be approved' });
+  if (qt.clientId !== req.session.client.clientId) return res.status(403).json({ error: 'Access denied' });
+  const now = new Date().toISOString();
+  db.prepare("UPDATE quotes SET status='Approved', approvedAt=?, approvedBy='client', updatedAt=? WHERE id=?").run(now, now, qt.id);
+
+  // Send admin notification
+  try {
+    const cfg = getEmailSettings();
+    if (cfg.enabled && cfg.smtpUser && cfg.smtpPass) {
+      const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(qt.clientId);
+      const fromName = cfg.fromName || 'FieldMark';
+      const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+      transporter.sendMail({
+        from: `"${fromName}" <${cfg.smtpUser}>`,
+        to: cfg.smtpUser,
+        subject: `Quote ${qt.quoteNumber} Approved — ${cl ? cl.name : 'Client'}`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+<div style="background:#22c55e;color:#fff;padding:20px;text-align:center;font-size:18px;font-weight:700;">Quote Approved!</div>
+<div style="padding:20px;background:#f9f9f9;">
+<p><strong>Quote:</strong> ${qt.quoteNumber}</p>
+<p><strong>Client:</strong> ${cl ? cl.name : 'Unknown'}</p>
+<p><strong>Total:</strong> $${(qt.grandTotal||0).toFixed(2)}</p>
+<p><strong>Approved:</strong> ${now.split('T')[0]} via client portal</p>
+</div></div>`
+      });
+    }
+  } catch(err) { console.error('Quote approval notification error:', err.message); }
+
+  res.json({ ok: true });
+});
+
+// Admin manual approval
+app.post('/api/quotes/:id/admin-approve', requireAdmin, (req, res) => {
+  const qt = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  if (!qt) return res.status(404).json({ error: 'Quote not found' });
+  const now = new Date().toISOString();
+  db.prepare("UPDATE quotes SET status='Approved', approvedAt=?, approvedBy='admin', updatedAt=? WHERE id=?").run(now, now, qt.id);
+  const updated = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  try { updated.laborEntries = JSON.parse(updated.laborEntries); } catch(e) { updated.laborEntries = []; }
+  try { updated.partsEntries = JSON.parse(updated.partsEntries); } catch(e) { updated.partsEntries = []; }
+  try { updated.recipients = JSON.parse(updated.recipients); } catch(e) { updated.recipients = []; }
+  res.json(updated);
+});
+
+// Send quote email
+app.post('/api/quotes/:id/send', requireAdmin, async (req, res) => {
+  const qt = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
+  if (!qt) return res.status(404).json({ error: 'Quote not found' });
+  let recipients = [];
+  try { recipients = JSON.parse(qt.recipients); } catch(e) {}
+  // Allow overriding recipients from request body
+  if (req.body.recipients && Array.isArray(req.body.recipients) && req.body.recipients.length > 0) {
+    recipients = req.body.recipients;
+    db.prepare("UPDATE quotes SET recipients=? WHERE id=?").run(JSON.stringify(recipients), qt.id);
+  }
+  if (recipients.length === 0) return res.status(400).json({ error: 'No recipients specified' });
+  const cfg = getEmailSettings();
+  if (!cfg.enabled || !cfg.smtpUser || !cfg.smtpPass) return res.status(400).json({ error: 'Email not configured. Go to Settings → Email to configure SMTP.' });
+  const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(qt.clientId);
+  const fromName = cfg.fromName || 'FieldMark';
+  const token = generateQuoteToken(qt.id);
+  const baseUrl = req.protocol + '://' + req.get('host');
+  const viewUrl = baseUrl + '/api/quotes/' + qt.id + '/client-view?token=' + token;
+  const approveUrl = baseUrl + '/api/quotes/' + qt.id + '/approve-link?token=' + token;
+
+  try {
+    const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+    await transporter.sendMail({
+      from: `"${fromName}" <${cfg.smtpUser}>`,
+      to: recipients.join(', '),
+      subject: `Quote ${qt.quoteNumber} from ${fromName}${cl ? ' — ' + cl.name : ''}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+<div style="background:#3b82f6;color:#fff;padding:20px;text-align:center;">
+<div style="font-size:22px;font-weight:700;">${fromName}</div>
+<div style="font-size:11px;opacity:.8;margin-top:4px;">Service Management</div>
+</div>
+<div style="padding:24px;background:#fff;">
+<h2 style="margin:0 0 16px;color:#1a1a1a;font-size:18px;">Quote ${qt.quoteNumber}</h2>
+<table style="width:100%;margin-bottom:20px;font-size:13px;">
+<tr><td style="padding:4px 0;font-weight:600;">Client:</td><td>${cl ? cl.name : ''}</td></tr>
+<tr><td style="padding:4px 0;font-weight:600;">Date:</td><td>${qt.createdAt ? qt.createdAt.split('T')[0] : ''}</td></tr>
+<tr><td style="padding:4px 0;font-weight:600;">Valid Until:</td><td>${qt.validUntil || 'N/A'}</td></tr>
+<tr><td style="padding:4px 0;font-weight:600;">Total:</td><td style="font-size:18px;font-weight:700;color:#3b82f6;">$${(qt.grandTotal||0).toFixed(2)}</td></tr>
+</table>
+<div style="text-align:center;margin:24px 0;">
+<a href="${viewUrl}" style="display:inline-block;padding:12px 28px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px;margin-right:8px;">View Quote</a>
+<a href="${approveUrl}" style="display:inline-block;padding:12px 28px;background:#22c55e;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px;">Approve Quote</a>
+</div>
+</div>
+<div style="padding:16px;text-align:center;background:#f5f5f5;color:#999;font-size:11px;">
+${fromName} &bull; www.field-mark.app
+</div>
+</div>`
+    });
+
+    const now = new Date().toISOString();
+    if (qt.status === 'Draft') {
+      db.prepare("UPDATE quotes SET status='Sent', sentAt=?, updatedAt=? WHERE id=?").run(now, now, qt.id);
+    } else {
+      db.prepare("UPDATE quotes SET updatedAt=? WHERE id=?").run(now, qt.id);
+    }
+    const updated = db.prepare('SELECT * FROM quotes WHERE id=?').get(qt.id);
+    try { updated.laborEntries = JSON.parse(updated.laborEntries); } catch(e) { updated.laborEntries = []; }
+    try { updated.partsEntries = JSON.parse(updated.partsEntries); } catch(e) { updated.partsEntries = []; }
+    try { updated.recipients = JSON.parse(updated.recipients); } catch(e) { updated.recipients = []; }
+    res.json(updated);
+  } catch(err) {
+    console.error('Quote send error:', err);
+    res.status(500).json({ error: 'Failed to send email: ' + err.message });
+  }
 });
 
 app.post('/api/invoices/:id/send', requireAdmin, async (req, res) => {
@@ -2018,6 +2493,56 @@ app.post('/api/import', requireAdmin, (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+// ─── QUOTE FOLLOW-UP TIMER ───────────────────────────────────────────────────
+setInterval(() => {
+  try {
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const pending = db.prepare("SELECT * FROM quotes WHERE status='Sent' AND sentAt < ? AND sentAt != '' AND followUpSentAt=''").all(oneWeekAgo);
+    if (pending.length === 0) return;
+    const cfg = getEmailSettings();
+    if (!cfg.enabled || !cfg.smtpUser || !cfg.smtpPass) return;
+    const fromName = cfg.fromName || 'FieldMark';
+    const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+
+    pending.forEach(async (qt) => {
+      try {
+        let recipients = [];
+        try { recipients = JSON.parse(qt.recipients); } catch(e) {}
+        if (recipients.length === 0) return;
+        const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(qt.clientId);
+        const token = generateQuoteToken(qt.id);
+        const approveUrl = (process.env.BASE_URL || 'https://www.field-mark.app') + '/api/quotes/' + qt.id + '/approve-link?token=' + token;
+
+        await transporter.sendMail({
+          from: `"${fromName}" <${cfg.smtpUser}>`,
+          to: recipients.join(', '),
+          subject: `Reminder: Quote ${qt.quoteNumber} from ${fromName}`,
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+<div style="background:#f59e0b;color:#fff;padding:20px;text-align:center;">
+<div style="font-size:22px;font-weight:700;">${fromName}</div>
+<div style="font-size:13px;margin-top:4px;">Quote Reminder</div>
+</div>
+<div style="padding:24px;background:#fff;">
+<p style="font-size:14px;color:#333;">This is a friendly reminder that quote <strong>${qt.quoteNumber}</strong> is still awaiting your approval.</p>
+<table style="width:100%;margin:16px 0;font-size:13px;">
+<tr><td style="padding:4px 0;font-weight:600;">Client:</td><td>${cl ? cl.name : ''}</td></tr>
+<tr><td style="padding:4px 0;font-weight:600;">Total:</td><td style="font-size:16px;font-weight:700;color:#3b82f6;">$${(qt.grandTotal||0).toFixed(2)}</td></tr>
+<tr><td style="padding:4px 0;font-weight:600;">Valid Until:</td><td>${qt.validUntil || 'N/A'}</td></tr>
+</table>
+<div style="text-align:center;margin:24px 0;">
+<a href="${approveUrl}" style="display:inline-block;padding:12px 28px;background:#22c55e;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px;">Approve Quote</a>
+</div>
+</div>
+<div style="padding:12px;text-align:center;background:#f5f5f5;color:#999;font-size:11px;">${fromName} &bull; www.field-mark.app</div>
+</div>`
+        });
+        db.prepare("UPDATE quotes SET followUpSentAt=?, updatedAt=? WHERE id=?").run(new Date().toISOString(), new Date().toISOString(), qt.id);
+        console.log('Follow-up sent for quote ' + qt.quoteNumber);
+      } catch(err) { console.error('Follow-up error for ' + qt.quoteNumber + ':', err.message); }
+    });
+  } catch(err) { console.error('Quote follow-up check error:', err.message); }
+}, 60 * 60 * 1000); // Every hour
 
 // ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

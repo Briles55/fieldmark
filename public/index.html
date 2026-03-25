@@ -389,6 +389,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
       <span>Request Service</span>
     </button>
+    <button id="nav-portal-quotes" class="nav-item" onclick="nav('portal-quotes',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      <span>My Quotes</span>
+    </button>
     <button id="nav-scanner" class="nav-item" style="display:none;" onclick="nav('scanner',this)">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
       QR Scanner
@@ -408,6 +412,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <button id="nav-invoices" class="nav-item" onclick="nav('invoices',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
       Invoices
+    </button>
+    <button id="nav-quotes" class="nav-item" onclick="nav('quotes',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Quotes
     </button>
     <button id="nav-service-requests" class="nav-item" onclick="nav('service-requests',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
@@ -542,6 +550,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div class="card admin-only" style="margin-bottom:20px;cursor:pointer;" id="client-outstanding-card" onclick="toggleClientOutstanding()">
         <div class="card-hd"><span class="card-title">Outstanding Invoices</span><span class="badge br" id="client-outstanding-badge">$0.00</span></div>
         <div class="card-body" id="client-outstanding-content" style="display:none;"></div>
+      </div>
+      <div class="card admin-only" style="margin-bottom:20px;cursor:pointer;" id="client-quotes-card" onclick="toggleClientQuotes()">
+        <div class="card-hd"><span class="card-title">Quotes</span><span class="badge bb" id="client-quotes-badge">0</span></div>
+        <div class="card-body" id="client-quotes-content" style="display:none;"></div>
       </div>
       <div class="card admin-only" style="margin-bottom:20px;" id="client-history-card">
         <div class="card-hd"><span class="card-title">Work Order & Invoice History</span></div>
@@ -834,6 +846,17 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div id="sr-form-content"></div>
     </div>
 
+    <div id="view-portal-quotes" class="view">
+      <div class="ph">
+        <div><div class="ph-title">My Quotes</div><div class="ph-sub" id="portal-quotes-sub"></div></div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Quote #</th><th>Date</th><th>Total</th><th>Status</th><th>Action</th>
+        </tr></thead><tbody id="portal-quotes-tbody"></tbody></table>
+      </div>
+    </div>
+
     <!-- SERVICE REQUESTS (admin) -->
     <div id="view-service-requests" class="view">
       <div class="ph">
@@ -962,6 +985,50 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div style="display:flex;gap:8px;" id="invd-actions"></div>
       </div>
       <div id="invd-content"></div>
+    </div>
+
+    <!-- QUOTES (admin only) -->
+    <div id="view-quotes" class="view">
+      <div class="ph">
+        <div><div class="ph-title">Quotes</div><div class="ph-sub" id="quotes-list-sub"></div></div>
+        <button class="btn btn-primary" onclick="openQuoteBuilder()">+ New Quote</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;">
+        <input class="fc" type="text" id="qt-filter-search" placeholder="Search quotes..." style="max-width:200px;" oninput="renderQuotesView()">
+        <select class="fc" id="qt-filter-status" style="max-width:160px;" onchange="renderQuotesView()">
+          <option value="">All Statuses</option><option>Draft</option><option>Sent</option><option>Approved</option><option>Declined</option><option>Expired</option>
+        </select>
+        <select class="fc" id="qt-filter-client" style="max-width:180px;" onchange="renderQuotesView()">
+          <option value="">All Clients</option>
+        </select>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Quote #</th><th>Client</th><th>Date</th><th>Total</th><th>Status</th><th>Valid Until</th>
+        </tr></thead><tbody id="quotes-list-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div id="view-quote-detail" class="view">
+      <div class="ph">
+        <div>
+          <a href="#" onclick="event.preventDefault();nav('quotes')" style="font-size:12px;color:var(--accent);text-decoration:none;">&larr; Back to Quotes</a>
+          <div class="ph-title" id="qtd-title"></div>
+          <div class="ph-sub" id="qtd-sub"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="qtd-actions"></div>
+      </div>
+      <div id="qtd-content"></div>
+    </div>
+
+    <div id="view-quote-builder" class="view">
+      <div class="ph">
+        <div>
+          <a href="#" onclick="event.preventDefault();nav('quotes')" style="font-size:12px;color:var(--accent);text-decoration:none;">&larr; Back to Quotes</a>
+          <div class="ph-title" id="qb-title">New Quote</div>
+        </div>
+      </div>
+      <div id="qb-content"></div>
     </div>
 
     <!-- FORM TEMPLATES (admin only) -->
@@ -1659,6 +1726,7 @@ function enterClientMode() {
   document.getElementById('nav-portal-equipment').style.display = '';
   document.getElementById('nav-portal-reports').style.display = '';
   document.getElementById('nav-portal-request').style.display = '';
+  document.getElementById('nav-portal-quotes').style.display = '';
   // Update sidebar branding
   document.querySelector('.sb-logo p').textContent = 'Client Portal';
   // Update sidebar user info
@@ -1681,6 +1749,7 @@ function exitClientMode() {
   document.getElementById('nav-portal-equipment').style.display = 'none';
   document.getElementById('nav-portal-reports').style.display = 'none';
   document.getElementById('nav-portal-request').style.display = 'none';
+  document.getElementById('nav-portal-quotes').style.display = 'none';
   // Restore staff nav visibility (will be re-set by applyRoleUI on next staff login)
   document.getElementById('nav-dashboard').style.display = '';
   document.getElementById('nav-clients').style.display = '';
@@ -1688,6 +1757,7 @@ function exitClientMode() {
   document.getElementById('nav-work-orders').style.display = '';
   document.getElementById('nav-time-cards').style.display = '';
   document.getElementById('nav-invoices').style.display = '';
+  document.getElementById('nav-quotes').style.display = '';
   document.getElementById('nav-service-requests').style.display = '';
   document.getElementById('nav-form-templates').style.display = '';
 }
@@ -1813,6 +1883,7 @@ function applyRoleUI() {
   document.getElementById('nav-work-orders').style.display = '';
   document.getElementById('nav-time-cards').style.display = '';
   document.getElementById('nav-invoices').style.display = admin ? '' : 'none';
+  document.getElementById('nav-quotes').style.display = admin ? '' : 'none';
   document.getElementById('nav-service-requests').style.display = admin ? '' : 'none';
   document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';
@@ -1877,12 +1948,12 @@ const app = {
 
 // â”€â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function nav(viewName, navEl) {
-  if ((viewName === 'users' || viewName === 'form-templates' || viewName === 'form-builder' || viewName === 'service-requests' || viewName === 'service-request-detail' || viewName === 'invoices' || viewName === 'invoice-detail') && !isAdmin()) {
+  if ((viewName === 'users' || viewName === 'form-templates' || viewName === 'form-builder' || viewName === 'service-requests' || viewName === 'service-request-detail' || viewName === 'invoices' || viewName === 'invoice-detail' || viewName === 'quotes' || viewName === 'quote-detail' || viewName === 'quote-builder') && !isAdmin()) {
     // work-orders and work-order-detail are allowed for all staff
     showToast('Access restricted to administrators', 'error'); return;
   }
   if (isClient() && viewName === 'clients') { viewName = 'portal-locations'; }
-  if (isClient() && !['portal-locations','portal-equipment','portal-reports','portal-request','location','equipment','report-detail'].includes(viewName)) {
+  if (isClient() && !['portal-locations','portal-equipment','portal-reports','portal-request','portal-quotes','location','equipment','report-detail'].includes(viewName)) {
     showToast('Access restricted', 'error'); return;
   }
   stopScanner();
@@ -1899,7 +1970,7 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'work-orders':'nav-work-orders', 'time-cards':'nav-time-cards', invoices:'nav-invoices', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request' };
+  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'work-orders':'nav-work-orders', 'time-cards':'nav-time-cards', invoices:'nav-invoices', quotes:'nav-quotes', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request', 'portal-quotes':'nav-portal-quotes' };
   if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
 }
 
@@ -2008,6 +2079,26 @@ function renderView(name) {
       bc.innerHTML = '<span onclick="nav(\'invoices\')">Invoices</span><span class="bc-sep">/</span><span class="cur">Invoice Detail</span>';
       setNav('invoices');
       renderInvoiceDetail();
+      break;
+    case 'quotes':
+      bc.innerHTML = '<span class="cur">Quotes</span>';
+      setNav('quotes');
+      renderQuotesView();
+      break;
+    case 'quote-detail':
+      bc.innerHTML = '<span onclick="nav(\'quotes\')">Quotes</span><span class="bc-sep">/</span><span class="cur">Quote Detail</span>';
+      setNav('quotes');
+      renderQuoteDetail();
+      break;
+    case 'quote-builder':
+      bc.innerHTML = '<span onclick="nav(\'quotes\')">Quotes</span><span class="bc-sep">/</span><span class="cur">' + (app.editingQuoteId ? 'Edit' : 'New') + ' Quote</span>';
+      setNav('quotes');
+      renderQuoteBuilder();
+      break;
+    case 'portal-quotes':
+      bc.innerHTML = '<span class="cur">My Quotes</span>';
+      setNav('portal-quotes');
+      renderPortalQuotes();
       break;
     case 'service-requests':
       bc.innerHTML = '<span class="cur">Service Requests</span>';
@@ -2754,6 +2845,562 @@ async function confirmApprenticeTime(id) {
     showToast('Apprentice time confirmed', 'success');
     renderInvoiceDetail();
   } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ─── QUOTES ─────────────────────────────────────────────────────────────────
+
+function renderQuotesView() {
+  var quotes = db.quotes || [];
+  var search = (document.getElementById('qt-filter-search').value || '').toLowerCase();
+  var statusF = document.getElementById('qt-filter-status').value;
+  var clientF = document.getElementById('qt-filter-client').value;
+  // populate client filter
+  var cSel = document.getElementById('qt-filter-client');
+  if (cSel.options.length <= 1) {
+    (db.clients || []).forEach(function(c) {
+      var o = document.createElement('option'); o.value = c.id; o.textContent = c.name; cSel.appendChild(o);
+    });
+    makeSearchable('qt-filter-client');
+  }
+  var filtered = quotes.filter(function(q) {
+    if (statusF && q.status !== statusF) return false;
+    if (clientF && q.clientId !== clientF) return false;
+    if (search) {
+      var cl = (db.clients || []).find(function(c) { return c.id === q.clientId; });
+      var haystack = (q.quoteNumber + ' ' + (cl ? cl.name : '') + ' ' + q.scopeOfWork).toLowerCase();
+      if (haystack.indexOf(search) < 0) return false;
+    }
+    return true;
+  });
+  document.getElementById('quotes-list-sub').textContent = filtered.length + ' quote' + (filtered.length !== 1 ? 's' : '');
+  var tbody = document.getElementById('quotes-list-tbody');
+  tbody.innerHTML = '';
+  if (filtered.length === 0) {
+    var tr = document.createElement('tr');
+    var td = document.createElement('td'); td.colSpan = 6; td.style.cssText = 'text-align:center;padding:40px;color:#999;';
+    td.textContent = 'No quotes found'; tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  filtered.forEach(function(q) {
+    var cl = (db.clients || []).find(function(c) { return c.id === q.clientId; });
+    var tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.onclick = (function(id) { return function() { app.viewQuoteId = id; showView('quote-detail'); }; })(q.id);
+    var statusColors = { Draft:'#6b7280', Sent:'#3b82f6', Approved:'#22c55e', Declined:'#ef4444', Expired:'#f59e0b' };
+    var sc = statusColors[q.status] || '#6b7280';
+    tr.innerHTML = '<td>' + esc(q.quoteNumber) + '</td>' +
+      '<td>' + esc(cl ? cl.name : '') + '</td>' +
+      '<td>' + esc(q.createdAt ? q.createdAt.split('T')[0] : '') + '</td>' +
+      '<td>$' + (q.grandTotal || 0).toFixed(2) + '</td>' +
+      '<td><span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;color:#fff;background:' + sc + ';">' + esc(q.status) + '</span></td>' +
+      '<td>' + esc(q.validUntil || '—') + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function renderQuoteDetail() {
+  var q = (db.quotes || []).find(function(x) { return x.id === app.viewQuoteId; });
+  if (!q) { showToast('Quote not found', 'error'); nav('quotes'); return; }
+  var cl = (db.clients || []).find(function(c) { return c.id === q.clientId; });
+  var loc = q.locationId ? (db.locations || []).find(function(l) { return l.id === q.locationId; }) : null;
+  var statusColors = { Draft:'#6b7280', Sent:'#3b82f6', Approved:'#22c55e', Declined:'#ef4444', Expired:'#f59e0b' };
+  var sc = statusColors[q.status] || '#6b7280';
+
+  document.getElementById('qtd-title').textContent = q.quoteNumber;
+  document.getElementById('qtd-sub').innerHTML = '<span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;color:#fff;background:' + sc + ';">' + esc(q.status) + '</span>';
+
+  // Actions
+  var acts = document.getElementById('qtd-actions');
+  acts.innerHTML = '';
+  var addBtn = function(label, cls, fn) {
+    var b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = fn; acts.appendChild(b);
+  };
+  addBtn('Preview PDF', 'btn-outline', function() { exportQuotePDF(q.id); });
+  if (q.status === 'Draft' || q.status === 'Sent') {
+    addBtn('Edit', 'btn-outline', function() { app.editingQuoteId = q.id; showView('quote-builder'); });
+    addBtn('Send to Client', 'btn-primary', function() { sendQuote(q.id); });
+  }
+  if (q.status === 'Sent') {
+    addBtn('Mark Approved', 'btn-outline', function() { adminApproveQuote(q.id); });
+  }
+  addBtn('Delete', 'btn-danger', function() { deleteQuote(q.id); });
+
+  // Content
+  var h = '';
+  // Info card
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-body">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">';
+  h += '<div><div style="font-size:11px;color:#999;">Client</div><div style="font-weight:600;">' + esc(cl ? cl.name : '—') + '</div></div>';
+  h += '<div><div style="font-size:11px;color:#999;">Location</div><div style="font-weight:600;">' + esc(loc ? loc.buildingName : '—') + '</div></div>';
+  h += '<div><div style="font-size:11px;color:#999;">Created</div><div>' + esc(q.createdAt ? q.createdAt.split('T')[0] : '') + '</div></div>';
+  h += '<div><div style="font-size:11px;color:#999;">Valid Until</div><div>' + esc(q.validUntil || '—') + '</div></div>';
+  h += '<div><div style="font-size:11px;color:#999;">Created By</div><div>' + esc(q.createdBy || '—') + '</div></div>';
+  if (q.sentAt) h += '<div><div style="font-size:11px;color:#999;">Sent</div><div>' + esc(q.sentAt.split('T')[0]) + '</div></div>';
+  if (q.approvedAt) h += '<div><div style="font-size:11px;color:#999;">Approved</div><div>' + esc(q.approvedAt.split('T')[0]) + ' (' + esc(q.approvedBy) + ')</div></div>';
+  if (q.followUpSentAt) h += '<div><div style="font-size:11px;color:#999;">Follow-up Sent</div><div>' + esc(q.followUpSentAt.split('T')[0]) + '</div></div>';
+  h += '</div></div></div>';
+
+  // Scope of work
+  if (q.scopeOfWork) {
+    h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Scope of Work</span></div>';
+    h += '<div class="card-body" style="white-space:pre-wrap;font-size:13px;">' + esc(q.scopeOfWork) + '</div></div>';
+  }
+
+  // Labor breakdown
+  var labor = q.laborEntries || [];
+  if (labor.length > 0) {
+    h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Labor</span></div><div class="card-body">';
+    h += '<table class="tbl" style="font-size:12px;"><thead><tr><th>Trade</th><th>Hours</th><th>Base Rate</th><th>Markup %</th><th>Client Rate</th><th>Total</th></tr></thead><tbody>';
+    labor.forEach(function(l) {
+      var baseRate = parseFloat(l.rate) || 0;
+      var mkup = parseFloat(l.markup) || 0;
+      var clientRate = Math.round(baseRate * (1 + mkup / 100) * 100) / 100;
+      h += '<tr><td>' + esc(l.trade) + '</td><td>' + l.hours + '</td><td>$' + baseRate.toFixed(2) + '</td><td>' + mkup + '%</td><td>$' + clientRate.toFixed(2) + '</td><td>$' + (l.total || 0).toFixed(2) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="text-align:right;margin-top:8px;font-size:12px;"><span style="color:#999;">Base: $' + (q.laborSubtotal || 0).toFixed(2) + '</span> &rarr; <strong>Client Total: $' + (q.laborTotal || 0).toFixed(2) + '</strong></div>';
+    h += '</div></div>';
+  }
+
+  // Parts breakdown
+  var parts = q.partsEntries || [];
+  if (parts.length > 0) {
+    h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Parts & Materials</span></div><div class="card-body">';
+    h += '<table class="tbl" style="font-size:12px;"><thead><tr><th>Description</th><th>Qty</th><th>Unit Cost</th><th>Markup %</th><th>Client Price</th><th>Total</th></tr></thead><tbody>';
+    parts.forEach(function(p) {
+      var baseCost = parseFloat(p.unitCost) || 0;
+      var mkup = parseFloat(p.markup) || 0;
+      var clientPrice = Math.round(baseCost * (1 + mkup / 100) * 100) / 100;
+      h += '<tr><td>' + esc(p.description) + '</td><td>' + p.qty + '</td><td>$' + baseCost.toFixed(2) + '</td><td>' + mkup + '%</td><td>$' + clientPrice.toFixed(2) + '</td><td>$' + (p.total || 0).toFixed(2) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="text-align:right;margin-top:8px;font-size:12px;"><span style="color:#999;">Base: $' + (q.partsSubtotal || 0).toFixed(2) + '</span> &rarr; <strong>Client Total: $' + (q.partsTotal || 0).toFixed(2) + '</strong></div>';
+    h += '</div></div>';
+  }
+
+  // Totals
+  var totalBase = (q.laborSubtotal || 0) + (q.partsSubtotal || 0);
+  var totalClient = q.grandTotal || 0;
+  var grossProfit = totalClient - totalBase;
+  var gpPercent = totalClient > 0 ? (grossProfit / totalClient * 100) : 0;
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="text-align:right;">';
+  h += '<div style="font-size:13px;">Labor: <strong>$' + (q.laborTotal || 0).toFixed(2) + '</strong></div>';
+  h += '<div style="font-size:13px;">Parts & Materials: <strong>$' + (q.partsTotal || 0).toFixed(2) + '</strong></div>';
+  h += '<div style="font-size:18px;font-weight:700;margin-top:8px;padding-top:8px;border-top:2px solid #333;">Grand Total: $' + totalClient.toFixed(2) + '</div>';
+  h += '<div style="margin-top:10px;padding:8px 14px;background:#f0fdf4;border-radius:6px;display:inline-block;">';
+  h += '<span style="font-size:12px;color:#666;">Base Cost: $' + totalBase.toFixed(2) + '</span>';
+  h += '<span style="margin:0 8px;color:#ccc;">|</span>';
+  h += '<span style="font-size:12px;color:#666;">Gross Profit: <strong style="color:#22c55e;">$' + grossProfit.toFixed(2) + '</strong></span>';
+  h += '<span style="margin:0 8px;color:#ccc;">|</span>';
+  h += '<span style="font-size:13px;font-weight:700;color:#22c55e;">' + gpPercent.toFixed(1) + '% GP</span>';
+  h += '</div>';
+  h += '</div></div>';
+
+  // Inclusions / Exclusions
+  if (q.inclusions) {
+    h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Inclusions</span></div>';
+    h += '<div class="card-body" style="white-space:pre-wrap;font-size:13px;">' + esc(q.inclusions) + '</div></div>';
+  }
+  if (q.exclusions) {
+    h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Exclusions</span></div>';
+    h += '<div class="card-body" style="white-space:pre-wrap;font-size:13px;">' + esc(q.exclusions) + '</div></div>';
+  }
+
+  // Recipients
+  var recips = q.recipients || [];
+  if (recips.length > 0) {
+    h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Recipients</span></div>';
+    h += '<div class="card-body" style="font-size:13px;">' + recips.map(function(e) { return esc(e); }).join(', ') + '</div></div>';
+  }
+
+  // Internal notes
+  if (q.notes) {
+    h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Internal Notes</span></div>';
+    h += '<div class="card-body" style="white-space:pre-wrap;font-size:13px;color:#666;">' + esc(q.notes) + '</div></div>';
+  }
+
+  document.getElementById('qtd-content').innerHTML = h;
+}
+
+function openQuoteBuilder(quoteId) {
+  app.editingQuoteId = quoteId || null;
+  showView('quote-builder');
+}
+
+function renderQuoteBuilder() {
+  var q = app.editingQuoteId ? (db.quotes || []).find(function(x) { return x.id === app.editingQuoteId; }) : null;
+  document.getElementById('qb-title').textContent = q ? 'Edit Quote — ' + q.quoteNumber : 'New Quote';
+
+  var defaultValid = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  var labor = q ? (q.laborEntries || []) : [];
+  var parts = q ? (q.partsEntries || []) : [];
+  var recips = q ? (q.recipients || []) : [];
+
+  var h = '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Client & Location</span></div><div class="card-body">';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+  h += '<div><label class="fl">Client *</label><select class="fc" id="qb-client" onchange="qbClientChanged()">';
+  h += '<option value="">Select client...</option>';
+  (db.clients || []).forEach(function(c) { h += '<option value="' + c.id + '"' + (q && q.clientId === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'; });
+  h += '</select></div>';
+  h += '<div><label class="fl">Location</label><select class="fc" id="qb-location">';
+  h += '<option value="">Select location...</option>';
+  if (q && q.clientId) {
+    (db.locations || []).filter(function(l) { return l.clientId === q.clientId; }).forEach(function(l) {
+      h += '<option value="' + l.id + '"' + (q.locationId === l.id ? ' selected' : '') + '>' + esc(l.buildingName) + '</option>';
+    });
+  }
+  h += '</select></div>';
+  h += '</div></div></div>';
+
+  // Scope of work
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Scope of Work</span></div><div class="card-body">';
+  h += '<textarea class="fc" id="qb-scope" rows="5" placeholder="Describe the scope of work...">' + esc(q ? q.scopeOfWork : '') + '</textarea>';
+  h += '</div></div>';
+
+  // Labor
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Labor</span><button class="btn btn-sm btn-outline" onclick="qbAddLabor()">+ Add Trade</button></div><div class="card-body">';
+  h += '<table class="tbl" style="font-size:12px;" id="qb-labor-table"><thead><tr><th>Trade</th><th style="width:70px;">Hours</th><th style="width:90px;">Base Rate</th><th style="width:80px;">Markup %</th><th style="width:100px;">Client Rate</th><th style="width:100px;">Line Total</th><th style="width:40px;"></th></tr></thead>';
+  h += '<tbody id="qb-labor-tbody">';
+  labor.forEach(function(l, i) { h += qbLaborRowHtml(l, i); });
+  h += '</tbody></table>';
+  h += '<div style="text-align:right;margin-top:8px;font-size:13px;" id="qb-labor-totals"></div>';
+  h += '</div></div>';
+
+  // Parts
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Parts & Materials</span><button class="btn btn-sm btn-outline" onclick="qbAddPart()">+ Add Item</button></div><div class="card-body">';
+  h += '<table class="tbl" style="font-size:12px;" id="qb-parts-table"><thead><tr><th>Description</th><th style="width:60px;">Qty</th><th style="width:90px;">Unit Cost</th><th style="width:80px;">Markup %</th><th style="width:100px;">Client Price</th><th style="width:100px;">Line Total</th><th style="width:40px;"></th></tr></thead>';
+  h += '<tbody id="qb-parts-tbody">';
+  parts.forEach(function(p, i) { h += qbPartRowHtml(p, i); });
+  h += '</tbody></table>';
+  h += '<div style="text-align:right;margin-top:8px;font-size:13px;" id="qb-parts-totals"></div>';
+  h += '</div></div>';
+
+  // Inclusions / Exclusions
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">';
+  h += '<div class="card"><div class="card-hd"><span class="card-title">Inclusions</span></div><div class="card-body">';
+  h += '<textarea class="fc" id="qb-inclusions" rows="4" placeholder="Key inclusions...">' + esc(q ? q.inclusions : '') + '</textarea></div></div>';
+  h += '<div class="card"><div class="card-hd"><span class="card-title">Exclusions</span></div><div class="card-body">';
+  h += '<textarea class="fc" id="qb-exclusions" rows="4" placeholder="Key exclusions...">' + esc(q ? q.exclusions : '') + '</textarea></div></div>';
+  h += '</div>';
+
+  // Recipients
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Recipients</span></div><div class="card-body">';
+  h += '<div style="display:flex;gap:8px;margin-bottom:8px;"><input class="fc" id="qb-new-email" type="email" placeholder="Add email address..." style="flex:1;"><button class="btn btn-sm btn-outline" onclick="qbAddRecipient()">Add</button></div>';
+  h += '<div id="qb-recipients">';
+  recips.forEach(function(e) { h += '<span class="qb-recip-tag" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;margin:2px;background:#e8f0fe;border-radius:12px;font-size:12px;">' + esc(e) + '<span style="cursor:pointer;color:#999;font-weight:700;" onclick="qbRemoveRecipient(this)">&times;</span></span>'; });
+  h += '</div></div></div>';
+
+  // Valid until, notes, grand total
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">';
+  h += '<div class="card"><div class="card-hd"><span class="card-title">Valid Until</span></div><div class="card-body">';
+  h += '<input class="fc" type="date" id="qb-valid" value="' + esc(q ? q.validUntil : defaultValid) + '"></div></div>';
+  h += '<div class="card"><div class="card-hd"><span class="card-title">Internal Notes</span></div><div class="card-body">';
+  h += '<textarea class="fc" id="qb-notes" rows="2" placeholder="Internal admin notes (not shown on quote)...">' + esc(q ? q.notes : '') + '</textarea></div></div>';
+  h += '</div>';
+
+  // Grand total display
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="text-align:right;">';
+  h += '<div style="font-size:22px;font-weight:700;" id="qb-grand-total">$0.00</div>';
+  h += '<div style="font-size:11px;color:#999;">Grand Total (after markup)</div>';
+  h += '</div></div>';
+
+  // Actions
+  h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:40px;">';
+  h += '<button class="btn btn-outline" onclick="saveQuote(false)">Save Draft</button>';
+  h += '<button class="btn btn-outline" onclick="saveQuote(false, true)">Save & Preview PDF</button>';
+  h += '<button class="btn btn-primary" onclick="saveQuote(true)">Save & Send</button>';
+  h += '</div>';
+
+  document.getElementById('qb-content').innerHTML = h;
+  setTimeout(function() {
+    makeSearchable('qb-client');
+    makeSearchable('qb-location');
+    qbRecalc();
+    // Pre-populate billing email if new quote and client is selected
+    if (!q) {
+      var cid = document.getElementById('qb-client').value;
+      if (cid) qbClientChanged();
+    }
+  }, 50);
+}
+
+function qbLaborRowHtml(l, idx) {
+  var trades = ['Plumber', 'HVAC B Gas Fitter', 'HVAC A Gas Fitter', 'Electrician', 'Apprentice'];
+  var opts = trades.map(function(t) { return '<option' + (l && l.trade === t ? ' selected' : '') + '>' + t + '</option>'; }).join('');
+  return '<tr class="qb-labor-row">' +
+    '<td><select class="fc" onchange="qbRecalc()" style="font-size:12px;"><option value="">Select...</option>' + opts + '</select></td>' +
+    '<td><input class="fc" type="number" min="0" step="0.5" value="' + (l ? l.hours || '' : '') + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="number" min="0" step="0.01" value="' + (l ? l.rate || '' : '') + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="number" min="0" step="0.1" value="' + (l ? l.markup || 0 : 0) + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-l-clientrate">—</td>' +
+    '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-l-total">—</td>' +
+    '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();qbRecalc();" style="padding:2px 6px;">&times;</button></td>' +
+    '</tr>';
+}
+
+function qbPartRowHtml(p, idx) {
+  return '<tr class="qb-part-row">' +
+    '<td><input class="fc" type="text" value="' + esc(p ? p.description || '' : '') + '" placeholder="Part description..." style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="number" min="0" step="1" value="' + (p ? p.qty || '' : '') + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="number" min="0" step="0.01" value="' + (p ? p.unitCost || '' : '') + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td><input class="fc" type="number" min="0" step="0.1" value="' + (p ? p.markup || 0 : 0) + '" onchange="qbRecalc()" oninput="qbRecalc()" style="font-size:12px;"></td>' +
+    '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-p-clientprice">—</td>' +
+    '<td style="text-align:right;font-weight:600;font-size:12px;" class="qb-p-total">—</td>' +
+    '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove();qbRecalc();" style="padding:2px 6px;">&times;</button></td>' +
+    '</tr>';
+}
+
+function qbAddLabor() {
+  var tbody = document.getElementById('qb-labor-tbody');
+  tbody.insertAdjacentHTML('beforeend', qbLaborRowHtml(null, tbody.children.length));
+  // Auto-populate rate from client
+  var cid = document.getElementById('qb-client').value;
+  if (cid) {
+    var cl = (db.clients || []).find(function(c) { return c.id === cid; });
+    if (cl) {
+      var row = tbody.lastElementChild;
+      var tradeSel = row.querySelector('select');
+      tradeSel.addEventListener('change', function() { qbAutoRate(row, cl); qbRecalc(); });
+    }
+  }
+}
+
+function qbAddPart() {
+  var tbody = document.getElementById('qb-parts-tbody');
+  tbody.insertAdjacentHTML('beforeend', qbPartRowHtml(null, tbody.children.length));
+}
+
+function qbAutoRate(row, cl) {
+  var trade = row.querySelector('select').value;
+  var rateInput = row.querySelectorAll('input')[1]; // base rate input
+  var rateMap = { 'Plumber': cl.ratePlumber, 'HVAC B Gas Fitter': cl.rateHvacB, 'HVAC A Gas Fitter': cl.rateHvacA, 'Electrician': cl.rateElectrician, 'Apprentice': cl.rateApprentice };
+  var rate = parseFloat(rateMap[trade]) || 0;
+  if (rate > 0) rateInput.value = rate;
+}
+
+function qbClientChanged() {
+  var cid = document.getElementById('qb-client').value;
+  var locSel = document.getElementById('qb-location');
+  // Clear and repopulate locations
+  locSel.innerHTML = '<option value="">Select location...</option>';
+  if (cid) {
+    (db.locations || []).filter(function(l) { return l.clientId === cid; }).forEach(function(l) {
+      var o = document.createElement('option'); o.value = l.id; o.textContent = l.buildingName; locSel.appendChild(o);
+    });
+    // Reset searchable
+    var wrap = locSel.closest('.ss-wrap');
+    if (wrap) { wrap.parentNode.insertBefore(locSel, wrap); wrap.remove(); locSel.removeAttribute('data-searchable'); }
+    makeSearchable('qb-location');
+
+    // Pre-populate billing email for recipients if empty
+    var cl = (db.clients || []).find(function(c) { return c.id === cid; });
+    if (cl) {
+      var recipDiv = document.getElementById('qb-recipients');
+      if (recipDiv && recipDiv.children.length === 0 && cl.billingEmail) {
+        recipDiv.innerHTML = '<span class="qb-recip-tag" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;margin:2px;background:#e8f0fe;border-radius:12px;font-size:12px;">' + esc(cl.billingEmail) + '<span style="cursor:pointer;color:#999;font-weight:700;" onclick="qbRemoveRecipient(this)">&times;</span></span>';
+      }
+      // Auto-fill rates on existing labor rows
+      var rows = document.querySelectorAll('.qb-labor-row');
+      rows.forEach(function(row) { qbAutoRate(row, cl); });
+      qbRecalc();
+    }
+  }
+}
+
+function qbAddRecipient() {
+  var input = document.getElementById('qb-new-email');
+  var email = input.value.trim();
+  if (!email || email.indexOf('@') < 0) { showToast('Enter a valid email', 'error'); return; }
+  var div = document.getElementById('qb-recipients');
+  div.insertAdjacentHTML('beforeend', '<span class="qb-recip-tag" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;margin:2px;background:#e8f0fe;border-radius:12px;font-size:12px;">' + esc(email) + '<span style="cursor:pointer;color:#999;font-weight:700;" onclick="qbRemoveRecipient(this)">&times;</span></span>');
+  input.value = '';
+}
+
+function qbRemoveRecipient(el) {
+  el.parentElement.remove();
+}
+
+function qbRecalc() {
+  var laborTotal = 0, laborBase = 0;
+  document.querySelectorAll('.qb-labor-row').forEach(function(row) {
+    var inputs = row.querySelectorAll('input');
+    var hours = parseFloat(inputs[0].value) || 0;
+    var rate = parseFloat(inputs[1].value) || 0;
+    var markup = parseFloat(inputs[2].value) || 0;
+    var clientRate = Math.round(rate * (1 + markup / 100) * 100) / 100;
+    var lineTotal = Math.round(hours * clientRate * 100) / 100;
+    row.querySelector('.qb-l-clientrate').textContent = '$' + clientRate.toFixed(2) + '/hr';
+    row.querySelector('.qb-l-total').textContent = '$' + lineTotal.toFixed(2);
+    laborBase += Math.round(hours * rate * 100) / 100;
+    laborTotal += lineTotal;
+  });
+  var ltDiv = document.getElementById('qb-labor-totals');
+  if (ltDiv) ltDiv.innerHTML = '<span style="color:#999;">Base: $' + laborBase.toFixed(2) + '</span> &rarr; <strong>Total: $' + laborTotal.toFixed(2) + '</strong>';
+
+  var partsTotal = 0, partsBase = 0;
+  document.querySelectorAll('.qb-part-row').forEach(function(row) {
+    var inputs = row.querySelectorAll('input');
+    var qty = parseFloat(inputs[1].value) || 0;
+    var cost = parseFloat(inputs[2].value) || 0;
+    var markup = parseFloat(inputs[3].value) || 0;
+    var clientPrice = Math.round(cost * (1 + markup / 100) * 100) / 100;
+    var lineTotal = Math.round(qty * clientPrice * 100) / 100;
+    row.querySelector('.qb-p-clientprice').textContent = '$' + clientPrice.toFixed(2);
+    row.querySelector('.qb-p-total').textContent = '$' + lineTotal.toFixed(2);
+    partsBase += Math.round(qty * cost * 100) / 100;
+    partsTotal += lineTotal;
+  });
+  var ptDiv = document.getElementById('qb-parts-totals');
+  if (ptDiv) ptDiv.innerHTML = '<span style="color:#999;">Base: $' + partsBase.toFixed(2) + '</span> &rarr; <strong>Total: $' + partsTotal.toFixed(2) + '</strong>';
+
+  var gtDiv = document.getElementById('qb-grand-total');
+  if (gtDiv) gtDiv.textContent = '$' + (laborTotal + partsTotal).toFixed(2);
+}
+
+function qbCollectData() {
+  var clientId = document.getElementById('qb-client').value;
+  if (!clientId) { showToast('Please select a client', 'error'); return null; }
+  var locationId = document.getElementById('qb-location').value;
+  var scopeOfWork = document.getElementById('qb-scope').value;
+  var inclusions = document.getElementById('qb-inclusions').value;
+  var exclusions = document.getElementById('qb-exclusions').value;
+  var validUntil = document.getElementById('qb-valid').value;
+  var notes = document.getElementById('qb-notes').value;
+
+  var laborEntries = [];
+  document.querySelectorAll('.qb-labor-row').forEach(function(row) {
+    var sel = row.querySelector('select');
+    var inputs = row.querySelectorAll('input');
+    var trade = sel.value;
+    if (!trade) return;
+    laborEntries.push({ trade: trade, hours: parseFloat(inputs[0].value) || 0, rate: parseFloat(inputs[1].value) || 0, markup: parseFloat(inputs[2].value) || 0 });
+  });
+
+  var partsEntries = [];
+  document.querySelectorAll('.qb-part-row').forEach(function(row) {
+    var inputs = row.querySelectorAll('input');
+    var desc = inputs[0].value.trim();
+    if (!desc) return;
+    partsEntries.push({ description: desc, qty: parseFloat(inputs[1].value) || 0, unitCost: parseFloat(inputs[2].value) || 0, markup: parseFloat(inputs[3].value) || 0 });
+  });
+
+  var recipients = [];
+  document.querySelectorAll('.qb-recip-tag').forEach(function(tag) {
+    var text = tag.childNodes[0].textContent.trim();
+    if (text) recipients.push(text);
+  });
+
+  return { clientId: clientId, locationId: locationId, scopeOfWork: scopeOfWork, laborEntries: laborEntries, partsEntries: partsEntries, inclusions: inclusions, exclusions: exclusions, recipients: recipients, notes: notes, validUntil: validUntil };
+}
+
+async function saveQuote(andSend, andPreview) {
+  var data = qbCollectData();
+  if (!data) return;
+  try {
+    var result;
+    if (app.editingQuoteId) {
+      result = await apiPost('/api/quotes/' + app.editingQuoteId, data, 'PUT');
+      var idx = (db.quotes || []).findIndex(function(x) { return x.id === app.editingQuoteId; });
+      if (idx >= 0) db.quotes[idx] = result; else db.quotes.push(result);
+    } else {
+      result = await apiPost('/api/quotes', data);
+      if (!db.quotes) db.quotes = [];
+      db.quotes.unshift(result);
+    }
+    showToast('Quote saved', 'success');
+    if (andSend) {
+      await sendQuote(result.id);
+    } else if (andPreview) {
+      exportQuotePDF(result.id);
+    }
+    app.viewQuoteId = result.id;
+    app.editingQuoteId = null;
+    showView('quote-detail');
+  } catch(e) { showToast(e.message || 'Error saving quote', 'error'); }
+}
+
+function exportQuotePDF(id) {
+  var q = (db.quotes || []).find(function(x) { return x.id === id; });
+  if (!q) { showToast('Quote not found', 'error'); return; }
+  var win = window.open('/api/quotes/' + id + '/pdf-view', '_blank');
+  if (!win) showToast('Popup blocked — please allow popups for this site', 'error');
+}
+
+async function sendQuote(id) {
+  if (!confirm('Send this quote to all recipients?')) return;
+  try {
+    var result = await apiPost('/api/quotes/' + id + '/send', {});
+    var idx = (db.quotes || []).findIndex(function(x) { return x.id === id; });
+    if (idx >= 0) db.quotes[idx] = result;
+    showToast('Quote sent successfully', 'success');
+    if (app.view === 'quote-detail') renderQuoteDetail();
+  } catch(e) { showToast(e.message || 'Failed to send quote', 'error'); }
+}
+
+async function adminApproveQuote(id) {
+  if (!confirm('Mark this quote as approved?')) return;
+  try {
+    var result = await apiPost('/api/quotes/' + id + '/admin-approve', {});
+    var idx = (db.quotes || []).findIndex(function(x) { return x.id === id; });
+    if (idx >= 0) db.quotes[idx] = result;
+    showToast('Quote marked as approved', 'success');
+    if (app.view === 'quote-detail') renderQuoteDetail();
+  } catch(e) { showToast(e.message || 'Failed to approve quote', 'error'); }
+}
+
+async function deleteQuote(id) {
+  if (!confirm('Delete this quote? This cannot be undone.')) return;
+  try {
+    await apiPost('/api/quotes/' + id, {}, 'DELETE');
+    db.quotes = (db.quotes || []).filter(function(x) { return x.id !== id; });
+    showToast('Quote deleted', 'success');
+    nav('quotes');
+  } catch(e) { showToast(e.message || 'Failed to delete quote', 'error'); }
+}
+
+// Client portal quotes
+function renderPortalQuotes() {
+  var quotes = db.quotes || [];
+  document.getElementById('portal-quotes-sub').textContent = quotes.length + ' quote' + (quotes.length !== 1 ? 's' : '');
+  var tbody = document.getElementById('portal-quotes-tbody');
+  tbody.innerHTML = '';
+  if (quotes.length === 0) {
+    var tr = document.createElement('tr');
+    var td = document.createElement('td'); td.colSpan = 5; td.style.cssText = 'text-align:center;padding:40px;color:#999;';
+    td.textContent = 'No quotes found'; tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  quotes.forEach(function(q) {
+    var tr = document.createElement('tr');
+    var statusColors = { Sent:'#3b82f6', Approved:'#22c55e' };
+    var sc = statusColors[q.status] || '#6b7280';
+    tr.innerHTML = '<td>' + esc(q.quoteNumber) + '</td>' +
+      '<td>' + esc(q.createdAt ? q.createdAt.split('T')[0] : '') + '</td>' +
+      '<td>$' + (q.grandTotal || 0).toFixed(2) + '</td>' +
+      '<td><span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;color:#fff;background:' + sc + ';">' + esc(q.status) + '</span></td>' +
+      '<td></td>';
+    // Actions cell
+    var actTd = tr.querySelector('td:last-child');
+    if (q.status === 'Sent') {
+      var approveBtn = document.createElement('button');
+      approveBtn.className = 'btn btn-sm btn-primary';
+      approveBtn.textContent = 'Approve';
+      approveBtn.onclick = (function(qid) { return function(e) { e.stopPropagation(); portalApproveQuote(qid); }; })(q.id);
+      actTd.appendChild(approveBtn);
+    } else if (q.status === 'Approved') {
+      actTd.innerHTML = '<span style="color:#22c55e;font-size:12px;font-weight:600;">&#10003; Approved</span>';
+    }
+    tbody.appendChild(tr);
+  });
+}
+
+async function portalApproveQuote(id) {
+  if (!confirm('Approve this quote?')) return;
+  try {
+    await apiPost('/api/quotes/' + id + '/approve', {});
+    var q = (db.quotes || []).find(function(x) { return x.id === id; });
+    if (q) { q.status = 'Approved'; q.approvedAt = new Date().toISOString(); q.approvedBy = 'client'; }
+    showToast('Quote approved! Thank you.', 'success');
+    renderPortalQuotes();
+  } catch(e) { showToast(e.message || 'Failed to approve quote', 'error'); }
 }
 
 // ─── WARRANTY ────────────────────────────────────────────────────────────────
@@ -4338,12 +4985,14 @@ function renderDashboard() {
   const adminOpenWOs = allWOs.filter(wo=>wo.status==='Open'||wo.status==='In Progress').length;
   const pendingInvoices = (db.invoices||[]).filter(inv=>inv.status==='Draft').length;
   const warrantyInvoices = (db.invoices||[]).filter(inv=>inv.status==='Warranty').length;
+  const pendingQuotes = (db.quotes||[]).filter(q=>q.status==='Sent').length;
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${totalClients}</div><div class="stat-lbl">Clients</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--green)">${totalLocs}</div><div class="stat-lbl">Locations</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--amber)">${totalEq}</div><div class="stat-lbl">Equipment</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="nav('work-orders')"><div class="stat-val" style="color:var(--red)">${adminOpenWOs}</div><div class="stat-lbl">Open Work Orders</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="nav('invoices')"><div class="stat-val" style="color:var(--amber)">${pendingInvoices}</div><div class="stat-lbl">Pending Invoices</div></div>
+    <div class="stat-card" style="cursor:pointer;" onclick="nav('quotes')"><div class="stat-val" style="color:#3b82f6">${pendingQuotes}</div><div class="stat-lbl">Pending Quotes</div></div>
     <div class="stat-card" style="cursor:pointer;" onclick="document.getElementById('inv-filter-status').value='Warranty';nav('invoices')"><div class="stat-val" style="color:var(--amber)">${warrantyInvoices}</div><div class="stat-lbl">Warranty This Year</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--muted)">${totalRpts}</div><div class="stat-lbl">Reports</div></div>
   `;
@@ -4465,6 +5114,7 @@ function renderClientDetail() {
     loadClientBillingSummary(c.id);
     renderClientHistory(c.id);
     renderClientOutstanding(c.id);
+    renderClientQuotes(c.id);
   }
   renderLocationsTable();
 }
@@ -4553,6 +5203,35 @@ function renderClientOutstanding(clientId) {
 function toggleClientOutstanding() {
   var el = document.getElementById('client-outstanding-content');
   if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function toggleClientQuotes() {
+  var el = document.getElementById('client-quotes-content');
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function renderClientQuotes(clientId) {
+  var quotes = (db.quotes || []).filter(function(q) { return q.clientId === clientId; });
+  var badge = document.getElementById('client-quotes-badge');
+  if (badge) badge.textContent = quotes.length;
+  var el = document.getElementById('client-quotes-content');
+  if (!el) return;
+  if (quotes.length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">No quotes for this client</div>';
+    return;
+  }
+  var html = '<table class="tbl" style="font-size:12px;"><thead><tr><th>Quote #</th><th>Date</th><th>Total</th><th>Status</th></tr></thead><tbody>';
+  quotes.forEach(function(q) {
+    var statusColors = { Draft:'#6b7280', Sent:'#3b82f6', Approved:'#22c55e', Declined:'#ef4444', Expired:'#f59e0b' };
+    var sc = statusColors[q.status] || '#6b7280';
+    html += '<tr style="cursor:pointer;" onclick="app.viewQuoteId=\'' + q.id + '\';showView(\'quote-detail\');">' +
+      '<td>' + esc(q.quoteNumber) + '</td>' +
+      '<td>' + esc(q.createdAt ? q.createdAt.split('T')[0] : '') + '</td>' +
+      '<td>$' + (q.grandTotal || 0).toFixed(2) + '</td>' +
+      '<td><span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;color:#fff;background:' + sc + ';">' + esc(q.status) + '</span></td></tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 function renderClientHistory(clientId) {

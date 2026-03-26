@@ -7,10 +7,21 @@ const Database   = require('better-sqlite3');
 const nodemailer = require('nodemailer');
 const path       = require('path');
 const crypto     = require('crypto');
+const helmet     = require('helmet');
+const rateLimit  = require('express-rate-limit');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
-const SECRET = process.env.SESSION_SECRET || 'fieldmark-dev-secret-change-me';
+const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
+
+// Generate a strong random secret if not set (persists for this process only)
+const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString('hex');
+if (!process.env.SESSION_SECRET) {
+  console.warn('WARNING: SESSION_SECRET not set — using random secret. Sessions will not persist across restarts. Set SESSION_SECRET env var in production.');
+}
+
+// HTML escape helper for emails (prevent injection)
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;'); }
 
 // ─── DATABASE ─────────────────────────────────────────────────────────────────
 const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'fieldmark.db');
@@ -268,11 +279,12 @@ try { db.exec("ALTER TABLE equipment ADD COLUMN ashraeLifeYears INTEGER DEFAULT 
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
 if (userCount === 0) {
-  const hash = bcrypt.hashSync('fieldmark', 10);
+  const defaultPw = 'FieldMark1';
+  const hash = bcrypt.hashSync(defaultPw, 10);
   const id   = genId();
   db.prepare('INSERT INTO users (id,username,name,role,passwordHash,createdAt) VALUES (?,?,?,?,?,?)')
     .run(id, 'admin', 'Administrator', 'admin', hash, new Date().toISOString());
-  console.log('Seeded default admin — username: admin  password: fieldmark');
+  console.log('Seeded default admin — username: admin  password: ' + defaultPw + ' (CHANGE THIS IMMEDIATELY)');
 }
 
 // Seed default form templates if none exist
@@ -497,8 +509,7 @@ function calcQuoteTotals(laborEntries, partsEntries) {
 }
 
 function generateQuoteToken(quoteId) {
-  const secret = process.env.SESSION_SECRET || 'fieldmark-secret';
-  return crypto.createHmac('sha256', secret).update(quoteId).digest('hex').slice(0, 16);
+  return crypto.createHmac('sha256', SECRET).update(quoteId + ':fieldmark-quote').digest('hex').slice(0, 32);
 }
 
 function createInvoiceForWO(woId) {
@@ -659,13 +670,58 @@ async function sendClientNotification(report) {
 }
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '50mb' }));
+
+// Trust Railway proxy so rate limiting and secure cookies work behind reverse proxy
+if (IS_PROD) app.set('trust proxy', 1);
+
+// Security headers (helmet)
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow inline scripts/styles for SPA
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Force HTTPS in production
+if (IS_PROD) {
+  app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] !== 'https') {
+      return res.redirect(301, 'https://' + req.hostname + req.originalUrl);
+    }
+    next();
+  });
+}
+
+// Rate limiting — login endpoints (prevent brute force)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // max 10 attempts per window
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// General API rate limiter
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 120, // 120 requests per minute
+  message: { error: 'Too many requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/', apiLimiter);
+
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }, // 7 days
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: IS_PROD, // Only send cookie over HTTPS in production
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours (reduced from 7 days)
+  },
 }));
 
 function requireAuth(req, res, next) {
@@ -683,7 +739,7 @@ function requireClientAuth(req, res, next) {
 }
 
 // ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=LOWER(?)').get(username);
@@ -703,7 +759,7 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 });
 
 // ─── CLIENT AUTH ─────────────────────────────────────────────────────────────
-app.post('/api/auth/client-login', async (req, res) => {
+app.post('/api/auth/client-login', loginLimiter, async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   const client = db.prepare('SELECT * FROM clients WHERE LOWER(email)=LOWER(?)').get(email);
@@ -1999,7 +2055,8 @@ app.post('/api/invoices/:id/send', requireAdmin, async (req, res) => {
 });
 
 // ─── SERVICE REQUESTS ─────────────────────────────────────────────────────────
-app.post('/api/service-requests', requireClientAuth, async (req, res) => {
+const serviceRequestLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: { error: 'Too many service requests. Please try again later.' } });
+app.post('/api/service-requests', requireClientAuth, serviceRequestLimiter, async (req, res) => {
   const cfg = getEmailSettings();
   const { locationId, equipmentId, urgency, description, photos, poNumber } = req.body;
   if (!locationId || !urgency || !description) return res.status(400).json({ error: 'Location, urgency, and description are required' });
@@ -2068,7 +2125,7 @@ app.post('/api/service-requests', requireClientAuth, async (req, res) => {
           </tr>` : ''}
           <tr style="border-bottom:1px solid #e2e8f0">
             <td style="padding:10px 0;color:#64748b;vertical-align:top">Description</td>
-            <td style="padding:10px 0">${description.replace(/\n/g, '<br>')}</td>
+            <td style="padding:10px 0">${escHtml(description).replace(/\n/g, '<br>')}</td>
           </tr>
           ${photosHtml}
         </table>
@@ -2370,7 +2427,7 @@ app.get('/api/users', requireAdmin, (req, res) => {
 app.post('/api/users', requireAdmin, async (req, res) => {
   const { username, name, role, password } = req.body;
   if (!username || !name || !password) return res.status(400).json({ error: 'username, name and password required' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) return res.status(400).json({ error: 'Password must be at least 8 characters with 1 uppercase letter and 1 number' });
   const existing = db.prepare('SELECT id FROM users WHERE LOWER(username)=LOWER(?)').get(username);
   if (existing) return res.status(400).json({ error: 'Username already exists' });
   const hash = await bcrypt.hash(password, 10);
@@ -2386,7 +2443,7 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
   const existing = db.prepare('SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND id!=?').get(username, req.params.id);
   if (existing) return res.status(400).json({ error: 'Username already exists' });
   if (password) {
-    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) return res.status(400).json({ error: 'Password must be at least 8 characters with 1 uppercase letter and 1 number' });
     const hash = await bcrypt.hash(password, 10);
     db.prepare('UPDATE users SET username=?,name=?,role=?,passwordHash=? WHERE id=?')
       .run(username, name, role||'technician', hash, req.params.id);

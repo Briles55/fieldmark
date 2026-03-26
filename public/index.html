@@ -6899,7 +6899,7 @@ async function saveUser() {
   if (!name || !username) { showToast('Name and username are required', 'error'); return; }
   if (!id && !pw) { showToast('Password is required for new users', 'error'); return; }
   if (pw && pw !== pw2) { showToast('Passwords do not match', 'error'); return; }
-  if (pw && pw.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+  if (pw && (pw.length < 8 || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw))) { showToast('Password must be at least 8 characters with 1 uppercase letter and 1 number', 'error'); return; }
   try {
     const body = { name, username, role }; if (pw) body.password = pw;
     if (id) { const u = await apiPost('/api/users/'+id, body, 'PUT'); if (currentUser && currentUser.id===id) { currentUser.name=u.name; currentUser.username=u.username; currentUser.role=u.role; updateSidebarUser(); } showToast('User updated','success'); }

@@ -1623,6 +1623,7 @@ async function loadDB() {
 }
 
 function esc(s) { const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
+function hasPhoto(v) { return v && (v.startsWith('data:') ? v.length > 50 : (v.startsWith('/api/photos/') || v.startsWith('http'))); }
 function fmtDate(iso) {
   if (!iso) return '\u2014';
   return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
@@ -5318,7 +5319,7 @@ function renderClientDetail() {
   document.getElementById('client-title').textContent = c.name;
   document.getElementById('client-sub').textContent = `${db.locations.filter(l=>l.clientId===c.id).length} location(s)`;
   var infoHtml = '';
-  if (c.logo && c.logo.length > 50) {
+  if (hasPhoto(c.logo)) {
     infoHtml += `<div style="grid-column:1/-1;margin-bottom:8px;"><div class="ii-lbl">Logo</div><div class="ii-val"><img src="${esc(c.logo)}" style="max-height:60px;max-width:180px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:4px;background:#fff;"></div></div>`;
   }
   infoHtml += `
@@ -5713,7 +5714,7 @@ function renderEquipmentDetail() {
   document.getElementById('eq-title').textContent = eq.name;
   document.getElementById('eq-sub').textContent = [cl?.name, loc?.buildingName].filter(Boolean).join(' \u2014 ');
   var eqPhotoHtml = '';
-  if (eq.photo && eq.photo.length > 50) {
+  if (hasPhoto(eq.photo)) {
     eqPhotoHtml = `<div style="margin-bottom:16px;text-align:center;">
       <img src="${eq.photo}" alt="${esc(eq.name)}" style="max-width:100%;max-height:300px;border-radius:8px;border:1px solid var(--border);cursor:pointer;object-fit:cover;" onclick="openPhotoLightbox(db.equipment.find(function(e){return e.id==='${eq.id}'}).photo)">
     </div>`;
@@ -6515,7 +6516,7 @@ function openClientModal(id) {
   var previewEl = document.getElementById('c-logo-preview');
   var placeholderEl = document.getElementById('c-logo-placeholder');
   var removeBtn = document.getElementById('c-logo-remove');
-  if (app._clientLogo && app._clientLogo.length > 50) {
+  if (hasPhoto(app._clientLogo)) {
     previewEl.style.border = '1px solid var(--border)';
     placeholderEl.style.display = 'none';
     var existImg = previewEl.querySelector('img');
@@ -6704,7 +6705,7 @@ function openEquipmentModal(id) {
   var existImg = previewEl.querySelector('img');
   if (existImg) existImg.remove();
   document.getElementById('e-photo-input').value = '';
-  if (e && e.photo && e.photo.length > 50) {
+  if (e && hasPhoto(e.photo)) {
     app._equipmentPhoto = e.photo;
     placeholderEl.style.display = 'none';
     previewEl.style.border = '1px solid var(--border)';

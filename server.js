@@ -276,6 +276,109 @@ try { db.exec("ALTER TABLE clients ADD COLUMN rateApprentice TEXT DEFAULT ''"); 
 try { db.exec("ALTER TABLE equipment ADD COLUMN replacementBudget REAL DEFAULT 0"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN ashraeLifeYears INTEGER DEFAULT 0"); } catch(e) {}
 
+// ─── DATABASE INDEXES (performance at scale) ─────────────────────────────────
+const indexes = [
+  'CREATE INDEX IF NOT EXISTS idx_locations_clientId ON locations(clientId)',
+  'CREATE INDEX IF NOT EXISTS idx_locations_buildingName ON locations(buildingName)',
+  'CREATE INDEX IF NOT EXISTS idx_equipment_locationId ON equipment(locationId)',
+  'CREATE INDEX IF NOT EXISTS idx_equipment_name ON equipment(name)',
+  'CREATE INDEX IF NOT EXISTS idx_reports_equipmentId ON reports(equipmentId)',
+  'CREATE INDEX IF NOT EXISTS idx_reports_createdAt ON reports(createdAt DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_reports_workOrderNumber ON reports(workOrderNumber)',
+  'CREATE INDEX IF NOT EXISTS idx_service_requests_clientId ON service_requests(clientId)',
+  'CREATE INDEX IF NOT EXISTS idx_service_requests_createdAt ON service_requests(createdAt DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_work_orders_woNumber ON work_orders(woNumber)',
+  'CREATE INDEX IF NOT EXISTS idx_work_orders_clientId ON work_orders(clientId)',
+  'CREATE INDEX IF NOT EXISTS idx_work_orders_createdAt ON work_orders(createdAt DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_invoices_woId ON invoices(woId)',
+  'CREATE INDEX IF NOT EXISTS idx_invoices_clientId ON invoices(clientId)',
+  'CREATE INDEX IF NOT EXISTS idx_invoices_createdAt ON invoices(createdAt DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_purchase_orders_woId ON purchase_orders(woId)',
+  'CREATE INDEX IF NOT EXISTS idx_quotes_clientId ON quotes(clientId)',
+  'CREATE INDEX IF NOT EXISTS idx_quotes_createdAt ON quotes(createdAt DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_time_cards_userId ON time_cards(userId)',
+  'CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name)',
+];
+indexes.forEach(sql => { try { db.exec(sql); } catch(e) {} });
+
+// ─── PHOTO FILE STORAGE ──────────────────────────────────────────────────────
+const fs = require('fs');
+const PHOTO_DIR = path.join(path.dirname(DB_PATH), 'photos');
+if (!fs.existsSync(PHOTO_DIR)) fs.mkdirSync(PHOTO_DIR, { recursive: true });
+
+// Save a base64 data URI to a file, return the filename
+function savePhotoFile(dataUri) {
+  if (!dataUri || dataUri.length < 50 || !dataUri.startsWith('data:')) return '';
+  const matches = dataUri.match(/^data:image\/(\w+);base64,(.+)$/);
+  if (!matches) return '';
+  const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+  const filename = crypto.randomUUID() + '.' + ext;
+  fs.writeFileSync(path.join(PHOTO_DIR, filename), Buffer.from(matches[2], 'base64'));
+  return filename;
+}
+
+// Read a photo file and return base64 data URI (for PDF embedding)
+function readPhotoAsDataUri(filename) {
+  if (!filename || filename.startsWith('data:')) return filename; // already a data URI (legacy)
+  const filepath = path.join(PHOTO_DIR, filename);
+  if (!fs.existsSync(filepath)) return '';
+  const buf = fs.readFileSync(filepath);
+  const ext = path.extname(filename).slice(1);
+  const mime = ext === 'jpg' ? 'jpeg' : ext;
+  return 'data:image/' + mime + ';base64,' + buf.toString('base64');
+}
+
+// Serve photo files via HTTP
+function isPhotoRef(val) { return val && !val.startsWith('data:') && val.length < 200; }
+
+// ─── STARTUP MIGRATION: Convert existing base64 photos to file storage ───────
+(function migrateBase64Photos() {
+  let migrated = 0;
+  // Migrate client logos
+  const clients = db.prepare("SELECT id, logo FROM clients WHERE logo LIKE 'data:%'").all();
+  clients.forEach(c => {
+    const fn = savePhotoFile(c.logo);
+    if (fn) { db.prepare('UPDATE clients SET logo=? WHERE id=?').run(fn, c.id); migrated++; }
+  });
+  // Migrate equipment photos
+  const equips = db.prepare("SELECT id, photo FROM equipment WHERE photo LIKE 'data:%'").all();
+  equips.forEach(e => {
+    const fn = savePhotoFile(e.photo);
+    if (fn) { db.prepare('UPDATE equipment SET photo=? WHERE id=?').run(fn, e.id); migrated++; }
+  });
+  // Migrate report photos
+  const reports = db.prepare("SELECT id, photoBefore, photoAfter, photoNameplate FROM reports WHERE photoBefore LIKE 'data:%' OR photoAfter LIKE 'data:%' OR photoNameplate LIKE 'data:%'").all();
+  reports.forEach(r => {
+    const updates = {};
+    if (r.photoBefore && r.photoBefore.startsWith('data:')) { const fn = savePhotoFile(r.photoBefore); if (fn) updates.photoBefore = fn; }
+    if (r.photoAfter && r.photoAfter.startsWith('data:')) { const fn = savePhotoFile(r.photoAfter); if (fn) updates.photoAfter = fn; }
+    if (r.photoNameplate && r.photoNameplate.startsWith('data:')) { const fn = savePhotoFile(r.photoNameplate); if (fn) updates.photoNameplate = fn; }
+    const cols = Object.keys(updates);
+    if (cols.length) {
+      const setClause = cols.map(c => `${c}=?`).join(',');
+      db.prepare(`UPDATE reports SET ${setClause} WHERE id=?`).run(...cols.map(c => updates[c]), r.id);
+      migrated += cols.length;
+    }
+  });
+  // Migrate service request photos (stored as JSON array)
+  const srs = db.prepare("SELECT id, photos FROM service_requests WHERE photos LIKE '%data:%'").all();
+  srs.forEach(sr => {
+    try {
+      let photos = JSON.parse(sr.photos);
+      let changed = false;
+      photos = photos.map(p => {
+        if (p && p.startsWith('data:')) {
+          const fn = savePhotoFile(p);
+          if (fn) { changed = true; return '/api/photos/' + fn; }
+        }
+        return p;
+      });
+      if (changed) { db.prepare('UPDATE service_requests SET photos=? WHERE id=?').run(JSON.stringify(photos), sr.id); migrated++; }
+    } catch(e) {}
+  });
+  if (migrated > 0) console.log(`Photo migration: converted ${migrated} base64 photos to file storage`);
+})();
+
 // Seed default admin if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
 if (userCount === 0) {
@@ -712,6 +815,19 @@ app.use('/api/', apiLimiter);
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve photo files (no auth required for img src loading, filenames are unguessable UUIDs)
+app.get('/api/photos/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename); // prevent directory traversal
+  const filepath = path.join(PHOTO_DIR, filename);
+  if (!fs.existsSync(filepath)) return res.status(404).send('Not found');
+  const ext = path.extname(filename).slice(1);
+  const mime = ext === 'jpg' ? 'jpeg' : ext;
+  res.setHeader('Content-Type', 'image/' + mime);
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // cache 1 year (photos don't change)
+  fs.createReadStream(filepath).pipe(res);
+});
+
 app.use(session({
   secret: SECRET,
   resave: false,
@@ -789,6 +905,13 @@ app.get('/api/client-data', requireClientAuth, (req, res) => {
   if (locationIds.length) {
     const placeholders = locationIds.map(() => '?').join(',');
     equipment = db.prepare(`SELECT * FROM equipment WHERE locationId IN (${placeholders}) ORDER BY name`).all(...locationIds);
+    // Convert equipment photo refs to URLs
+    equipment.forEach(eq => {
+      if (eq.photo) {
+        if (isPhotoRef(eq.photo)) eq.photo = '/api/photos/' + eq.photo;
+        else if (eq.photo.startsWith('data:')) eq.photo = ''; // strip base64
+      }
+    });
     const equipmentIds = equipment.map(e => e.id);
     if (equipmentIds.length) {
       const ePlaceholders = equipmentIds.map(() => '?').join(',');
@@ -815,15 +938,37 @@ app.get('/api/client-data', requireClientAuth, (req, res) => {
 // ─── DATA (full load) ─────────────────────────────────────────────────────────
 app.get('/api/data', requireAuth, (req, res) => {
   const clients   = db.prepare('SELECT * FROM clients ORDER BY name').all();
+  // Convert client logo refs to URLs (don't send raw filenames or base64 blobs)
+  clients.forEach(c => {
+    if (c.logo) {
+      if (isPhotoRef(c.logo)) c.logo = '/api/photos/' + c.logo;
+      else if (c.logo.startsWith('data:')) c.logo = ''; // strip legacy base64 from bulk load
+    }
+  });
   const locations = db.prepare('SELECT * FROM locations ORDER BY buildingName').all();
   const equipment = db.prepare('SELECT * FROM equipment ORDER BY name').all();
+  // Convert equipment photo refs to URLs
+  equipment.forEach(eq => {
+    if (eq.photo) {
+      if (isPhotoRef(eq.photo)) eq.photo = '/api/photos/' + eq.photo;
+      else if (eq.photo.startsWith('data:')) eq.photo = ''; // strip legacy base64 from bulk load
+    }
+  });
   const reports   = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,createdAt FROM reports ORDER BY createdAt DESC').all();
   const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
   // Parse checklist JSON for each report
   reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
   formTemplates.forEach(t => { try { t.fields = JSON.parse(t.fields); } catch { t.fields = []; } });
   const serviceRequests = db.prepare('SELECT * FROM service_requests ORDER BY createdAt DESC').all();
-  serviceRequests.forEach(sr => { try { sr.photos = JSON.parse(sr.photos); } catch { sr.photos = []; } });
+  serviceRequests.forEach(sr => {
+    try { sr.photos = JSON.parse(sr.photos); } catch { sr.photos = []; }
+    // Convert any legacy base64 photos to URLs
+    sr.photos = sr.photos.map(p => {
+      if (p && isPhotoRef(p) && !p.startsWith('/api/photos/')) return '/api/photos/' + p;
+      if (p && p.startsWith('data:')) return ''; // strip base64 from bulk load
+      return p;
+    }).filter(p => p);
+  });
   const workOrders = db.prepare('SELECT * FROM work_orders ORDER BY createdAt DESC').all();
   workOrders.forEach(wo => { try { wo.laborEntries = JSON.parse(wo.laborEntries); } catch { wo.laborEntries = []; } });
   const users = db.prepare('SELECT id,username,name,role,createdAt FROM users ORDER BY name').all();
@@ -851,12 +996,15 @@ app.post('/api/clients', requireAdmin, async (req, res) => {
   const id = genId();
   let hash = '';
   if (portalPassword && portalPassword.length >= 6) hash = await bcrypt.hash(portalPassword, 10);
+  const logoRef = logo && logo.startsWith('data:') ? savePhotoFile(logo) : (logo || '');
   db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,passwordHash,logo,billingContact,billingEmail,billingPhone,billingAddress,paymentTerms,poRequired,taxId,creditLimit,accountNumber,defaultRate,arNotes,ratePlumber,rateHvacB,rateHvacA,rateElectrician,rateApprentice,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', hash, logo||'',
+    .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', hash, logoRef,
          billingContact||'', billingEmail||'', billingPhone||'', billingAddress||'', paymentTerms||'', poRequired||'No',
          taxId||'', creditLimit||'', accountNumber||'', defaultRate||'', arNotes||'',
          ratePlumber||'', rateHvacB||'', rateHvacA||'', rateElectrician||'', rateApprentice||'', new Date().toISOString());
-  res.json(db.prepare('SELECT * FROM clients WHERE id=?').get(id));
+  const created = db.prepare('SELECT * FROM clients WHERE id=?').get(id);
+  if (created.logo && isPhotoRef(created.logo)) created.logo = '/api/photos/' + created.logo;
+  res.json(created);
 });
 
 app.put('/api/clients/:id', requireAdmin, async (req, res) => {
@@ -865,8 +1013,9 @@ app.put('/api/clients/:id', requireAdmin, async (req, res) => {
           taxId, creditLimit, accountNumber, defaultRate, arNotes,
           ratePlumber, rateHvacB, rateHvacA, rateElectrician, rateApprentice } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
+  const logoRef = logo && logo.startsWith('data:') ? savePhotoFile(logo) : (logo && logo.startsWith('/api/photos/') ? logo.replace('/api/photos/', '') : (logo || ''));
   db.prepare('UPDATE clients SET name=?,phone=?,email=?,address=?,city=?,state=?,notes=?,logo=?,billingContact=?,billingEmail=?,billingPhone=?,billingAddress=?,paymentTerms=?,poRequired=?,taxId=?,creditLimit=?,accountNumber=?,defaultRate=?,arNotes=?,ratePlumber=?,rateHvacB=?,rateHvacA=?,rateElectrician=?,rateApprentice=? WHERE id=?')
-    .run(name, phone||'', email||'', address||'', city||'', state||'', notes||'', logo||'',
+    .run(name, phone||'', email||'', address||'', city||'', state||'', notes||'', logoRef,
          billingContact||'', billingEmail||'', billingPhone||'', billingAddress||'', paymentTerms||'', poRequired||'No',
          taxId||'', creditLimit||'', accountNumber||'', defaultRate||'', arNotes||'',
          ratePlumber||'', rateHvacB||'', rateHvacA||'', rateElectrician||'', rateApprentice||'', req.params.id);
@@ -874,7 +1023,9 @@ app.put('/api/clients/:id', requireAdmin, async (req, res) => {
     const hash = await bcrypt.hash(portalPassword, 10);
     db.prepare('UPDATE clients SET passwordHash=? WHERE id=?').run(hash, req.params.id);
   }
-  res.json(db.prepare('SELECT * FROM clients WHERE id=?').get(req.params.id));
+  const updated = db.prepare('SELECT * FROM clients WHERE id=?').get(req.params.id);
+  if (updated.logo && isPhotoRef(updated.logo)) updated.logo = '/api/photos/' + updated.logo;
+  res.json(updated);
 });
 
 app.delete('/api/clients/:id', requireAdmin, (req, res) => {
@@ -928,17 +1079,23 @@ app.post('/api/equipment', requireAdmin, (req, res) => {
   const { locationId, name, model, serial, yearInstalled, type, notes, formTemplateId, photo, replacementBudget, ashraeLifeYears } = req.body;
   if (!locationId || !name) return res.status(400).json({ error: 'locationId and name required' });
   const id = genId();
+  const photoRef = photo && photo.startsWith('data:') ? savePhotoFile(photo) : (photo || '');
   db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,formTemplateId,photo,replacementBudget,ashraeLifeYears,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photo||'', parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, new Date().toISOString());
-  res.json(db.prepare('SELECT * FROM equipment WHERE id=?').get(id));
+    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photoRef, parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, new Date().toISOString());
+  const eq = db.prepare('SELECT * FROM equipment WHERE id=?').get(id);
+  if (isPhotoRef(eq.photo)) eq.photo = '/api/photos/' + eq.photo;
+  res.json(eq);
 });
 
 app.put('/api/equipment/:id', requireAdmin, (req, res) => {
   const { name, model, serial, yearInstalled, type, notes, formTemplateId, photo, replacementBudget, ashraeLifeYears } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
+  const photoRef = photo && photo.startsWith('data:') ? savePhotoFile(photo) : (photo && photo.startsWith('/api/photos/') ? photo.replace('/api/photos/', '') : (photo || ''));
   db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=?,formTemplateId=?,photo=?,replacementBudget=?,ashraeLifeYears=? WHERE id=?')
-    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photo||'', parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, req.params.id);
-  res.json(db.prepare('SELECT * FROM equipment WHERE id=?').get(req.params.id));
+    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photoRef, parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, req.params.id);
+  const eq = db.prepare('SELECT * FROM equipment WHERE id=?').get(req.params.id);
+  if (isPhotoRef(eq.photo)) eq.photo = '/api/photos/' + eq.photo;
+  res.json(eq);
 });
 
 app.delete('/api/equipment/:id', requireAdmin, (req, res) => {
@@ -1001,7 +1158,10 @@ app.post('/api/reports', requireAuth, async (req, res) => {
     .run(id, equipmentId, type, techName||'', date||'', status||'', workPerformed||'', cause||'',
          parts||'', recommendations||'', nextDate||'', JSON.stringify(checklist||[]),
          refrigerantType||'', suctionPressure||'', dischargePressure||'', supplyTemp||'', returnTemp||'',
-         photoBefore||'', photoAfter||'', photoNameplate||'', workOrderNumber||'',
+         photoBefore && photoBefore.startsWith('data:') ? savePhotoFile(photoBefore) : (photoBefore||''),
+         photoAfter && photoAfter.startsWith('data:') ? savePhotoFile(photoAfter) : (photoAfter||''),
+         photoNameplate && photoNameplate.startsWith('data:') ? savePhotoFile(photoNameplate) : (photoNameplate||''),
+         workOrderNumber||'',
          new Date().toISOString());
   const report = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,createdAt FROM reports WHERE id=?').get(id);
   report.checklist = checklist || [];
@@ -1043,6 +1203,10 @@ app.delete('/api/reports/:id', requireAdmin, (req, res) => {
 app.get('/api/reports/:id/photos', requireAuth, (req, res) => {
   const row = db.prepare('SELECT photoBefore,photoAfter,photoNameplate FROM reports WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Report not found' });
+  // Convert file refs to URLs for frontend display
+  if (row.photoBefore && isPhotoRef(row.photoBefore)) row.photoBefore = '/api/photos/' + row.photoBefore;
+  if (row.photoAfter && isPhotoRef(row.photoAfter)) row.photoAfter = '/api/photos/' + row.photoAfter;
+  if (row.photoNameplate && isPhotoRef(row.photoNameplate)) row.photoNameplate = '/api/photos/' + row.photoNameplate;
   res.json(row);
 });
 
@@ -1103,27 +1267,30 @@ function renderReportSection(r) {
 <td style="padding:5px 10px;font-size:12px;color:#555;">${e(locName)}${locAddr ? '<br>' + e(locAddr) : ''}</td>
 </tr></table>`;
 
-  // EQUIPMENT PHOTO
-  if (eq && eq.photo && eq.photo.length > 50) {
+  // EQUIPMENT PHOTO — resolve file refs to data URIs for PDF/email embedding
+  const eqPhotoUri = eq && eq.photo ? (isPhotoRef(eq.photo) ? readPhotoAsDataUri(eq.photo) : eq.photo) : '';
+  if (eqPhotoUri && eqPhotoUri.length > 50) {
     h += `<div style="text-align:center;margin:20px 0 10px;">
-<img src="${eq.photo}" style="max-width:280px;max-height:220px;border:1px solid #ccc;border-radius:4px;display:block;margin:0 auto;">
+<img src="${eqPhotoUri}" style="max-width:280px;max-height:220px;border:1px solid #ccc;border-radius:4px;display:block;margin:0 auto;">
 <div style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Equipment Photo</div></div>`;
   }
 
-  // SERVICE CALL PHOTOS
-  const hasBefore = r.photoBefore && r.photoBefore.length > 50;
-  const hasAfter = r.photoAfter && r.photoAfter.length > 50;
+  // SERVICE CALL PHOTOS — resolve file refs to data URIs
+  const beforeUri = r.photoBefore ? (isPhotoRef(r.photoBefore) ? readPhotoAsDataUri(r.photoBefore) : r.photoBefore) : '';
+  const afterUri = r.photoAfter ? (isPhotoRef(r.photoAfter) ? readPhotoAsDataUri(r.photoAfter) : r.photoAfter) : '';
+  const hasBefore = beforeUri && beforeUri.length > 50;
+  const hasAfter = afterUri && afterUri.length > 50;
   if (hasBefore || hasAfter) {
     h += `<div style="font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;">Photos from Service Call</div>`;
     h += `<table style="width:100%;border-collapse:collapse;"><tr>`;
     if (hasBefore) {
       h += `<td style="width:50%;text-align:center;padding:8px;vertical-align:top;">
-<img src="${r.photoBefore}" style="max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;">
+<img src="${beforeUri}" style="max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;">
 <div style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Photo Before Work</div></td>`;
     }
     if (hasAfter) {
       h += `<td style="width:50%;text-align:center;padding:8px;vertical-align:top;">
-<img src="${r.photoAfter}" style="max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;">
+<img src="${afterUri}" style="max-width:100%;max-height:280px;border:1px solid #ccc;display:block;margin:0 auto;">
 <div style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Photo of Work After Completion</div></td>`;
     }
     h += `</tr></table>`;
@@ -1156,8 +1323,9 @@ function renderReportSection(r) {
       } else if (f.type === 'text' || f.type === 'select') {
         h += `<div style="padding:4px 0;font-size:13px;"><span style="font-weight:700;">${e(f.label)}:</span> ${e(f.value || 'N/A')}</div>`;
       } else if (f.type === 'photo' && f.value) {
-        h += `<div style="margin:10px 0;"><div style="font-weight:700;font-size:12px;margin-bottom:4px;">${e(f.label)}</div>
-<img src="${f.value}" style="max-width:260px;border:1px solid #ccc;"></div>`;
+        const ckPhotoUri = isPhotoRef(f.value) ? readPhotoAsDataUri(f.value) : f.value;
+        if (ckPhotoUri) h += `<div style="margin:10px 0;"><div style="font-weight:700;font-size:12px;margin-bottom:4px;">${e(f.label)}</div>
+<img src="${ckPhotoUri}" style="max-width:260px;border:1px solid #ccc;"></div>`;
       }
     });
   } else if (Array.isArray(ck) && ck.length > 0) {
@@ -1170,12 +1338,13 @@ function renderReportSection(r) {
     });
   }
 
-  // NAMEPLATE
-  if (r.photoNameplate && r.photoNameplate.length > 50) {
+  // NAMEPLATE — resolve file refs to data URIs
+  const nameplateUri = r.photoNameplate ? (isPhotoRef(r.photoNameplate) ? readPhotoAsDataUri(r.photoNameplate) : r.photoNameplate) : '';
+  if (nameplateUri && nameplateUri.length > 50) {
     h += `<div style="font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;">Additional Images</div>`;
     h += `<table style="width:100%;"><tr>
 <td style="width:50%;text-align:center;padding:8px;vertical-align:top;">
-<img src="${r.photoNameplate}" style="max-width:100%;max-height:240px;border:1px solid #ccc;display:block;margin:0 auto;">
+<img src="${nameplateUri}" style="max-width:100%;max-height:240px;border:1px solid #ccc;display:block;margin:0 auto;">
 <div style="font-size:11px;color:#555;margin-top:4px;">Nameplate</div>
 </td><td style="width:50%;"></td></tr></table>`;
   }
@@ -1539,11 +1708,12 @@ body { font-family: Arial, Helvetica, sans-serif; }
 </style></head><body>
 <div style="max-width:760px;margin:0 auto;padding:20px 28px 40px;font-size:13px;line-height:1.5;color:#1a1a1a;">`;
 
-  // LOGO HEADER
-  const hasLogo = cl && cl.logo && cl.logo.length > 50;
+  // LOGO HEADER — resolve file refs to data URIs for PDF embedding
+  const logoUri = cl && cl.logo ? (isPhotoRef(cl.logo) ? readPhotoAsDataUri(cl.logo) : cl.logo) : '';
+  const hasLogo = logoUri && logoUri.length > 50;
   h += `<table style="width:100%;margin-bottom:20px;"><tr>`;
   h += `<td style="vertical-align:middle;"><div style="font-size:22px;font-weight:700;color:#c0392b;">FieldMark</div><div style="font-size:11px;color:#666;">Service Management</div></td>`;
-  if (hasLogo) h += `<td style="text-align:right;vertical-align:middle;"><img src="${cl.logo}" style="max-height:50px;max-width:140px;"></td>`;
+  if (hasLogo) h += `<td style="text-align:right;vertical-align:middle;"><img src="${logoUri}" style="max-height:50px;max-width:140px;"></td>`;
   h += `</tr></table>`;
 
   // INVOICE HEADER
@@ -1675,11 +1845,12 @@ body { font-family: Arial, Helvetica, sans-serif; }
 </style></head><body>
 <div style="max-width:760px;margin:0 auto;padding:20px 28px 40px;font-size:13px;line-height:1.5;color:#1a1a1a;">`;
 
-  // LOGO HEADER
-  const hasLogo = cl && cl.logo && cl.logo.length > 50;
+  // LOGO HEADER — resolve file refs to data URIs for PDF embedding
+  const logoUri = cl && cl.logo ? (isPhotoRef(cl.logo) ? readPhotoAsDataUri(cl.logo) : cl.logo) : '';
+  const hasLogo = logoUri && logoUri.length > 50;
   h += `<table style="width:100%;margin-bottom:20px;"><tr>`;
   h += `<td style="vertical-align:middle;"><div style="font-size:22px;font-weight:700;color:#3b82f6;">FieldMark</div><div style="font-size:11px;color:#666;">Service Management</div></td>`;
-  if (hasLogo) h += `<td style="text-align:right;vertical-align:middle;"><img src="${cl.logo}" style="max-height:50px;max-width:140px;"></td>`;
+  if (hasLogo) h += `<td style="text-align:right;vertical-align:middle;"><img src="${logoUri}" style="max-height:50px;max-width:140px;"></td>`;
   h += `</tr></table>`;
 
   // QUOTE HEADER
@@ -2067,11 +2238,18 @@ app.post('/api/service-requests', requireClientAuth, serviceRequestLimiter, asyn
     return res.status(400).json({ error: 'A Purchase Order number is required to submit a service request' });
   }
 
-  // Store in database
+  // Store in database — save photos as files
   const srId = genId();
   const now = new Date().toISOString();
+  const savedPhotos = (photos || []).map(p => {
+    if (p && p.startsWith('data:')) {
+      const fn = savePhotoFile(p);
+      return fn ? '/api/photos/' + fn : '';
+    }
+    return p || '';
+  }).filter(p => p);
   db.prepare('INSERT INTO service_requests (id,clientId,locationId,equipmentId,urgency,description,photos,status,poNumber,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(srId, req.session.client.id, locationId, equipmentId||'', urgency, description, JSON.stringify(photos||[]), 'New', poNumber||'', now);
+    .run(srId, req.session.client.id, locationId, equipmentId||'', urgency, description, JSON.stringify(savedPhotos), 'New', poNumber||'', now);
 
   const client = db.prepare('SELECT * FROM clients WHERE id=?').get(req.session.client.id);
   const loc = db.prepare('SELECT * FROM locations WHERE id=?').get(locationId);
@@ -2081,9 +2259,14 @@ app.post('/api/service-requests', requireClientAuth, serviceRequestLimiter, asyn
   const urgencyColors = { 'Routine': '#22c55e', 'Urgent': '#f59e0b', 'Emergency': '#ef4444' };
   const urgencyColor = urgencyColors[urgency] || '#64748b';
 
-  const photosHtml = (photos && photos.length)
-    ? `<tr><td colspan="2" style="padding:16px 0"><p style="color:#64748b;margin:0 0 10px;font-weight:600">Attached Photos (${photos.length})</p>
-        <div>${photos.map((p, i) => `<img src="${p}" alt="Photo ${i+1}" style="max-width:280px;border-radius:6px;margin:4px;border:1px solid #e2e8f0">`).join('')}</div></td></tr>`
+  // Convert saved photo refs to data URIs for email embedding
+  const emailPhotos = savedPhotos.map(p => {
+    if (p.startsWith('/api/photos/')) return readPhotoAsDataUri(p.replace('/api/photos/', ''));
+    return p;
+  }).filter(p => p && p.length > 50);
+  const photosHtml = (emailPhotos.length)
+    ? `<tr><td colspan="2" style="padding:16px 0"><p style="color:#64748b;margin:0 0 10px;font-weight:600">Attached Photos (${emailPhotos.length})</p>
+        <div>${emailPhotos.map((p, i) => `<img src="${p}" alt="Photo ${i+1}" style="max-width:280px;border-radius:6px;margin:4px;border:1px solid #e2e8f0">`).join('')}</div></td></tr>`
     : '';
 
   const html = `

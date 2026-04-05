@@ -325,6 +325,11 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .fb-del{background:none;border:none;color:var(--muted);cursor:pointer;padding:8px;border-radius:6px;flex-shrink:0;transition:all .15s;}
 .fb-del:hover{color:var(--red);background:rgba(239,68,68,.1);}
 .fb-drop-indicator{height:3px;background:var(--accent);border-radius:2px;margin:2px 0;transition:opacity .1s;}
+.fb-drop-indicator-live{height:4px;background:var(--accent);border-radius:3px;margin:4px 0;box-shadow:0 0 0 3px rgba(59,130,246,.18);position:relative;pointer-events:none;animation:fb-ind-pulse 1s ease-in-out infinite;}
+.fb-drop-indicator-live::before,.fb-drop-indicator-live::after{content:"";position:absolute;top:50%;width:10px;height:10px;border-radius:50%;background:var(--accent);transform:translateY(-50%);}
+.fb-drop-indicator-live::before{left:-4px;}
+.fb-drop-indicator-live::after{right:-4px;}
+@keyframes fb-ind-pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
 .fb-mobile-add{display:none;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
 .fb-mobile-reorder{display:none;}
 .fb-field-required-star{color:var(--red);margin-left:2px;}
@@ -5384,42 +5389,118 @@ function fbBuildOptionListEditor(fieldIdx, field) {
 }
 
 function fbDragPalette(e, type) { e.dataTransfer.setData('fb-type', type); e.dataTransfer.effectAllowed = 'copy'; }
-function fbCanvasDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; document.getElementById('fb-canvas').classList.add('drag-over'); }
-function fbCanvasDragLeave(e) { document.getElementById('fb-canvas').classList.remove('drag-over'); }
+function fbCanvasDragOver(e) {
+  e.preventDefault();
+  document.getElementById('fb-canvas').classList.add('drag-over');
+  // If the event target isn't a row, we're in empty canvas space — show indicator at end
+  if (!e.target.closest || !e.target.closest('.fb-wysiwyg-row')) {
+    fbInsertAt = (app.formBuilderFields || []).length;
+    fbShowInsertIndicator(fbInsertAt);
+  }
+}
+function fbCanvasDragLeave(e) {
+  // Only clear when leaving the canvas entirely, not when moving between children
+  const canvas = document.getElementById('fb-canvas');
+  if (!canvas.contains(e.relatedTarget)) {
+    canvas.classList.remove('drag-over');
+    fbClearInsertIndicator();
+  }
+}
 function fbCanvasDrop(e) {
   e.preventDefault();
-  document.getElementById('fb-canvas').classList.remove('drag-over');
+  const canvas = document.getElementById('fb-canvas');
+  canvas.classList.remove('drag-over');
+  const insertAt = (fbInsertAt !== null) ? fbInsertAt : (app.formBuilderFields || []).length;
   const type = e.dataTransfer.getData('fb-type');
-  if (type) { fbAddField(type); return; }
+  if (type) {
+    fbInsertField(type, insertAt);
+    fbClearInsertIndicator();
+    return;
+  }
+  const fromIdx = parseInt(e.dataTransfer.getData('fb-reorder'));
+  if (!isNaN(fromIdx)) {
+    const fields = app.formBuilderFields;
+    let target = insertAt;
+    if (target > fromIdx) target--;
+    if (target !== fromIdx) {
+      const item = fields.splice(fromIdx, 1)[0];
+      fields.splice(target, 0, item);
+      renderFBCanvas();
+    }
+  }
+  fbClearInsertIndicator();
 }
 
 let fbDragIdx = null;
+let fbInsertAt = null; // index where a drop would insert (0..fields.length)
+
 function fbFieldDragStart(e, idx) {
   fbDragIdx = idx;
   e.dataTransfer.setData('fb-reorder', idx.toString());
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => e.target.classList.add('dragging'), 0);
 }
-function fbFieldDragOver(e, idx) { e.preventDefault(); }
+function fbFieldDragOver(e, idx) {
+  e.preventDefault();
+  // Decide top-half vs bottom-half of this row
+  const row = e.currentTarget;
+  const rect = row.getBoundingClientRect();
+  const before = (e.clientY - rect.top) < rect.height / 2;
+  fbInsertAt = before ? idx : idx + 1;
+  fbShowInsertIndicator(fbInsertAt);
+}
 function fbFieldDrop(e, idx) {
   e.preventDefault(); e.stopPropagation();
-  // New field dropped from palette onto an existing row — insert at that position
+  const insertAt = (fbInsertAt !== null) ? fbInsertAt : idx;
   const newType = e.dataTransfer.getData('fb-type');
   if (newType) {
-    fbInsertField(newType, idx);
+    fbInsertField(newType, insertAt);
+    fbClearInsertIndicator();
     document.getElementById('fb-canvas').classList.remove('drag-over');
     return;
   }
-  // Reorder within canvas
   const fromIdx = parseInt(e.dataTransfer.getData('fb-reorder'));
-  if (!isNaN(fromIdx) && fromIdx !== idx) {
+  if (!isNaN(fromIdx)) {
     const fields = app.formBuilderFields;
-    const item = fields.splice(fromIdx, 1)[0];
-    fields.splice(idx, 0, item);
-    renderFBCanvas();
+    let target = insertAt;
+    if (target > fromIdx) target--; // account for removal
+    if (target !== fromIdx) {
+      const item = fields.splice(fromIdx, 1)[0];
+      fields.splice(target, 0, item);
+      renderFBCanvas();
+    }
+  }
+  fbClearInsertIndicator();
+}
+function fbFieldDragEnd(e) {
+  if (e.target.classList) e.target.classList.remove('dragging');
+  fbDragIdx = null;
+  fbClearInsertIndicator();
+}
+
+// Insertion indicator — a blue line shown between rows to preview drop position
+function fbShowInsertIndicator(idx) {
+  const body = document.getElementById('fb-canvas-body');
+  if (!body) return;
+  // Reuse existing indicator or create one
+  let ind = document.getElementById('fb-ins-ind');
+  if (!ind) {
+    ind = document.createElement('div');
+    ind.id = 'fb-ins-ind';
+    ind.className = 'fb-drop-indicator-live';
+  }
+  const rows = body.querySelectorAll('.fb-wysiwyg-row');
+  if (idx >= rows.length) {
+    body.appendChild(ind);
+  } else {
+    body.insertBefore(ind, rows[idx]);
   }
 }
-function fbFieldDragEnd(e) { e.target.classList.remove('dragging'); fbDragIdx = null; }
+function fbClearInsertIndicator() {
+  const ind = document.getElementById('fb-ins-ind');
+  if (ind && ind.parentNode) ind.parentNode.removeChild(ind);
+  fbInsertAt = null;
+}
 
 function fbMakeField(type) {
   const id = 'f_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);

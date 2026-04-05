@@ -5400,9 +5400,17 @@ function fbFieldDragStart(e, idx) {
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => e.target.classList.add('dragging'), 0);
 }
-function fbFieldDragOver(e, idx) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+function fbFieldDragOver(e, idx) { e.preventDefault(); }
 function fbFieldDrop(e, idx) {
   e.preventDefault(); e.stopPropagation();
+  // New field dropped from palette onto an existing row — insert at that position
+  const newType = e.dataTransfer.getData('fb-type');
+  if (newType) {
+    fbInsertField(newType, idx);
+    document.getElementById('fb-canvas').classList.remove('drag-over');
+    return;
+  }
+  // Reorder within canvas
   const fromIdx = parseInt(e.dataTransfer.getData('fb-reorder'));
   if (!isNaN(fromIdx) && fromIdx !== idx) {
     const fields = app.formBuilderFields;
@@ -5413,7 +5421,7 @@ function fbFieldDrop(e, idx) {
 }
 function fbFieldDragEnd(e) { e.target.classList.remove('dragging'); fbDragIdx = null; }
 
-function fbAddField(type) {
+function fbMakeField(type) {
   const id = 'f_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
   const defaults = {
     checkbox: 'New Checkbox', text: 'New Text Field', select: 'New Dropdown', photo: 'Photo', photopair: 'Before / After',
@@ -5424,7 +5432,21 @@ function fbAddField(type) {
   const field = { id, type, label: defaults[type] !== undefined ? defaults[type] : 'New Field', required: false };
   if (type === 'select' || type === 'radio') field.options = ['Pass', 'Fail', 'N/A'];
   if (type === 'multicheck') field.options = ['Option 1', 'Option 2'];
-  app.formBuilderFields.push(field);
+  return field;
+}
+
+function fbAddField(type) {
+  app.formBuilderFields.push(fbMakeField(type));
+  renderFBCanvas();
+}
+
+function fbInsertField(type, idx) {
+  const field = fbMakeField(type);
+  if (typeof idx !== 'number' || idx < 0 || idx > app.formBuilderFields.length) {
+    app.formBuilderFields.push(field);
+  } else {
+    app.formBuilderFields.splice(idx, 0, field);
+  }
   renderFBCanvas();
 }
 

@@ -278,7 +278,11 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .fb-brand-right{text-align:right;font-size:12px;line-height:1.35;}
 .fb-brand-client-name{font-weight:700;color:var(--text);font-size:13px;}
 .fb-brand-client-meta{color:var(--muted);font-size:11px;}
-.fb-brand-title{font-size:18px;font-weight:700;color:var(--text);padding:14px 20px 6px;background:var(--bg);border-left:1px solid var(--border);border-right:1px solid var(--border);letter-spacing:-.2px;}
+.fb-brand-title-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px 10px;background:var(--bg);border-left:1px solid var(--border);border-right:1px solid var(--border);}
+.fb-brand-title{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-.2px;}
+.fb-brand-timestamp{text-align:right;flex-shrink:0;}
+.fb-brand-ts-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
+.fb-brand-ts-val{font-size:12px;font-weight:600;color:var(--text);margin-top:2px;}
 /* WYSIWYG canvas paper */
 .fb-canvas.fb-canvas-paper{padding:0;background:var(--bg);border-style:solid;overflow:hidden;}
 .fb-canvas-paper-body{padding:18px 20px 22px;border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);border-radius:0 0 10px 10px;}
@@ -1187,16 +1191,6 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
                 <div><div style="font-weight:600;">Phone</div><div style="font-size:11px;color:var(--muted)">Phone number</div></div>
               </div>
 
-              <div class="fb-palette-section">Date &amp; Time</div>
-              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'date')">
-                <div class="fb-palette-icon dat"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
-                <div><div style="font-weight:600;">Date</div><div style="font-size:11px;color:var(--muted)">Date picker</div></div>
-              </div>
-              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'time')">
-                <div class="fb-palette-icon tim"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-                <div><div style="font-weight:600;">Time</div><div style="font-size:11px;color:var(--muted)">Time picker</div></div>
-              </div>
-
               <div class="fb-palette-section">Choice</div>
               <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'checkbox')">
                 <div class="fb-palette-icon chk"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
@@ -1252,8 +1246,6 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('number')">+ Number</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('email')">+ Email</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('phone')">+ Phone</button>
-            <button class="btn btn-secondary btn-sm" onclick="fbAddField('date')">+ Date</button>
-            <button class="btn btn-secondary btn-sm" onclick="fbAddField('time')">+ Time</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('checkbox')">+ Checkbox</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('select')">+ Dropdown</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('radio')">+ Radio</button>
@@ -5432,6 +5424,10 @@ function renderFormBrandedHeader(client, title) {
   const cName = c ? esc(c.name || '') : '';
   const cAddr = c ? [c.address, c.city, c.state].filter(Boolean).map(esc).join(', ') : '';
   const cPhone = c && c.phone ? esc(c.phone) : '';
+  // Accept an ISO timestamp; default to now so the builder preview shows current time
+  const ts = arguments.length >= 3 && arguments[2] ? new Date(arguments[2]) : new Date();
+  const dateStr = ts.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+  const timeStr = ts.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
   return `<div class="fb-brand-header">
     <div class="fb-brand-left">
       <div class="fb-brand-fm-icon">
@@ -5449,7 +5445,13 @@ function renderFormBrandedHeader(client, title) {
       ${cPhone ? `<div class="fb-brand-client-meta">${cPhone}</div>` : ''}
     </div>
   </div>
-  <div class="fb-brand-title">${esc(title || '')}</div>`;
+  <div class="fb-brand-title-row">
+    <div class="fb-brand-title">${esc(title || '')}</div>
+    <div class="fb-brand-timestamp">
+      <div class="fb-brand-ts-lbl">Date &amp; Time</div>
+      <div class="fb-brand-ts-val">${esc(dateStr)} &middot; ${esc(timeStr)}</div>
+    </div>
+  </div>`;
 }
 
 // Shared renderer — generates HTML for a set of form-builder fields.
@@ -6874,7 +6876,7 @@ function renderReportDetail() {
     const tpl = (db.formTemplates || []).find(t => t.id === cf.templateId);
     const hdrClient = cl || (tpl ? (db.clients || []).find(x => x.id === tpl.clientId) : null) || null;
     checklistHtml = `<div class="card" style="margin-top:16px;padding:0;overflow:hidden;">
-      ${renderFormBrandedHeader(hdrClient, cf.templateName || 'Custom Form')}
+      ${renderFormBrandedHeader(hdrClient, cf.templateName || 'Custom Form', r.date || r.createdAt)}
       <div class="card-body" style="padding:16px 20px;">
         ${(cf.fields||[]).map(f => renderCustomFieldValue(f)).join('')}
       </div>

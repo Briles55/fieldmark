@@ -305,6 +305,13 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .fb-wysiwyg-opts-edit input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:11px;font-family:inherit;}
 .fb-wysiwyg-opts-edit label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;}
 .fb-photo-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fb-opt-rows{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;}
+.fb-opt-row{display:flex;align-items:center;gap:6px;}
+.fb-opt-row input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit;}
+.fb-opt-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.15);}
+.fb-opt-del{background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;padding:4px 7px;border-radius:4px;font-size:11px;line-height:1;flex-shrink:0;}
+.fb-opt-del:hover{color:var(--red);border-color:var(--red);}
+.fb-opt-add{margin-top:2px;font-size:11px;padding:4px 10px;}
 .fb-field-label{flex:1;}
 .fb-field-label input{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;padding:6px 8px;color:var(--text);font-size:13px;font-family:inherit;transition:all .15s;}
 .fb-field-label input:hover{border-color:var(--border);}
@@ -5261,7 +5268,10 @@ function renderFBCanvas() {
     row.appendChild(preview);
 
     // Options editor for choice-based types
-    if (f.type === 'select' || f.type === 'radio' || f.type === 'multicheck') {
+    if (f.type === 'multicheck') {
+      // Per-row label editor with add/remove — supports any count, each box has its own title
+      row.appendChild(fbBuildOptionListEditor(i, f));
+    } else if (f.type === 'select' || f.type === 'radio') {
       var optsDiv = document.createElement('div');
       optsDiv.className = 'fb-wysiwyg-opts-edit';
       var optsLabel = document.createElement('label');
@@ -5315,6 +5325,64 @@ document.addEventListener('input', function(e) {
   }
 });
 
+// Per-row option editor for multicheck — any number of boxes, each with its own title
+function fbBuildOptionListEditor(fieldIdx, field) {
+  var wrap = document.createElement('div');
+  wrap.className = 'fb-wysiwyg-opts-edit fb-opt-list';
+  var lbl = document.createElement('label');
+  lbl.textContent = 'Checkbox options';
+  wrap.appendChild(lbl);
+
+  var list = document.createElement('div');
+  list.className = 'fb-opt-rows';
+  wrap.appendChild(list);
+
+  function renderRows() {
+    list.innerHTML = '';
+    var opts = field.options || [];
+    opts.forEach(function(opt, optIdx) {
+      var r = document.createElement('div');
+      r.className = 'fb-opt-row';
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = opt;
+      inp.placeholder = 'Option label';
+      inp.oninput = function() {
+        app.formBuilderFields[fieldIdx].options[optIdx] = this.value;
+      };
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'fb-opt-del';
+      del.title = 'Remove';
+      del.innerHTML = '&#10005;';
+      del.onclick = function() {
+        app.formBuilderFields[fieldIdx].options.splice(optIdx, 1);
+        renderRows();
+      };
+      r.appendChild(inp);
+      r.appendChild(del);
+      list.appendChild(r);
+    });
+  }
+  renderRows();
+
+  var addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'btn btn-ghost btn-sm fb-opt-add';
+  addBtn.innerHTML = '+ Add option';
+  addBtn.onclick = function() {
+    if (!app.formBuilderFields[fieldIdx].options) app.formBuilderFields[fieldIdx].options = [];
+    var next = app.formBuilderFields[fieldIdx].options.length + 1;
+    app.formBuilderFields[fieldIdx].options.push('Option ' + next);
+    renderRows();
+    // Refresh the live preview input in the canvas row
+    renderFBCanvas();
+  };
+  wrap.appendChild(addBtn);
+
+  return wrap;
+}
+
 function fbDragPalette(e, type) { e.dataTransfer.setData('fb-type', type); e.dataTransfer.effectAllowed = 'copy'; }
 function fbCanvasDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; document.getElementById('fb-canvas').classList.add('drag-over'); }
 function fbCanvasDragLeave(e) { document.getElementById('fb-canvas').classList.remove('drag-over'); }
@@ -5355,7 +5423,7 @@ function fbAddField(type) {
   };
   const field = { id, type, label: defaults[type] !== undefined ? defaults[type] : 'New Field', required: false };
   if (type === 'select' || type === 'radio') field.options = ['Pass', 'Fail', 'N/A'];
-  if (type === 'multicheck') field.options = ['Option 1', 'Option 2', 'Option 3'];
+  if (type === 'multicheck') field.options = ['Option 1', 'Option 2'];
   app.formBuilderFields.push(field);
   renderFBCanvas();
 }

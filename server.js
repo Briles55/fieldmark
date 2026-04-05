@@ -104,6 +104,13 @@ db.exec(`
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS onboarding_tokens (
+    id        TEXT PRIMARY KEY,
+    email     TEXT NOT NULL,
+    status    TEXT NOT NULL DEFAULT 'pending',
+    data      TEXT DEFAULT '',
+    createdAt TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS service_requests (
     id          TEXT PRIMARY KEY,
     clientId    TEXT NOT NULL,
@@ -1143,6 +1150,114 @@ app.delete('/api/form-templates/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM form_templates WHERE id=?').run(req.params.id);
   // Clear formTemplateId from any equipment using this template
   db.prepare("UPDATE equipment SET formTemplateId='' WHERE formTemplateId=?").run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ─── ONBOARDING ──────────────────────────────────────────────────────────────
+function generateOnboardingToken(id) {
+  return crypto.createHmac('sha256', SECRET).update(id + ':fieldmark-onboard').digest('hex').slice(0, 32);
+}
+
+// Admin: send onboarding link
+app.post('/api/onboarding/send', requireAdmin, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+  const id = genId();
+  const token = generateOnboardingToken(id);
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO onboarding_tokens (id,email,status,data,createdAt) VALUES (?,?,?,?,?)')
+    .run(token, email, 'pending', '', now);
+
+  // Send email
+  try {
+    const cfg = getEmailSettings();
+    if (!cfg.enabled || !cfg.smtpUser || !cfg.smtpPass) {
+      return res.json({ ok: true, token, emailSent: false, reason: 'Email not configured' });
+    }
+    const appUrl = (cfg.appUrl || '').replace(/\/$/, '');
+    const link = appUrl ? `${appUrl}/onboard?token=${token}` : '';
+    if (!link) return res.json({ ok: true, token, emailSent: false, reason: 'App URL not configured' });
+    const fromName = cfg.fromName || 'FieldMark';
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com', port: 587, secure: false,
+      auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
+    });
+    await transporter.sendMail({
+      from: `"${fromName}" <${cfg.smtpUser}>`,
+      to: email,
+      subject: 'Welcome to FieldMark — Complete Your Onboarding',
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222;">
+        <div style="background:#1a1d27;padding:24px 32px;border-radius:8px 8px 0 0;">
+          <h1 style="color:#3b82f6;margin:0;font-size:22px;">FieldMark</h1>
+          <p style="color:#94a3b8;margin:4px 0 0;">Customer Onboarding</p>
+        </div>
+        <div style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+          <h2 style="margin:0 0 12px;font-size:18px;">You've been invited!</h2>
+          <p style="color:#555;line-height:1.6;">We'd love to bring you on as a customer. Please click the button below to fill out your company details so we can get you set up.</p>
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${link}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:600;font-size:15px;">Complete Onboarding</a>
+          </div>
+          <p style="color:#94a3b8;font-size:12px;">If the button doesn't work, copy this link: ${link}</p>
+        </div>
+      </div>`,
+    });
+    res.json({ ok: true, token, emailSent: true });
+  } catch (err) {
+    console.error('Onboarding email error:', err.message);
+    res.json({ ok: true, token, emailSent: false, reason: err.message });
+  }
+});
+
+// Admin: list all onboarding submissions
+app.get('/api/onboarding', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM onboarding_tokens ORDER BY createdAt DESC').all();
+  rows.forEach(r => { try { r.data = r.data ? JSON.parse(r.data) : null; } catch { r.data = null; } });
+  res.json(rows);
+});
+
+// Public: verify token
+app.get('/api/onboarding/:token', (req, res) => {
+  const row = db.prepare('SELECT * FROM onboarding_tokens WHERE id=?').get(req.params.token);
+  if (!row) return res.status(404).json({ error: 'Invalid or expired link' });
+  if (row.status === 'completed') return res.status(400).json({ error: 'This form has already been submitted' });
+  res.json({ valid: true, email: row.email });
+});
+
+// Public: submit onboarding form
+app.post('/api/onboarding/:token', (req, res) => {
+  const row = db.prepare('SELECT * FROM onboarding_tokens WHERE id=?').get(req.params.token);
+  if (!row) return res.status(404).json({ error: 'Invalid or expired link' });
+  if (row.status === 'completed') return res.status(400).json({ error: 'Already submitted' });
+  const data = req.body;
+  if (!data.companyName) return res.status(400).json({ error: 'Company name is required' });
+  db.prepare('UPDATE onboarding_tokens SET status=?,data=? WHERE id=?')
+    .run('completed', JSON.stringify(data), req.params.token);
+  res.json({ ok: true });
+});
+
+// Admin: approve onboarding → create client
+app.post('/api/onboarding/:token/approve', requireAdmin, async (req, res) => {
+  const row = db.prepare('SELECT * FROM onboarding_tokens WHERE id=?').get(req.params.token);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  let data;
+  try { data = JSON.parse(row.data); } catch { return res.status(400).json({ error: 'No data to approve' }); }
+
+  const id = genId();
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,passwordHash,logo,billingContact,billingEmail,billingPhone,billingAddress,paymentTerms,poRequired,taxId,creditLimit,accountNumber,defaultRate,arNotes,ratePlumber,rateHvacB,rateHvacA,rateElectrician,rateApprentice,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, data.companyName||'', data.phone||'', data.email||'', data.address||'', data.city||'', data.state||'', data.notes||'', '', '',
+         data.billingContact||'', data.billingEmail||'', data.billingPhone||'', data.billingAddress||'',
+         data.paymentTerms||'', data.poRequired||'No', data.taxId||'', '', data.accountNumber||'', '', '', '', '', '', '', now);
+
+  db.prepare('DELETE FROM onboarding_tokens WHERE id=?').run(req.params.token);
+
+  const client = db.prepare('SELECT * FROM clients WHERE id=?').get(id);
+  res.json({ ok: true, client });
+});
+
+// Admin: dismiss onboarding submission
+app.delete('/api/onboarding/:token', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM onboarding_tokens WHERE id=?').run(req.params.token);
   res.json({ ok: true });
 });
 
@@ -2762,6 +2877,149 @@ app.post('/api/import', requireAdmin, (req, res) => {
   });
   const counts = importAll();
   res.json({ ok: true, imported: counts });
+});
+
+// ─── ONBOARDING PUBLIC PAGE ──────────────────────────────────────────────────
+app.get('/onboard', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Customer Onboarding — FieldMark</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;color:#1a1a2e;min-height:100vh}
+.hd{background:#1a1d27;padding:20px 28px;display:flex;align-items:center;gap:12px}
+.hd-icon{width:36px;height:36px;background:rgba(59,130,246,.15);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.hd-icon svg{width:20px;height:20px}
+.hd-name{font-size:20px;font-weight:700;color:#3b82f6;letter-spacing:-.5px}
+.hd-sub{font-size:11px;color:#94a3b8}
+.wrap{max-width:680px;margin:32px auto;padding:0 16px 60px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px}
+.card-hd{padding:16px 24px;border-bottom:1px solid #e2e8f0;font-size:15px;font-weight:700;color:#1a1a2e}
+.card-body{padding:24px}
+.fg{margin-bottom:16px}
+.flbl{display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+.fc{width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;color:#1a1a2e;background:#fff;transition:border .15s}
+.fc:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+textarea.fc{min-height:80px;resize:vertical}
+select.fc{appearance:auto}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:520px){.fr{grid-template-columns:1fr}}
+.req{color:#ef4444;margin-left:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 28px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-primary{background:#3b82f6;color:#fff}
+.btn-primary:hover{background:#2563eb}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.thanks{text-align:center;padding:60px 20px}
+.thanks h2{font-size:24px;margin-bottom:8px}
+.thanks p{color:#64748b;font-size:14px}
+.err{text-align:center;padding:60px 20px;color:#ef4444}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:99;display:none}
+</style>
+</head><body>
+<div class="hd">
+  <div class="hd-icon"><svg fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
+  <div><div class="hd-name">FieldMark</div><div class="hd-sub">Customer Onboarding</div></div>
+</div>
+<div class="wrap" id="main">
+  <div style="text-align:center;padding:60px 20px;color:#94a3b8;">Loading...</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+  var token = new URLSearchParams(location.search).get('token');
+  var main = document.getElementById('main');
+  if(!token){main.innerHTML='<div class="err"><h2>Invalid Link</h2><p>No onboarding token found in the URL.</p></div>';return}
+
+  fetch('/api/onboarding/'+token).then(function(r){return r.json()}).then(function(d){
+    if(d.error){main.innerHTML='<div class="err"><h2>Link Unavailable</h2><p>'+esc(d.error)+'</p></div>';return}
+    renderForm(d.email);
+  }).catch(function(){main.innerHTML='<div class="err"><h2>Error</h2><p>Could not verify this link.</p></div>'});
+
+  function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+
+  function renderForm(email){
+    main.innerHTML=
+    '<h2 style="font-size:22px;margin-bottom:4px;">Welcome!</h2>'+
+    '<p style="color:#64748b;margin-bottom:24px;">Please fill out your company details below so we can get you set up.</p>'+
+    '<form id="ob-form" onsubmit="return false">'+
+      '<div class="card"><div class="card-hd">Company Information</div><div class="card-body">'+
+        '<div class="fg"><label class="flbl">Company Name<span class="req">*</span></label><input class="fc" id="ob-name" required placeholder="ACME Corporation"></div>'+
+        '<div class="fg"><label class="flbl">Contact Name</label><input class="fc" id="ob-contact" placeholder="John Smith"></div>'+
+        '<div class="fr">'+
+          '<div class="fg"><label class="flbl">Phone</label><input class="fc" type="tel" id="ob-phone" placeholder="(555) 000-0000"></div>'+
+          '<div class="fg"><label class="flbl">Email</label><input class="fc" type="email" id="ob-email" value="'+esc(email)+'" placeholder="contact@company.com"></div>'+
+        '</div>'+
+        '<div class="fg"><label class="flbl">Address</label><input class="fc" id="ob-address" placeholder="123 Main St"></div>'+
+        '<div class="fr">'+
+          '<div class="fg"><label class="flbl">City</label><input class="fc" id="ob-city" placeholder="City"></div>'+
+          '<div class="fg"><label class="flbl">State / Province</label><input class="fc" id="ob-state" placeholder="State"></div>'+
+        '</div>'+
+      '</div></div>'+
+
+      '<div class="card"><div class="card-hd">Billing &amp; Accounts</div><div class="card-body">'+
+        '<div class="fr">'+
+          '<div class="fg"><label class="flbl">Billing Contact</label><input class="fc" id="ob-bcont" placeholder="Billing contact name"></div>'+
+          '<div class="fg"><label class="flbl">Billing Email</label><input class="fc" type="email" id="ob-bemail" placeholder="billing@company.com"></div>'+
+        '</div>'+
+        '<div class="fr">'+
+          '<div class="fg"><label class="flbl">Billing Phone</label><input class="fc" type="tel" id="ob-bphone" placeholder="(555) 000-0000"></div>'+
+          '<div class="fg"><label class="flbl">Payment Terms</label><select class="fc" id="ob-terms"><option value="">— Select —</option><option>Due on Receipt</option><option>Net 15</option><option>Net 30</option><option>Net 45</option><option>Net 60</option><option>Net 90</option></select></div>'+
+        '</div>'+
+        '<div class="fg"><label class="flbl">Billing Address</label><input class="fc" id="ob-baddr" placeholder="If different from company address"></div>'+
+        '<div class="fr">'+
+          '<div class="fg"><label class="flbl">PO Required</label><select class="fc" id="ob-po"><option>No</option><option>Yes</option></select></div>'+
+          '<div class="fg"><label class="flbl">Tax ID</label><input class="fc" id="ob-tax" placeholder="Tax ID / EIN"></div>'+
+        '</div>'+
+        '<div class="fg"><label class="flbl">Account Number</label><input class="fc" id="ob-acct" placeholder="Your account # (if applicable)"></div>'+
+      '</div></div>'+
+
+      '<div class="card"><div class="card-hd">Additional Notes</div><div class="card-body">'+
+        '<div class="fg" style="margin:0"><label class="flbl">Notes</label><textarea class="fc" id="ob-notes" placeholder="Anything else we should know..."></textarea></div>'+
+      '</div></div>'+
+
+      '<div style="text-align:right;margin-top:8px;"><button class="btn btn-primary" type="button" id="ob-submit">Submit Onboarding</button></div>'+
+    '</form>';
+
+    document.getElementById('ob-submit').onclick=function(){
+      var name=document.getElementById('ob-name').value.trim();
+      if(!name){showToast('Company name is required');return}
+      var body={
+        companyName:name,
+        contactName:document.getElementById('ob-contact').value.trim(),
+        phone:document.getElementById('ob-phone').value.trim(),
+        email:document.getElementById('ob-email').value.trim(),
+        address:document.getElementById('ob-address').value.trim(),
+        city:document.getElementById('ob-city').value.trim(),
+        state:document.getElementById('ob-state').value.trim(),
+        billingContact:document.getElementById('ob-bcont').value.trim(),
+        billingEmail:document.getElementById('ob-bemail').value.trim(),
+        billingPhone:document.getElementById('ob-bphone').value.trim(),
+        billingAddress:document.getElementById('ob-baddr').value.trim(),
+        paymentTerms:document.getElementById('ob-terms').value,
+        poRequired:document.getElementById('ob-po').value,
+        taxId:document.getElementById('ob-tax').value.trim(),
+        accountNumber:document.getElementById('ob-acct').value.trim(),
+        notes:document.getElementById('ob-notes').value.trim()
+      };
+      var btn=document.getElementById('ob-submit');
+      btn.disabled=true;btn.textContent='Submitting...';
+      fetch('/api/onboarding/'+token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){return r.json()})
+        .then(function(d){
+          if(d.error){showToast(d.error);btn.disabled=false;btn.textContent='Submit Onboarding';return}
+          main.innerHTML='<div class="thanks"><div style="font-size:48px;margin-bottom:12px;">&#10003;</div><h2>Thank You!</h2><p>Your details have been submitted. We\\'ll get you set up shortly.</p></div>';
+        })
+        .catch(function(){showToast('Network error — please try again');btn.disabled=false;btn.textContent='Submit Onboarding'});
+    };
+  }
+
+  function showToast(msg){
+    var t=document.getElementById('toast');t.textContent=msg;t.style.display='block';
+    setTimeout(function(){t.style.display='none'},4000);
+  }
+})();
+<\/script>
+</body></html>`);
 });
 
 // ─── CATCH-ALL → SPA ──────────────────────────────────────────────────────────

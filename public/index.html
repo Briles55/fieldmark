@@ -568,6 +568,19 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           <div id="dash-clients"></div>
         </div>
       </div>
+      <div class="card admin-only" style="margin-top:24px;" id="dash-onboarding-card">
+        <div class="card-hd">
+          <span class="card-title">Onboard New Customer</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Send a potential customer a link to fill out their company details. Their submission will appear below for your review.</p>
+          <div style="display:flex;gap:8px;max-width:500px;">
+            <input class="fc" type="email" id="onboard-email" placeholder="customer@example.com" style="flex:1;">
+            <button class="btn btn-primary" onclick="sendOnboardingLink()" id="onboard-send-btn">Send Link</button>
+          </div>
+        </div>
+        <div id="dash-onboarding-queue"></div>
+      </div>
     </div>
 
     <!-- CLIENTS -->
@@ -5865,6 +5878,8 @@ function renderDashboard() {
       </div>`;
     }).join('');
   }
+  // Load onboarding queue
+  renderOnboardingQueue();
 }
 
 function openDashQuotes() {
@@ -5881,6 +5896,138 @@ function openDashQuotes() {
   h += '<div class=”stat-lbl” style=”font-size:14px;margin-top:6px;”>Approved Quotes</div></div>';
   h += '</div></div>';
   openModal('modal-dash-quotes', 'Quotes', h);
+}
+
+// ─── ONBOARDING ──────────────────────────────────────────────────────────────
+async function sendOnboardingLink() {
+  var email = document.getElementById('onboard-email').value.trim();
+  if (!email) { showToast('Enter an email address', 'error'); return; }
+  var btn = document.getElementById('onboard-send-btn');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    var resp = await apiPost('/api/onboarding/send', { email });
+    if (resp.emailSent) {
+      showToast('Onboarding link sent to ' + email, 'success');
+    } else {
+      showToast('Link created but email not sent — ' + (resp.reason || 'check email settings'), 'warning');
+    }
+    document.getElementById('onboard-email').value = '';
+    renderOnboardingQueue();
+  } catch (err) { showToast(err.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Send Link';
+}
+
+async function renderOnboardingQueue() {
+  var container = document.getElementById('dash-onboarding-queue');
+  if (!container) return;
+  try {
+    var list = await fetch('/api/onboarding', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('fm_token') } }).then(function(r) { return r.json(); });
+    if (!Array.isArray(list) || list.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+    var tbody = document.createElement('div');
+    tbody.style.cssText = 'border-top:1px solid var(--border);';
+    list.forEach(function(row) {
+      var item = document.createElement('div');
+      item.style.cssText = 'padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;';
+
+      var left = document.createElement('div');
+      left.style.cssText = 'min-width:0;flex:1;';
+      var emailDiv = document.createElement('div');
+      emailDiv.style.cssText = 'font-size:13px;font-weight:500;';
+      emailDiv.textContent = row.email;
+      left.appendChild(emailDiv);
+
+      var meta = document.createElement('div');
+      meta.style.cssText = 'font-size:11px;color:var(--muted);';
+      var dateStr = row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '';
+      if (row.status === 'completed' && row.data) {
+        meta.textContent = (row.data.companyName || 'Unnamed') + ' \u2022 ' + dateStr;
+      } else {
+        meta.textContent = 'Pending \u2022 ' + dateStr;
+      }
+      left.appendChild(meta);
+      item.appendChild(left);
+
+      var badge = document.createElement('span');
+      badge.className = 'badge ' + (row.status === 'completed' ? 'bg' : 'bgr');
+      badge.textContent = row.status === 'completed' ? 'Submitted' : 'Pending';
+      item.appendChild(badge);
+
+      var actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
+
+      if (row.status === 'completed') {
+        var reviewBtn = document.createElement('button');
+        reviewBtn.className = 'btn btn-ghost btn-sm';
+        reviewBtn.textContent = 'Review';
+        (function(r) { reviewBtn.onclick = function() { reviewOnboarding(r); }; })(row);
+        actions.appendChild(reviewBtn);
+
+        var approveBtn = document.createElement('button');
+        approveBtn.className = 'btn btn-primary btn-sm';
+        approveBtn.textContent = 'Approve';
+        (function(r) { approveBtn.onclick = function() { approveOnboarding(r.id); }; })(row);
+        actions.appendChild(approveBtn);
+      }
+
+      var dismissBtn = document.createElement('button');
+      dismissBtn.className = 'btn btn-danger btn-sm';
+      dismissBtn.textContent = 'Dismiss';
+      (function(r) { dismissBtn.onclick = function() { dismissOnboarding(r.id); }; })(row);
+      actions.appendChild(dismissBtn);
+
+      item.appendChild(actions);
+      tbody.appendChild(item);
+    });
+    container.innerHTML = '';
+    container.appendChild(tbody);
+  } catch (err) { console.error('Onboarding queue error:', err); }
+}
+
+function reviewOnboarding(row) {
+  var d = row.data || {};
+  var fields = [
+    ['Company Name', d.companyName], ['Contact Name', d.contactName],
+    ['Phone', d.phone], ['Email', d.email],
+    ['Address', d.address], ['City', d.city], ['State', d.state],
+    ['Billing Contact', d.billingContact], ['Billing Email', d.billingEmail],
+    ['Billing Phone', d.billingPhone], ['Billing Address', d.billingAddress],
+    ['Payment Terms', d.paymentTerms], ['PO Required', d.poRequired],
+    ['Tax ID', d.taxId], ['Account Number', d.accountNumber],
+    ['Notes', d.notes]
+  ];
+  var html = '<div style=”padding:20px;”>';
+  html += fields.map(function(f) {
+    if (!f[1]) return '';
+    return '<div style=”padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;”>' +
+      '<span style=”font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;”>' + esc(f[0]) + '</span>' +
+      '<span style=”font-size:13px;text-align:right;”>' + esc(f[1]) + '</span></div>';
+  }).filter(Boolean).join('');
+  html += '<div style=”margin-top:16px;display:flex;justify-content:flex-end;gap:8px;”>' +
+    '<button class=”btn btn-secondary btn-sm” onclick=”closeModal(\'modal-dash-quotes\')”>Close</button>' +
+    '<button class=”btn btn-primary btn-sm” onclick=”closeModal(\'modal-dash-quotes\');approveOnboarding(\'' + esc(row.id) + '\')”>Approve &amp; Create Client</button>' +
+    '</div></div>';
+  openModal('modal-dash-quotes', 'Onboarding Review — ' + esc(d.companyName || row.email), html);
+}
+
+async function approveOnboarding(token) {
+  try {
+    await apiPost('/api/onboarding/' + token + '/approve', {});
+    showToast('Client created from onboarding', 'success');
+    await loadDB();
+    renderDashboard();
+    renderOnboardingQueue();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function dismissOnboarding(token) {
+  try {
+    await apiPost('/api/onboarding/' + token, {}, 'DELETE');
+    showToast('Onboarding dismissed', 'success');
+    renderOnboardingQueue();
+  } catch (err) { showToast(err.message, 'error'); }
 }
 
 // â”€â”€â”€ CLIENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

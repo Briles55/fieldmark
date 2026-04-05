@@ -344,6 +344,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
   .fb-mobile-reorder button:hover{color:var(--text);background:var(--surface2);}
 }
 
+/* EQUIPMENT THUMBNAILS */
+.eq-thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:block;}
+.eq-thumb-empty{width:42px;height:42px;border-radius:6px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);background:var(--bg2);}
+
 /* PHOTO FIELDS */
 .photo-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
 .photo-field{display:flex;flex-direction:column;align-items:center;gap:8px;}
@@ -699,6 +703,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           <table>
             <thead>
               <tr>
+                <th style="width:52px;"></th>
                 <th>Name</th>
                 <th>Model #</th>
                 <th>Serial #</th>
@@ -893,6 +898,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           <table>
             <thead>
               <tr>
+                <th style="width:52px;"></th>
                 <th>Name</th>
                 <th>Model</th>
                 <th>Serial</th>
@@ -2417,13 +2423,14 @@ function renderPortalEquipment(search) {
   document.getElementById('portal-eq-sub').textContent = `${list.length} unit(s)`;
   const tbody = document.getElementById('portal-eq-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan=”6”><div class=”empty”><div class=”empty-ico”>\u2699\uFE0F</div><div class=”empty-title”>No equipment found</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan=”7”><div class=”empty”><div class=”empty-ico”>\u2699\uFE0F</div><div class=”empty-title”>No equipment found</div></div></td></tr>';
     return;
   }
   tbody.innerHTML = list.map(e => {
     const loc = db.locations.find(l=>l.id===e.locationId);
     const rptCount = db.reports.filter(r=>r.equipmentId===e.id).length;
     return `<tr class=”clickable” onclick=”openEquipmentView('${e.id}')”>
+      <td>${hasPhoto(e.photo)?`<img src=”${esc(e.photo)}” class=”eq-thumb”>`:`<div class=”eq-thumb-empty”><svg width=”18” height=”18” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”1.5” d=”M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z”/></svg></div>`}</td>
       <td><strong>${esc(e.name)}</strong></td>
       <td>${esc(e.model||'\u2014')}</td>
       <td>${esc(e.serial||'\u2014')}</td>
@@ -6281,7 +6288,7 @@ function renderEquipmentTable() {
   const list = db.equipment.filter(e=>e.locationId===app.locationId);
   const tbody = document.getElementById('equipment-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-ico">\u2699\uFE0F</div><div class="empty-title">No equipment yet</div><div class="empty-desc">Add equipment for this location</div>${isAdmin()?'<button class="btn btn-primary" onclick="openEquipmentModal()">Add Equipment</button>':''}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-ico">\u2699\uFE0F</div><div class="empty-title">No equipment yet</div><div class="empty-desc">Add equipment for this location</div>${isAdmin()?'<button class="btn btn-primary" onclick="openEquipmentModal()">Add Equipment</button>':''}</div></td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(e => {
@@ -6289,6 +6296,7 @@ function renderEquipmentTable() {
     const lastSvc = reports.find(r=>r.type==='service');
     const lastRpt = reports[0];
     return `<tr class="clickable" onclick="openEquipmentView('${e.id}')">
+      <td>${hasPhoto(e.photo)?`<img src="${esc(e.photo)}" class="eq-thumb">`:`<div class="eq-thumb-empty"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>`}</td>
       <td><strong>${esc(e.name)}</strong>${e.type?`<br><span style="font-size:11px;color:var(--muted)">${esc(e.type)}</span>`:''}</td>
       <td><code style="font-size:12px;color:var(--muted)">${esc(e.model||'\u2014')}</code></td>
       <td><code style="font-size:12px;color:var(--muted)">${esc(e.serial||'\u2014')}</code></td>

@@ -220,6 +220,20 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .fb-palette-icon.txt{background:rgba(59,130,246,.15);color:var(--accent);}
 .fb-palette-icon.sel{background:rgba(245,158,11,.15);color:var(--amber);}
 .fb-palette-icon.pho{background:rgba(168,85,247,.15);color:#a855f7;}
+.fb-palette-icon.tar{background:rgba(59,130,246,.15);color:var(--accent);}
+.fb-palette-icon.num{background:rgba(20,184,166,.15);color:#14b8a6;}
+.fb-palette-icon.dat{background:rgba(236,72,153,.15);color:#ec4899;}
+.fb-palette-icon.tim{background:rgba(236,72,153,.15);color:#ec4899;}
+.fb-palette-icon.eml{background:rgba(99,102,241,.15);color:#6366f1;}
+.fb-palette-icon.phn{background:rgba(99,102,241,.15);color:#6366f1;}
+.fb-palette-icon.rad{background:rgba(245,158,11,.15);color:var(--amber);}
+.fb-palette-icon.mch{background:rgba(34,197,94,.15);color:var(--green);}
+.fb-palette-icon.rat{background:rgba(245,158,11,.15);color:var(--amber);}
+.fb-palette-icon.sig{background:rgba(168,85,247,.15);color:#a855f7;}
+.fb-palette-icon.hed{background:rgba(100,116,139,.15);color:#64748b;}
+.fb-palette-icon.div{background:rgba(100,116,139,.15);color:#64748b;}
+.fb-palette-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:12px 4px 6px;}
+.fb-palette-section:first-child{margin-top:0;}
 .fb-canvas{min-height:200px;border:2px dashed var(--border);border-radius:12px;padding:16px;transition:all .25s ease;background:var(--surface);}
 .fb-canvas.drag-over{border-color:var(--accent);background:rgba(59,130,246,.04);box-shadow:0 0 0 4px rgba(59,130,246,.08);}
 .fb-canvas-empty{text-align:center;padding:60px 20px;color:var(--muted);}
@@ -236,6 +250,25 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .fb-field-type.txt{background:rgba(59,130,246,.15);color:var(--accent);}
 .fb-field-type.sel{background:rgba(245,158,11,.15);color:var(--amber);}
 .fb-field-type.pho{background:rgba(168,85,247,.15);color:#a855f7;}
+.fb-field-type.tar{background:rgba(59,130,246,.15);color:var(--accent);}
+.fb-field-type.num{background:rgba(20,184,166,.15);color:#14b8a6;}
+.fb-field-type.dat{background:rgba(236,72,153,.15);color:#ec4899;}
+.fb-field-type.tim{background:rgba(236,72,153,.15);color:#ec4899;}
+.fb-field-type.eml{background:rgba(99,102,241,.15);color:#6366f1;}
+.fb-field-type.phn{background:rgba(99,102,241,.15);color:#6366f1;}
+.fb-field-type.rad{background:rgba(245,158,11,.15);color:var(--amber);}
+.fb-field-type.mch{background:rgba(34,197,94,.15);color:var(--green);}
+.fb-field-type.rat{background:rgba(245,158,11,.15);color:var(--amber);}
+.fb-field-type.sig{background:rgba(168,85,247,.15);color:#a855f7;}
+.fb-field-type.hed{background:rgba(100,116,139,.15);color:#64748b;}
+.fb-field-type.div{background:rgba(100,116,139,.15);color:#64748b;}
+/* Preview modal */
+.fb-preview-rating{display:inline-flex;gap:4px;font-size:22px;color:#fbbf24;cursor:pointer;user-select:none;}
+.fb-preview-rating span{transition:transform .1s;}
+.fb-preview-rating span:hover{transform:scale(1.2);}
+.fb-sig-pad{width:100%;max-width:420px;height:140px;border:2px dashed var(--border);border-radius:8px;background:var(--surface);touch-action:none;cursor:crosshair;}
+.fb-heading-preview{font-size:16px;font-weight:700;color:var(--text);padding:12px 0 6px;border-bottom:2px solid var(--border);margin:8px 0 4px;}
+.fb-divider-preview{height:1px;background:var(--border);margin:12px 0;}
 .fb-field-label{flex:1;}
 .fb-field-label input{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;padding:6px 8px;color:var(--text);font-size:13px;font-family:inherit;transition:all .15s;}
 .fb-field-label input:hover{border-color:var(--border);}
@@ -428,7 +461,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     </button>
     <button id="nav-form-templates" class="nav-item" onclick="nav('form-templates',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-      Form Templates
+      Form Builder
     </button>
     <button id="nav-users" class="nav-item" onclick="nav('users',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
@@ -1048,19 +1081,19 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <!-- FORM TEMPLATES (admin only) -->
     <div id="view-form-templates" class="view">
       <div class="ph">
-        <div><div class="ph-title">Form Templates</div><div class="ph-sub" id="templates-sub">Custom inspection checklists for equipment</div></div>
+        <div><div class="ph-title">Form Builder</div><div class="ph-sub" id="templates-sub">Build custom forms with drag and drop</div></div>
         <button class="btn btn-primary" onclick="openFormBuilder()">
           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          New Template
+          New Form
         </button>
       </div>
       <div class="card">
-        <div class="card-hd"><span class="card-title">All Templates</span></div>
+        <div class="card-hd"><span class="card-title">All Forms</span></div>
         <div class="tbl-wrap">
           <table>
             <thead>
               <tr>
-                <th>Template Name</th>
+                <th>Form Name</th>
                 <th>Fields</th>
                 <th>Created</th>
                 <th>Updated</th>
@@ -1077,45 +1110,114 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <div id="view-form-builder" class="view">
       <div class="back-link" onclick="showView('form-templates')">
         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-        Back to Templates
+        Back to Forms
       </div>
       <div class="ph">
-        <div><div class="ph-title" id="fb-title">New Template</div><div class="ph-sub">Drag fields from the palette to build your inspection form</div></div>
+        <div><div class="ph-title" id="fb-title">New Form</div><div class="ph-sub">Drag fields from the palette on the left onto the canvas to build your form</div></div>
       </div>
       <div class="fg" style="max-width:400px;margin-bottom:20px;">
-        <label class="flbl">Template Name *</label>
+        <label class="flbl">Form Name *</label>
         <input class="fc" type="text" id="fb-name" placeholder="e.g. RTU Maintenance Checklist">
       </div>
       <div class="fb-layout">
         <div class="fb-palette">
           <div class="card">
             <div class="card-hd"><span class="card-title">Field Types</span></div>
-            <div class="card-body" style="padding:12px;">
+            <div class="card-body" style="padding:12px;max-height:calc(100vh - 140px);overflow-y:auto;">
+              <div class="fb-palette-section">Text</div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'text')">
+                <div class="fb-palette-icon txt"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+                <div><div style="font-weight:600;">Text Input</div><div style="font-size:11px;color:var(--muted)">Single line</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'textarea')">
+                <div class="fb-palette-icon tar"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h10"/></svg></div>
+                <div><div style="font-weight:600;">Text Area</div><div style="font-size:11px;color:var(--muted)">Multi-line notes</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'number')">
+                <div class="fb-palette-icon num"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/></svg></div>
+                <div><div style="font-weight:600;">Number</div><div style="font-size:11px;color:var(--muted)">Numeric input</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'email')">
+                <div class="fb-palette-icon eml"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></div>
+                <div><div style="font-weight:600;">Email</div><div style="font-size:11px;color:var(--muted)">Email address</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'phone')">
+                <div class="fb-palette-icon phn"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.95.68l1.5 4.49a1 1 0 01-.5 1.2l-2.25 1.12a11 11 0 005.5 5.5l1.12-2.25a1 1 0 011.2-.5l4.49 1.5a1 1 0 01.68.95V19a2 2 0 01-2 2h-1C9.72 21 3 14.28 3 6V5z"/></svg></div>
+                <div><div style="font-weight:600;">Phone</div><div style="font-size:11px;color:var(--muted)">Phone number</div></div>
+              </div>
+
+              <div class="fb-palette-section">Date &amp; Time</div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'date')">
+                <div class="fb-palette-icon dat"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
+                <div><div style="font-weight:600;">Date</div><div style="font-size:11px;color:var(--muted)">Date picker</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'time')">
+                <div class="fb-palette-icon tim"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                <div><div style="font-weight:600;">Time</div><div style="font-size:11px;color:var(--muted)">Time picker</div></div>
+              </div>
+
+              <div class="fb-palette-section">Choice</div>
               <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'checkbox')">
                 <div class="fb-palette-icon chk"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
                 <div><div style="font-weight:600;">Checkbox</div><div style="font-size:11px;color:var(--muted)">Yes / No toggle</div></div>
               </div>
-              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'text')">
-                <div class="fb-palette-icon txt"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
-                <div><div style="font-weight:600;">Text Input</div><div style="font-size:11px;color:var(--muted)">Free-text notes</div></div>
-              </div>
               <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'select')">
-                <div class="fb-palette-icon sel"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/></svg></div>
-                <div><div style="font-weight:600;">Dropdown</div><div style="font-size:11px;color:var(--muted)">Select from options</div></div>
+                <div class="fb-palette-icon sel"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></div>
+                <div><div style="font-weight:600;">Dropdown</div><div style="font-size:11px;color:var(--muted)">Select one from list</div></div>
               </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'radio')">
+                <div class="fb-palette-icon rad"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg></div>
+                <div><div style="font-weight:600;">Radio Group</div><div style="font-size:11px;color:var(--muted)">Single choice buttons</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'multicheck')">
+                <div class="fb-palette-icon mch"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                <div><div style="font-weight:600;">Multi Choice</div><div style="font-size:11px;color:var(--muted)">Multiple checkboxes</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'rating')">
+                <div class="fb-palette-icon rat"><svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l2.39 6.96H22l-5.8 4.21L18.18 22 12 17.77 5.82 22l1.98-8.83L2 8.96h7.61z"/></svg></div>
+                <div><div style="font-weight:600;">Rating</div><div style="font-size:11px;color:var(--muted)">1–5 stars</div></div>
+              </div>
+
+              <div class="fb-palette-section">Media &amp; Sign</div>
               <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'photo')">
                 <div class="fb-palette-icon pho"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg></div>
-                <div><div style="font-weight:600;">Photo</div><div style="font-size:11px;color:var(--muted)">Image upload field</div></div>
+                <div><div style="font-weight:600;">Photo</div><div style="font-size:11px;color:var(--muted)">Camera or upload</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'signature')">
+                <div class="fb-palette-icon sig"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5"/></svg></div>
+                <div><div style="font-weight:600;">Signature</div><div style="font-size:11px;color:var(--muted)">Draw to sign</div></div>
+              </div>
+
+              <div class="fb-palette-section">Layout</div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'heading')">
+                <div class="fb-palette-icon hed"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4v16M18 4v16M6 12h12"/></svg></div>
+                <div><div style="font-weight:600;">Section Heading</div><div style="font-size:11px;color:var(--muted)">Title / divider text</div></div>
+              </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'divider')">
+                <div class="fb-palette-icon div"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h16"/></svg></div>
+                <div><div style="font-weight:600;">Divider</div><div style="font-size:11px;color:var(--muted)">Horizontal line</div></div>
               </div>
             </div>
           </div>
         </div>
         <div>
           <div class="fb-mobile-add">
-            <button class="btn btn-secondary btn-sm" onclick="fbAddField('checkbox')">+ Checkbox</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('text')">+ Text</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('textarea')">+ Text Area</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('number')">+ Number</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('email')">+ Email</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('phone')">+ Phone</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('date')">+ Date</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('time')">+ Time</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('checkbox')">+ Checkbox</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('select')">+ Dropdown</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('radio')">+ Radio</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('multicheck')">+ Multi</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('rating')">+ Rating</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('photo')">+ Photo</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('signature')">+ Signature</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('heading')">+ Heading</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('divider')">+ Divider</button>
           </div>
           <div class="fb-canvas" id="fb-canvas"
                ondragover="fbCanvasDragOver(event)"
@@ -1126,7 +1228,11 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
       <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;">
         <button class="btn btn-secondary" onclick="showView('form-templates')">Cancel</button>
-        <button class="btn btn-primary" onclick="saveFormTemplate()">Save Template</button>
+        <button class="btn btn-secondary" onclick="openFormPreview()">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          Preview
+        </button>
+        <button class="btn btn-primary" onclick="saveFormTemplate()">Save Form</button>
       </div>
     </div>
 
@@ -1475,11 +1581,11 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         </div>
       </div>
       <div class="fg admin-only">
-        <label class="flbl">Inspection Form Template</label>
+        <label class="flbl">Custom Form</label>
         <select class="fc" id="e-template">
           <option value="">Default Checklist</option>
         </select>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Assign a custom inspection form for maintenance reports on this equipment.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Assign a custom form (built in Form Builder) for maintenance reports on this equipment.</div>
       </div>
       <div class="fg">
         <label class="flbl">Equipment Photo</label>
@@ -1570,6 +1676,23 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <div class="modal-ft">
       <button class="btn btn-secondary" onclick="closeModal('modal-edit-report')">Cancel</button>
       <button class="btn" onclick="saveEditReport()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Form Preview Modal -->
+<div class="overlay" id="modal-fb-preview">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-hd">
+      <span class="modal-title" id="fb-preview-title">Form Preview</span>
+      <button class="modal-x" onclick="closeModal('modal-fb-preview')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="fb-preview-body" style="max-height:72vh;overflow-y:auto;"></div>
+    <div class="modal-ft">
+      <div style="font-size:11px;color:var(--muted);margin-right:auto;">This is a preview — values won't be saved</div>
+      <button class="btn btn-secondary" onclick="closeModal('modal-fb-preview')">Close</button>
     </div>
   </div>
 </div>
@@ -2181,12 +2304,12 @@ function renderView(name) {
       renderServiceRequestDetail();
       break;
     case 'form-templates':
-      bc.innerHTML = '<span class="cur">Form Templates</span>';
+      bc.innerHTML = '<span class="cur">Form Builder</span>';
       setNav('form-templates');
       renderFormTemplates();
       break;
     case 'form-builder':
-      bc.innerHTML = `<span onclick="showView('form-templates')">Form Templates</span><span class="bc-sep">/</span><span class="cur">${app.editingTemplateId?'Edit':'New'} Template</span>`;
+      bc.innerHTML = `<span onclick="showView('form-templates')">Form Builder</span><span class="bc-sep">/</span><span class="cur">${app.editingTemplateId?'Edit':'New'} Form</span>`;
       setNav('form-templates');
       renderFormBuilder();
       break;
@@ -4870,10 +4993,10 @@ async function deleteTimeEntry(woId, entryId) {
 
 function renderFormTemplates() {
   var list = db.formTemplates || [];
-  document.getElementById('templates-sub').textContent = list.length + ' template' + (list.length !== 1 ? 's' : '');
+  document.getElementById('templates-sub').textContent = list.length + ' form' + (list.length !== 1 ? 's' : '');
   var tbody = document.getElementById('templates-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan=”5”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCB</div><div class=”empty-title”>No templates yet</div><div class=”empty-desc”>Create a custom inspection form template</div><button class=”btn btn-primary” onclick=”openFormBuilder()”>New Template</button></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan=”5”><div class=”empty”><div class=”empty-ico”>\uD83D\uDCCB</div><div class=”empty-title”>No forms yet</div><div class=”empty-desc”>Build a custom form with drag and drop</div><button class=”btn btn-primary” onclick=”openFormBuilder()”>New Form</button></div></td></tr>';
     return;
   }
   tbody.innerHTML = '';
@@ -4926,13 +5049,13 @@ function renderFormTemplates() {
 
 function confirmDeleteTemplate(id) {
   const t = (db.formTemplates||[]).find(x=>x.id===id);
-  document.getElementById('delete-msg').textContent = `Delete template “${t?.name}”? Equipment using this template will revert to the default checklist.`;
+  document.getElementById('delete-msg').textContent = `Delete form “${t?.name}”? Equipment using this form will revert to the default checklist.`;
   document.getElementById('delete-confirm-btn').onclick = async () => {
     try {
       await apiPost('/api/form-templates/'+id, {}, 'DELETE');
       db.formTemplates = db.formTemplates.filter(x=>x.id!==id);
       db.equipment.forEach(e => { if (e.formTemplateId === id) e.formTemplateId = ''; });
-      showToast('Template deleted','success');
+      showToast('Form deleted','success');
       closeModal('modal-delete');
       renderFormTemplates();
     } catch(err) { showToast(err.message,'error'); }
@@ -4967,7 +5090,7 @@ function openFormBuilder(templateIdOrObj) {
 }
 
 function renderFormBuilder() {
-  document.getElementById('fb-title').textContent = app.editingTemplateId ? 'Edit Template' : 'New Template';
+  document.getElementById('fb-title').textContent = app.editingTemplateId ? 'Edit Form' : 'New Form';
   document.getElementById('fb-name').value = app.formBuilderName || '';
   renderFBCanvas();
 }
@@ -4979,8 +5102,8 @@ function renderFBCanvas() {
     canvas.innerHTML = '<div class=fb-canvas-empty><div style=font-size:32px;margin-bottom:8px;opacity:.4>\uD83D\uDCCB</div><div style=font-size:14px;font-weight:500;margin-bottom:4px>No fields yet</div><div style=font-size:12px>Drag fields from the palette or use the buttons above on mobile</div></div>';
     return;
   }
-  var typeMap = { checkbox:'chk', text:'txt', select:'sel', photo:'pho' };
-  var labelMap = { checkbox:'Checkbox', text:'Text', select:'Dropdown', photo:'Photo' };
+  var typeMap = { checkbox:'chk', text:'txt', select:'sel', photo:'pho', textarea:'tar', number:'num', date:'dat', time:'tim', email:'eml', phone:'phn', radio:'rad', multicheck:'mch', rating:'rat', signature:'sig', heading:'hed', divider:'div' };
+  var labelMap = { checkbox:'Checkbox', text:'Text', select:'Dropdown', photo:'Photo', textarea:'Text Area', number:'Number', date:'Date', time:'Time', email:'Email', phone:'Phone', radio:'Radio', multicheck:'Multi', rating:'Rating', signature:'Signature', heading:'Heading', divider:'Divider' };
   canvas.innerHTML = '';
   for (var i = 0; i < fields.length; i++) {
     var f = fields[i];
@@ -5042,20 +5165,23 @@ function renderFBCanvas() {
     labelDiv.appendChild(labelInput);
     top.appendChild(labelDiv);
 
-    var reqLabel = document.createElement('label');
-    reqLabel.className = 'fb-req-toggle';
-    var reqCb = document.createElement('input');
-    reqCb.type = 'checkbox';
-    reqCb.checked = !!f.required;
-    (function(idx) { reqCb.onchange = function() { fbToggleReq(idx, this.checked); }; })(i);
-    reqLabel.appendChild(reqCb);
-    reqLabel.appendChild(document.createTextNode(' Required'));
-    top.appendChild(reqLabel);
+    // Required toggle (hidden for layout-only types)
+    if (f.type !== 'heading' && f.type !== 'divider') {
+      var reqLabel = document.createElement('label');
+      reqLabel.className = 'fb-req-toggle';
+      var reqCb = document.createElement('input');
+      reqCb.type = 'checkbox';
+      reqCb.checked = !!f.required;
+      (function(idx) { reqCb.onchange = function() { fbToggleReq(idx, this.checked); }; })(i);
+      reqLabel.appendChild(reqCb);
+      reqLabel.appendChild(document.createTextNode(' Required'));
+      top.appendChild(reqLabel);
+    }
 
     body.appendChild(top);
 
-    // Extras: dropdown options or photo preview
-    if (f.type === 'select') {
+    // Extras: options-based types
+    if (f.type === 'select' || f.type === 'radio' || f.type === 'multicheck') {
       var optsDiv = document.createElement('div');
       optsDiv.className = 'fb-field-opts';
       var optsInput = document.createElement('input');
@@ -5071,6 +5197,30 @@ function renderFBCanvas() {
       photoDiv.className = 'fb-photo-preview';
       photoDiv.innerHTML = '<svg width=14 height=14 fill=none stroke=currentColor viewBox=”0 0 24 24”><path stroke-linecap=round stroke-linejoin=round stroke-width=2 d=”M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z”/><circle cx=12 cy=13 r=3/></svg> Camera or photo library upload';
       body.appendChild(photoDiv);
+    }
+    if (f.type === 'signature') {
+      var sigDiv = document.createElement('div');
+      sigDiv.className = 'fb-photo-preview';
+      sigDiv.textContent = '✍️ Signature pad (draw to sign)';
+      body.appendChild(sigDiv);
+    }
+    if (f.type === 'rating') {
+      var ratDiv = document.createElement('div');
+      ratDiv.className = 'fb-photo-preview';
+      ratDiv.textContent = '★★★★★ 1–5 star rating';
+      body.appendChild(ratDiv);
+    }
+    if (f.type === 'divider') {
+      var divDiv = document.createElement('div');
+      divDiv.className = 'fb-photo-preview';
+      divDiv.textContent = '— Horizontal divider (no input)';
+      body.appendChild(divDiv);
+    }
+    if (f.type === 'heading') {
+      var hedDiv = document.createElement('div');
+      hedDiv.className = 'fb-photo-preview';
+      hedDiv.textContent = 'Section heading (title only, no input)';
+      body.appendChild(hedDiv);
     }
 
     div.appendChild(body);
@@ -5118,10 +5268,16 @@ function fbFieldDrop(e, idx) {
 function fbFieldDragEnd(e) { e.target.classList.remove('dragging'); fbDragIdx = null; }
 
 function fbAddField(type) {
-  const id = 'f_' + Date.now().toString(36);
-  const defaults = { checkbox: 'New Checkbox', text: 'New Text Field', select: 'New Dropdown', photo: 'Photo' };
-  const field = { id, type, label: defaults[type] || 'New Field', required: false };
-  if (type === 'select') field.options = ['Pass', 'Fail', 'N/A'];
+  const id = 'f_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+  const defaults = {
+    checkbox: 'New Checkbox', text: 'New Text Field', select: 'New Dropdown', photo: 'Photo',
+    textarea: 'Notes', number: 'Number', date: 'Date', time: 'Time', email: 'Email', phone: 'Phone',
+    radio: 'Choose One', multicheck: 'Select All That Apply', rating: 'Rating',
+    signature: 'Signature', heading: 'Section Heading', divider: ''
+  };
+  const field = { id, type, label: defaults[type] !== undefined ? defaults[type] : 'New Field', required: false };
+  if (type === 'select' || type === 'radio') field.options = ['Pass', 'Fail', 'N/A'];
+  if (type === 'multicheck') field.options = ['Option 1', 'Option 2', 'Option 3'];
   app.formBuilderFields.push(field);
   renderFBCanvas();
 }
@@ -5140,11 +5296,14 @@ function fbMoveField(idx, dir) {
 
 async function saveFormTemplate() {
   const name = document.getElementById('fb-name').value.trim();
-  if (!name) { showToast('Template name is required', 'error'); return; }
+  if (!name) { showToast('Form name is required', 'error'); return; }
   if (!app.formBuilderFields.length) { showToast('Add at least one field', 'error'); return; }
   for (const f of app.formBuilderFields) {
-    if (!f.label.trim()) { showToast('All fields must have a label', 'error'); return; }
-    if (f.type === 'select' && (!f.options || !f.options.length)) { showToast(`Dropdown “${f.label}” needs at least one option`, 'error'); return; }
+    if (f.type === 'divider') continue;
+    if (!f.label || !f.label.trim()) { showToast('All fields must have a label', 'error'); return; }
+    if ((f.type === 'select' || f.type === 'radio' || f.type === 'multicheck') && (!f.options || !f.options.length)) {
+      showToast(`“${f.label}” needs at least one option`, 'error'); return;
+    }
   }
   try {
     const body = { name, fields: app.formBuilderFields };
@@ -5152,17 +5311,155 @@ async function saveFormTemplate() {
       const updated = await apiPost('/api/form-templates/' + app.editingTemplateId, body, 'PUT');
       const idx = db.formTemplates.findIndex(t => t.id === app.editingTemplateId);
       if (idx >= 0) db.formTemplates[idx] = updated; else db.formTemplates.push(updated);
-      showToast('Template updated', 'success');
+      showToast('Form updated', 'success');
     } else {
       const created = await apiPost('/api/form-templates', body);
       db.formTemplates.push(created);
-      showToast('Template created', 'success');
+      showToast('Form created', 'success');
     }
     showView('form-templates');
   } catch (err) { showToast(err.message, 'error'); }
 }
 
-// â”€â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── FORM BUILDER PREVIEW ───────────────────────────────────────────────────
+function openFormPreview() {
+  const name = (document.getElementById('fb-name').value || '').trim() || 'Untitled Form';
+  const fields = app.formBuilderFields || [];
+  document.getElementById('fb-preview-title').textContent = name + ' — Preview';
+  const body = document.getElementById('fb-preview-body');
+  if (!fields.length) {
+    body.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--muted);">No fields to preview. Add fields to the canvas first.</div>';
+  } else {
+    body.innerHTML = '<form onsubmit="return false" class="fb-preview-form">' +
+      renderFormFields(fields, 'pv') + '</form>';
+    // Wire up any signature pads / ratings inside preview
+    initFormFieldWidgets(fields, 'pv');
+  }
+  openModal('modal-fb-preview');
+}
+
+// Shared renderer — generates HTML for a set of form-builder fields.
+// prefix is used for unique element IDs (e.g. "pv" for preview, "cf" for custom-report).
+function renderFormFields(fields, prefix) {
+  if (!fields || !fields.length) return '';
+  return fields.map((f, i) => {
+    const reqStar = f.required ? '<span class="fb-field-required-star">*</span>' : '';
+    const id = prefix + '-' + i;
+    const lbl = esc(f.label || '');
+    switch (f.type) {
+      case 'heading':
+        return `<div class="fb-heading-preview">${lbl}</div>`;
+      case 'divider':
+        return `<div class="fb-divider-preview"></div>`;
+      case 'checkbox':
+        return `<div class="chk-item"><input type="checkbox" id="${id}" data-fb-idx="${i}"><label for="${id}" style="cursor:pointer;flex:1;">${lbl}${reqStar}</label></div>`;
+      case 'text':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><input class="fc" type="text" id="${id}" data-fb-idx="${i}" placeholder="Enter ${lbl.toLowerCase()}..."></div>`;
+      case 'textarea':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><textarea class="fc" id="${id}" data-fb-idx="${i}" rows="3" placeholder="Enter ${lbl.toLowerCase()}..."></textarea></div>`;
+      case 'number':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><input class="fc" type="number" step="any" id="${id}" data-fb-idx="${i}" placeholder="0"></div>`;
+      case 'date':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><input class="fc" type="date" id="${id}" data-fb-idx="${i}"></div>`;
+      case 'time':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><input class="fc" type="time" id="${id}" data-fb-idx="${i}"></div>`;
+      case 'email':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><input class="fc" type="email" id="${id}" data-fb-idx="${i}" placeholder="name@example.com"></div>`;
+      case 'phone':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><input class="fc" type="tel" id="${id}" data-fb-idx="${i}" placeholder="(555) 123-4567"></div>`;
+      case 'select': {
+        const opts = (f.options||[]).map(o => `<option>${esc(o)}</option>`).join('');
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><select class="fc" id="${id}" data-fb-idx="${i}"><option value="">— Select —</option>${opts}</select></div>`;
+      }
+      case 'radio': {
+        const opts = (f.options||[]).map((o, j) => `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13.5px;"><input type="radio" name="${id}" value="${esc(o)}" data-fb-idx="${i}" style="accent-color:var(--accent);">${esc(o)}</label>`).join('');
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><div data-fb-radio-idx="${i}" id="${id}">${opts}</div></div>`;
+      }
+      case 'multicheck': {
+        const opts = (f.options||[]).map((o, j) => `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13.5px;"><input type="checkbox" value="${esc(o)}" data-fb-mc-idx="${i}" style="accent-color:var(--accent);">${esc(o)}</label>`).join('');
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label><div id="${id}">${opts}</div></div>`;
+      }
+      case 'rating':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label>
+          <div class="fb-preview-rating" id="${id}" data-fb-rating-idx="${i}" data-value="0">
+            ${[1,2,3,4,5].map(n => `<span data-star="${n}" style="color:#d1d5db;">★</span>`).join('')}
+          </div></div>`;
+      case 'signature':
+        return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${lbl}${reqStar}</label>
+          <canvas class="fb-sig-pad" id="${id}" data-fb-sig-idx="${i}" width="420" height="140"></canvas>
+          <div><button type="button" class="btn btn-ghost btn-sm" onclick="fbClearSignature('${id}')">Clear</button></div></div>`;
+      case 'photo':
+        return `<div class="fg" style="margin-bottom:12px;">
+          <label class="flbl">${lbl}${reqStar}</label>
+          <div id="${id}-wrap" style="margin-top:6px;">
+            <div class="photo-drop" onclick="document.getElementById('${id}').click()" id="${id}-target" style="border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;">
+              <div style="font-size:24px;margin-bottom:4px;">📷</div>
+              <div style="font-size:12px;color:var(--muted);">Tap to take or upload photo</div>
+            </div>
+            <input type="file" id="${id}" accept="image/*" style="display:none;" data-fb-photo-idx="${i}">
+            <div id="${id}-preview"></div>
+          </div>
+        </div>`;
+      default:
+        return '';
+    }
+  }).join('');
+}
+
+// Wire up interactive widgets (rating stars, signature pads) after HTML is inserted.
+function initFormFieldWidgets(fields, prefix) {
+  fields.forEach((f, i) => {
+    const id = prefix + '-' + i;
+    if (f.type === 'rating') {
+      const container = document.getElementById(id);
+      if (container) {
+        container.querySelectorAll('[data-star]').forEach(star => {
+          star.onclick = function() {
+            const val = parseInt(this.getAttribute('data-star'));
+            container.setAttribute('data-value', val);
+            container.querySelectorAll('[data-star]').forEach(s => {
+              const n = parseInt(s.getAttribute('data-star'));
+              s.style.color = n <= val ? '#fbbf24' : '#d1d5db';
+            });
+          };
+        });
+      }
+    }
+    if (f.type === 'signature') {
+      initSignaturePad(id);
+    }
+  });
+}
+
+function initSignaturePad(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#111';
+  let drawing = false, last = null;
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: (t.clientX - r.left) * (canvas.width / r.width), y: (t.clientY - r.top) * (canvas.height / r.height) };
+  }
+  function start(e) { e.preventDefault(); drawing = true; last = getPos(e); canvas.setAttribute('data-has-ink','1'); }
+  function move(e) { if (!drawing) return; e.preventDefault(); const p = getPos(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; }
+  function end() { drawing = false; }
+  canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move);
+  canvas.addEventListener('mouseup', end); canvas.addEventListener('mouseleave', end);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  canvas.addEventListener('touchmove', move, {passive:false});
+  canvas.addEventListener('touchend', end);
+}
+
+function fbClearSignature(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  canvas.removeAttribute('data-has-ink');
+}
+
+// ─── DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderDashboard() {
   var dashView = document.getElementById('view-dashboard');
 
@@ -6060,31 +6357,79 @@ function renderCustomChecklistFields(template) {
   if (!template || !template.fields) return '';
   // Initialize photo storage for custom fields
   if (!app.customFieldPhotos) app.customFieldPhotos = {};
-  return template.fields.map((f, i) => {
-    const reqStar = f.required ? '<span class="fb-field-required-star">*</span>' : '';
-    if (f.type === 'checkbox') {
-      return `<div class="chk-item"><input type="checkbox" id="cf-${i}" data-cf-idx="${i}"><label for="cf-${i}" style="cursor:pointer;flex:1;">${esc(f.label)}${reqStar}</label></div>`;
-    } else if (f.type === 'text') {
-      return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${esc(f.label)}${reqStar}</label><input class="fc" type="text" id="cf-${i}" data-cf-idx="${i}" placeholder="Enter ${esc(f.label).toLowerCase()}..."></div>`;
-    } else if (f.type === 'select') {
-      const opts = (f.options||[]).map(o => `<option>${esc(o)}</option>`).join('');
-      return `<div class="fg" style="margin-bottom:12px;"><label class="flbl">${esc(f.label)}${reqStar}</label><select class="fc" id="cf-${i}" data-cf-idx="${i}"><option value="">\u2014 Select \u2014</option>${opts}</select></div>`;
-    } else if (f.type === 'photo') {
-      app.customFieldPhotos[i] = null;
-      return `<div class="fg" style="margin-bottom:12px;">
-        <label class="flbl">${esc(f.label)}${reqStar}</label>
-        <div id="cf-photo-wrap-${i}" style="margin-top:6px;">
-          <div class="photo-drop" onclick="document.getElementById('cf-photo-${i}').click()" id="cf-photo-target-${i}" style="border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;">
-            <div style="font-size:24px;margin-bottom:4px;">\uD83D\uDCF7</div>
-            <div style="font-size:12px;color:var(--muted);">Tap to take or upload photo</div>
-          </div>
-          <input type="file" id="cf-photo-${i}" accept="image/*" style="display:none;" onchange="handleCustomFieldPhoto(${i},this)" data-cf-idx="${i}">
-          <div id="cf-photo-preview-${i}"></div>
-        </div>
+  template.fields.forEach((f, i) => { if (f.type === 'photo') app.customFieldPhotos[i] = null; });
+  return renderFormFields(template.fields, 'cf');
+}
+
+// Render a single saved custom-form field value for the report detail view
+function renderCustomFieldValue(f) {
+  const lbl = esc(f.label || '');
+  const row = (inner) => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">${lbl}</div>
+    <div style="font-size:13.5px;">${inner}</div></div>`;
+  switch (f.type) {
+    case 'heading':
+      return `<div class="fb-heading-preview">${lbl}</div>`;
+    case 'divider':
+      return `<div class="fb-divider-preview"></div>`;
+    case 'checkbox':
+      return `<div class="chk-item">
+        <span style="width:16px;height:16px;border-radius:3px;background:${f.value?'var(--green)':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${f.value?'<svg width="10" height="10" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
+        </span>
+        <span style="${f.value?'':'color:var(--muted)'}">${lbl}</span>
+      </div>`;
+    case 'text':
+    case 'textarea':
+    case 'email':
+    case 'phone':
+    case 'date':
+    case 'time':
+      return row(f.value ? esc(String(f.value)) : '<span style="color:var(--muted);">No response</span>');
+    case 'number':
+      return row(f.value !== null && f.value !== undefined && f.value !== '' ? esc(String(f.value)) : '<span style="color:var(--muted);">No response</span>');
+    case 'select':
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:13.5px;">${lbl}</span>
+        <span class="badge ${f.value==='Pass'?'bg':f.value==='Fail'?'br':'bgr'}">${esc(f.value||'N/A')}</span>
+      </div>`;
+    case 'radio':
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:13.5px;">${lbl}</span>
+        <span class="badge bgr">${esc(f.value||'No selection')}</span>
+      </div>`;
+    case 'multicheck': {
+      const vals = Array.isArray(f.value) ? f.value : [];
+      return row(vals.length ? vals.map(v => `<span class="badge bgr" style="margin:2px 4px 2px 0;">${esc(v)}</span>`).join('') : '<span style="color:var(--muted);">None selected</span>');
+    }
+    case 'rating': {
+      const n = parseInt(f.value || 0);
+      const stars = [1,2,3,4,5].map(i => `<span style="color:${i<=n?'#fbbf24':'#d1d5db'};">★</span>`).join('');
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:13.5px;">${lbl}</span>
+        <span style="font-size:18px;">${stars}</span>
       </div>`;
     }
-    return '';
-  }).join('');
+    case 'signature':
+      return row(f.value ? `<img src="${f.value}" style="max-width:320px;border:1px solid var(--border);border-radius:6px;background:#fff;">` : '<span style="color:var(--muted);">Not signed</span>');
+    case 'photo':
+      return row(f.value ? `<img src="${f.value}" style="max-width:280px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="openPhotoLightbox(this.src)">` : '<span style="color:var(--muted);">No photo</span>');
+    default:
+      return '';
+  }
+}
+
+// Wire up widgets + photo handlers after report form HTML is inserted
+function initCustomChecklistWidgets(template) {
+  if (!template || !template.fields) return;
+  initFormFieldWidgets(template.fields, 'cf');
+  // Wire photo inputs (they use a different handler that stores into app.customFieldPhotos)
+  template.fields.forEach((f, i) => {
+    if (f.type === 'photo') {
+      const input = document.getElementById('cf-' + i);
+      if (input) input.onchange = function() { handleCustomFieldPhoto(i, this); };
+    }
+  });
 }
 
 function handleCustomFieldPhoto(idx, inputEl) {
@@ -6093,10 +6438,10 @@ function handleCustomFieldPhoto(idx, inputEl) {
   compressImage(file).then(dataUrl => {
     if (!app.customFieldPhotos) app.customFieldPhotos = {};
     app.customFieldPhotos[idx] = dataUrl;
-    const preview = document.getElementById('cf-photo-preview-' + idx);
-    const target = document.getElementById('cf-photo-target-' + idx);
-    target.style.display = 'none';
-    preview.innerHTML = `<div style="position:relative;display:inline-block;margin-top:8px;">
+    const preview = document.getElementById('cf-' + idx + '-preview');
+    const target = document.getElementById('cf-' + idx + '-target');
+    if (target) target.style.display = 'none';
+    if (preview) preview.innerHTML = `<div style="position:relative;display:inline-block;margin-top:8px;">
       <img src="${dataUrl}" style="max-width:200px;border-radius:8px;border:1px solid var(--border);" onclick="openPhotoLightbox(app.customFieldPhotos[${idx}])">
       <button type="button" onclick="removeCustomFieldPhoto(${idx})" style="position:absolute;top:-8px;right:-8px;background:var(--red);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
     </div>`;
@@ -6106,8 +6451,10 @@ function handleCustomFieldPhoto(idx, inputEl) {
 
 function removeCustomFieldPhoto(idx) {
   app.customFieldPhotos[idx] = null;
-  document.getElementById('cf-photo-preview-' + idx).innerHTML = '';
-  document.getElementById('cf-photo-target-' + idx).style.display = '';
+  const preview = document.getElementById('cf-' + idx + '-preview');
+  const target = document.getElementById('cf-' + idx + '-target');
+  if (preview) preview.innerHTML = '';
+  if (target) target.style.display = '';
 }
 
 function renderReportForm() {
@@ -6215,6 +6562,8 @@ function renderReportForm() {
       </div>
     </form>
   `;
+  // Wire up rating/signature widgets for any custom-form fields
+  if (type === 'maintenance' && template) initCustomChecklistWidgets(template);
 }
 
 async function submitReport(e) {
@@ -6233,17 +6582,44 @@ async function submitReport(e) {
       for (let i = 0; i < template.fields.length; i++) {
         const f = template.fields[i];
         let value;
+        const id = 'cf-' + i;
+        if (f.type === 'heading' || f.type === 'divider') {
+          fieldValues.push({ id: f.id, type: f.type, label: f.label, value: null });
+          continue;
+        }
         if (f.type === 'photo') {
           value = (app.customFieldPhotos && app.customFieldPhotos[i]) || null;
           if (f.required && !value) { showToast(`"${f.label}" photo is required`, 'error'); return; }
+        } else if (f.type === 'signature') {
+          const canvas = document.getElementById(id);
+          if (canvas && canvas.getAttribute('data-has-ink') === '1') {
+            try { value = canvas.toDataURL('image/png'); } catch(e) { value = null; }
+          } else {
+            value = null;
+          }
+          if (f.required && !value) { showToast(`"${f.label}" signature is required`, 'error'); return; }
+        } else if (f.type === 'rating') {
+          const container = document.getElementById(id);
+          value = container ? parseInt(container.getAttribute('data-value') || '0') : 0;
+          if (f.required && !value) { showToast(`"${f.label}" rating is required`, 'error'); return; }
+        } else if (f.type === 'radio') {
+          const container = document.querySelector(`[data-fb-radio-idx="${i}"]`);
+          const selected = container ? container.querySelector('input[type="radio"]:checked') : null;
+          value = selected ? selected.value : '';
+          if (f.required && !value) { showToast(`"${f.label}" is required`, 'error'); return; }
+        } else if (f.type === 'multicheck') {
+          const boxes = document.querySelectorAll(`[data-fb-mc-idx="${i}"]`);
+          value = Array.from(boxes).filter(b => b.checked).map(b => b.value);
+          if (f.required && !value.length) { showToast(`"${f.label}" requires at least one selection`, 'error'); return; }
         } else {
-          const el = document.getElementById('cf-'+i);
+          const el = document.getElementById(id);
           if (f.type === 'checkbox') { value = el?.checked || false; }
-          else if (f.type === 'text') { value = el?.value?.trim() || ''; }
+          else if (f.type === 'text' || f.type === 'textarea' || f.type === 'email' || f.type === 'phone' || f.type === 'date' || f.type === 'time') { value = el?.value?.trim() || ''; }
+          else if (f.type === 'number') { value = el?.value !== '' ? parseFloat(el.value) : null; }
           else if (f.type === 'select') { value = el?.value || ''; }
           if (f.required) {
-            if (f.type === 'text' && !value) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
-            if (f.type === 'select' && !value) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
+            const empty = (f.type === 'number') ? (value === null || isNaN(value)) : !value;
+            if (f.type !== 'checkbox' && empty) { showToast(`"${f.label}" is required`, 'error'); el?.focus(); return; }
           }
         }
         fieldValues.push({ id: f.id, type: f.type, label: f.label, value });
@@ -6312,32 +6688,7 @@ function renderReportDetail() {
     checklistHtml = `<div class="card" style="margin-top:16px;">
       <div class="card-hd"><span class="card-title">${esc(cf.templateName||'Custom Checklist')}</span><span class="badge bb">Custom</span></div>
       <div class="card-body" style="padding:12px 20px;">
-        ${(cf.fields||[]).map(f => {
-          if (f.type === 'checkbox') {
-            return `<div class="chk-item">
-              <span style="width:16px;height:16px;border-radius:3px;background:${f.value?'var(--green)':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                ${f.value?'<svg width="10" height="10" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
-              </span>
-              <span style="${f.value?'':'color:var(--muted)'}">${esc(f.label)}</span>
-            </div>`;
-          } else if (f.type === 'text') {
-            return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
-              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px;">${esc(f.label)}</div>
-              <div style="font-size:13.5px;">${esc(f.value||'No response')}</div>
-            </div>`;
-          } else if (f.type === 'select') {
-            return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-              <span style="font-size:13.5px;">${esc(f.label)}</span>
-              <span class="badge ${f.value==='Pass'?'bg':f.value==='Fail'?'br':'bgr'}">${esc(f.value||'N/A')}</span>
-            </div>`;
-          } else if (f.type === 'photo') {
-            return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
-              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;">${esc(f.label)}</div>
-              ${f.value ? `<img src="${f.value}" style="max-width:280px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="openPhotoLightbox(this.src)">` : '<div style="font-size:13px;color:var(--muted);">No photo</div>'}
-            </div>`;
-          }
-          return '';
-        }).join('')}
+        ${(cf.fields||[]).map(f => renderCustomFieldValue(f)).join('')}
       </div>
     </div>`;
   } else if (r.checklist && Array.isArray(r.checklist) && r.checklist.length) {

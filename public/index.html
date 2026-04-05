@@ -269,6 +269,38 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .fb-sig-pad{width:100%;max-width:420px;height:140px;border:2px dashed var(--border);border-radius:8px;background:var(--surface);touch-action:none;cursor:crosshair;}
 .fb-heading-preview{font-size:16px;font-weight:700;color:var(--text);padding:12px 0 6px;border-bottom:2px solid var(--border);margin:8px 0 4px;}
 .fb-divider-preview{height:1px;background:var(--border);margin:12px 0;}
+/* Branded header (matches PDF export) */
+.fb-brand-header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:2px solid var(--accent);}
+.fb-brand-left{display:flex;align-items:center;gap:12px;}
+.fb-brand-fm-icon{width:40px;height:40px;border-radius:8px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.fb-brand-fm-name{font-size:20px;font-weight:700;color:#3b82f6;letter-spacing:-.5px;line-height:1;}
+.fb-brand-fm-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.fb-brand-right{text-align:right;font-size:12px;line-height:1.35;}
+.fb-brand-client-name{font-weight:700;color:var(--text);font-size:13px;}
+.fb-brand-client-meta{color:var(--muted);font-size:11px;}
+.fb-brand-title{font-size:18px;font-weight:700;color:var(--text);padding:14px 20px 6px;background:var(--bg);border-left:1px solid var(--border);border-right:1px solid var(--border);letter-spacing:-.2px;}
+/* WYSIWYG canvas paper */
+.fb-canvas.fb-canvas-paper{padding:0;background:var(--bg);border-style:solid;overflow:hidden;}
+.fb-canvas-paper-body{padding:18px 20px 22px;border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);border-radius:0 0 10px 10px;}
+.fb-wysiwyg-row{position:relative;padding:8px 10px;margin:6px 0;border:1px solid transparent;border-radius:8px;transition:background .15s,border-color .15s;}
+.fb-wysiwyg-row:hover{background:rgba(59,130,246,.04);border-color:var(--border);}
+.fb-wysiwyg-row.dragging{opacity:.4;}
+.fb-wysiwyg-controls{position:absolute;top:6px;right:6px;display:none;gap:4px;z-index:2;}
+.fb-wysiwyg-row:hover .fb-wysiwyg-controls{display:flex;}
+.fb-wysiwyg-controls button{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:11px;line-height:1;}
+.fb-wysiwyg-controls button:hover{color:var(--text);border-color:var(--accent);}
+.fb-wysiwyg-controls .fb-del-btn:hover{color:var(--red);border-color:var(--red);}
+.fb-wysiwyg-label-edit{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+.fb-wysiwyg-label-edit input[type="text"]{flex:1;background:transparent;border:1px dashed transparent;border-radius:4px;padding:4px 6px;color:var(--text);font-size:13px;font-weight:600;font-family:inherit;}
+.fb-wysiwyg-label-edit input[type="text"]:hover{border-color:var(--border);}
+.fb-wysiwyg-label-edit input[type="text"]:focus{outline:none;border-style:solid;border-color:var(--accent);background:var(--surface);}
+.fb-wysiwyg-req{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;padding:2px 6px;border-radius:4px;}
+.fb-wysiwyg-req:hover{background:var(--surface);}
+.fb-wysiwyg-req input{accent-color:var(--accent);width:11px;height:11px;}
+.fb-wysiwyg-opts-edit{margin-top:6px;}
+.fb-wysiwyg-opts-edit input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:11px;font-family:inherit;}
+.fb-wysiwyg-opts-edit label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;}
+.fb-photo-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .fb-field-label{flex:1;}
 .fb-field-label input{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;padding:6px 8px;color:var(--text);font-size:13px;font-family:inherit;transition:all .15s;}
 .fb-field-label input:hover{border-color:var(--border);}
@@ -1115,9 +1147,18 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div class="ph">
         <div><div class="ph-title" id="fb-title">New Form</div><div class="ph-sub">Drag fields from the palette on the left onto the canvas to build your form</div></div>
       </div>
-      <div class="fg" style="max-width:400px;margin-bottom:20px;">
-        <label class="flbl">Form Name *</label>
-        <input class="fc" type="text" id="fb-name" placeholder="e.g. RTU Maintenance Checklist">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:780px;margin-bottom:20px;">
+        <div class="fg" style="margin:0;">
+          <label class="flbl">Form Name *</label>
+          <input class="fc" type="text" id="fb-name" placeholder="e.g. RTU Maintenance Checklist">
+        </div>
+        <div class="fg" style="margin:0;">
+          <label class="flbl">For Customer</label>
+          <select class="fc" id="fb-client" onchange="fbClientChanged()">
+            <option value="">— Any customer —</option>
+          </select>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Choose a customer to preview the form with their branding.</div>
+        </div>
       </div>
       <div class="fb-layout">
         <div class="fb-palette">
@@ -1183,6 +1224,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
                 <div class="fb-palette-icon pho"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg></div>
                 <div><div style="font-weight:600;">Photo</div><div style="font-size:11px;color:var(--muted)">Camera or upload</div></div>
               </div>
+              <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'photopair')">
+                <div class="fb-palette-icon pho"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/></svg></div>
+                <div><div style="font-weight:600;">Photo Pair</div><div style="font-size:11px;color:var(--muted)">Two photos side-by-side</div></div>
+              </div>
               <div class="fb-palette-item" draggable="true" ondragstart="fbDragPalette(event,'signature')">
                 <div class="fb-palette-icon sig"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5"/></svg></div>
                 <div><div style="font-weight:600;">Signature</div><div style="font-size:11px;color:var(--muted)">Draw to sign</div></div>
@@ -1215,6 +1260,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('multicheck')">+ Multi</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('rating')">+ Rating</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('photo')">+ Photo</button>
+            <button class="btn btn-secondary btn-sm" onclick="fbAddField('photopair')">+ Photo Pair</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('signature')">+ Signature</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('heading')">+ Heading</button>
             <button class="btn btn-secondary btn-sm" onclick="fbAddField('divider')">+ Divider</button>
@@ -5066,6 +5112,7 @@ function confirmDeleteTemplate(id) {
 function openFormBuilder(templateIdOrObj) {
   app.formBuilderFields = [];
   app.formBuilderName = '';
+  app.formBuilderClientId = '';
   app.editingTemplateId = null;
   if (templateIdOrObj) {
     let t = null;
@@ -5082,6 +5129,7 @@ function openFormBuilder(templateIdOrObj) {
       if (!Array.isArray(fields)) fields = [];
       app.formBuilderFields = JSON.parse(JSON.stringify(fields));
       app.formBuilderName = t.name || '';
+      app.formBuilderClientId = t.clientId || '';
     } else {
       showToast('Template not found', 'error');
     }
@@ -5092,150 +5140,188 @@ function openFormBuilder(templateIdOrObj) {
 function renderFormBuilder() {
   document.getElementById('fb-title').textContent = app.editingTemplateId ? 'Edit Form' : 'New Form';
   document.getElementById('fb-name').value = app.formBuilderName || '';
+  // Populate client dropdown
+  const sel = document.getElementById('fb-client');
+  const current = app.formBuilderClientId || '';
+  sel.innerHTML = '<option value="">— Any customer —</option>' +
+    (db.clients || []).slice().sort((a,b) => (a.name||'').localeCompare(b.name||''))
+      .map(c => `<option value="${esc(c.id)}">${esc(c.name||'')}</option>`).join('');
+  sel.value = current;
+  try { makeSearchable('fb-client'); } catch(e) {}
+  renderFBCanvas();
+}
+
+function fbClientChanged() {
+  app.formBuilderClientId = document.getElementById('fb-client').value || '';
   renderFBCanvas();
 }
 
 function renderFBCanvas() {
   var canvas = document.getElementById('fb-canvas');
   var fields = app.formBuilderFields;
+  var formName = (document.getElementById('fb-name') && document.getElementById('fb-name').value) || 'Untitled Form';
+  var client = (db.clients || []).find(function(c) { return c.id === app.formBuilderClientId; }) || null;
+
+  canvas.classList.add('fb-canvas-paper');
+
   if (!fields || fields.length === 0) {
-    canvas.innerHTML = '<div class=fb-canvas-empty><div style=font-size:32px;margin-bottom:8px;opacity:.4>\uD83D\uDCCB</div><div style=font-size:14px;font-weight:500;margin-bottom:4px>No fields yet</div><div style=font-size:12px>Drag fields from the palette or use the buttons above on mobile</div></div>';
+    canvas.innerHTML = renderFormBrandedHeader(client, formName) +
+      '<div class="fb-canvas-paper-body"><div class="fb-canvas-empty">' +
+      '<div style="font-size:32px;margin-bottom:8px;opacity:.4;">\uD83D\uDCCB</div>' +
+      '<div style="font-size:14px;font-weight:500;margin-bottom:4px;">No fields yet</div>' +
+      '<div style="font-size:12px;">Drag fields from the palette on the left</div>' +
+      '</div></div>';
     return;
   }
-  var typeMap = { checkbox:'chk', text:'txt', select:'sel', photo:'pho', textarea:'tar', number:'num', date:'dat', time:'tim', email:'eml', phone:'phn', radio:'rad', multicheck:'mch', rating:'rat', signature:'sig', heading:'hed', divider:'div' };
-  var labelMap = { checkbox:'Checkbox', text:'Text', select:'Dropdown', photo:'Photo', textarea:'Text Area', number:'Number', date:'Date', time:'Time', email:'Email', phone:'Phone', radio:'Radio', multicheck:'Multi', rating:'Rating', signature:'Signature', heading:'Heading', divider:'Divider' };
-  canvas.innerHTML = '';
+
+  // Header (safe — no interactive handlers)
+  canvas.innerHTML = renderFormBrandedHeader(client, formName) + '<div class="fb-canvas-paper-body" id="fb-canvas-body"></div>';
+  var body = document.getElementById('fb-canvas-body');
+
   for (var i = 0; i < fields.length; i++) {
     var f = fields[i];
-    var typeCls = typeMap[f.type] || 'txt';
-    var typeLabel = labelMap[f.type] || f.type;
-    var div = document.createElement('div');
-    div.className = 'fb-field';
-    div.draggable = true;
-    div.setAttribute('data-idx', i);
+    var row = document.createElement('div');
+    row.className = 'fb-wysiwyg-row';
+    row.draggable = true;
+    row.setAttribute('data-idx', i);
     (function(idx) {
-      div.ondragstart = function(e) { fbFieldDragStart(e, idx); };
-      div.ondragover = function(e) { fbFieldDragOver(e, idx); };
-      div.ondragend = function(e) { fbFieldDragEnd(e); };
-      div.ondrop = function(e) { fbFieldDrop(e, idx); };
+      row.ondragstart = function(e) { fbFieldDragStart(e, idx); };
+      row.ondragover = function(e) { fbFieldDragOver(e, idx); };
+      row.ondragend = function(e) { fbFieldDragEnd(e); };
+      row.ondrop = function(e) { fbFieldDrop(e, idx); };
     })(i);
 
-    // Handle (drag grip)
-    var handle = document.createElement('div');
-    handle.className = 'fb-handle';
-    handle.title = 'Drag to reorder';
-    handle.innerHTML = '<svg width=14 height=14 fill=currentColor viewBox=”0 0 24 24”><circle cx=9 cy=5 r=1.5/><circle cx=15 cy=5 r=1.5/><circle cx=9 cy=12 r=1.5/><circle cx=15 cy=12 r=1.5/><circle cx=9 cy=19 r=1.5/><circle cx=15 cy=19 r=1.5/></svg>';
-    div.appendChild(handle);
+    // Hover control strip (top-right): drag handle, up/down, delete
+    var ctrls = document.createElement('div');
+    ctrls.className = 'fb-wysiwyg-controls';
 
-    // Mobile reorder
-    var mob = document.createElement('div');
-    mob.className = 'fb-mobile-reorder';
+    var dragBtn = document.createElement('button');
+    dragBtn.type = 'button';
+    dragBtn.title = 'Drag to reorder';
+    dragBtn.innerHTML = '&#9776;';
+    dragBtn.style.cursor = 'grab';
+    ctrls.appendChild(dragBtn);
+
     var upBtn = document.createElement('button');
+    upBtn.type = 'button';
+    upBtn.title = 'Move up';
     upBtn.innerHTML = '&#9650;';
     if (i === 0) upBtn.disabled = true;
     (function(idx) { upBtn.onclick = function() { fbMoveField(idx, -1); }; })(i);
+    ctrls.appendChild(upBtn);
+
     var dnBtn = document.createElement('button');
+    dnBtn.type = 'button';
+    dnBtn.title = 'Move down';
     dnBtn.innerHTML = '&#9660;';
     if (i === fields.length - 1) dnBtn.disabled = true;
     (function(idx) { dnBtn.onclick = function() { fbMoveField(idx, 1); }; })(i);
-    mob.appendChild(upBtn);
-    mob.appendChild(dnBtn);
-    div.appendChild(mob);
+    ctrls.appendChild(dnBtn);
 
-    // Field body
-    var body = document.createElement('div');
-    body.className = 'fb-field-body';
+    var delBtnW = document.createElement('button');
+    delBtnW.type = 'button';
+    delBtnW.className = 'fb-del-btn';
+    delBtnW.title = 'Delete field';
+    delBtnW.innerHTML = '&#10005;';
+    (function(idx) { delBtnW.onclick = function() { fbRemoveField(idx); }; })(i);
+    ctrls.appendChild(delBtnW);
 
-    // Top row: type badge + label input + required toggle
-    var top = document.createElement('div');
-    top.className = 'fb-field-top';
+    row.appendChild(ctrls);
 
-    var typeSpan = document.createElement('span');
-    typeSpan.className = 'fb-field-type ' + typeCls;
-    typeSpan.textContent = typeLabel;
-    top.appendChild(typeSpan);
+    // Inline label editor + required toggle (for non-divider)
+    if (f.type !== 'divider') {
+      var editRow = document.createElement('div');
+      editRow.className = 'fb-wysiwyg-label-edit';
 
-    var labelDiv = document.createElement('div');
-    labelDiv.className = 'fb-field-label';
-    var labelInput = document.createElement('input');
-    labelInput.type = 'text';
-    labelInput.value = f.label || '';
-    labelInput.placeholder = 'Field label...';
-    (function(idx) { labelInput.onchange = function() { fbUpdateLabel(idx, this.value); }; })(i);
-    labelDiv.appendChild(labelInput);
-    top.appendChild(labelDiv);
+      var labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.value = f.label || '';
+      labelInput.placeholder = f.type === 'heading' ? 'Section heading...' : 'Field label...';
+      (function(idx) { labelInput.onchange = function() { fbUpdateLabel(idx, this.value); }; })(i);
+      editRow.appendChild(labelInput);
 
-    // Required toggle (hidden for layout-only types)
-    if (f.type !== 'heading' && f.type !== 'divider') {
-      var reqLabel = document.createElement('label');
-      reqLabel.className = 'fb-req-toggle';
-      var reqCb = document.createElement('input');
-      reqCb.type = 'checkbox';
-      reqCb.checked = !!f.required;
-      (function(idx) { reqCb.onchange = function() { fbToggleReq(idx, this.checked); }; })(i);
-      reqLabel.appendChild(reqCb);
-      reqLabel.appendChild(document.createTextNode(' Required'));
-      top.appendChild(reqLabel);
+      if (f.type !== 'heading') {
+        var reqLabel = document.createElement('label');
+        reqLabel.className = 'fb-wysiwyg-req';
+        var reqCb = document.createElement('input');
+        reqCb.type = 'checkbox';
+        reqCb.checked = !!f.required;
+        (function(idx) { reqCb.onchange = function() { fbToggleReq(idx, this.checked); }; })(i);
+        reqLabel.appendChild(reqCb);
+        reqLabel.appendChild(document.createTextNode('Req'));
+        editRow.appendChild(reqLabel);
+      }
+      row.appendChild(editRow);
     }
 
-    body.appendChild(top);
+    // Rendered preview of the input (non-interactive — wrapped in pointer-events:none)
+    var preview = document.createElement('div');
+    preview.style.pointerEvents = 'none';
+    if (f.type === 'heading') {
+      preview.innerHTML = '';  // label already shown in edit row
+    } else if (f.type === 'divider') {
+      preview.innerHTML = '<div class="fb-divider-preview"></div>';
+    } else {
+      // Use shared renderer but strip the label (already editable above)
+      var fakeField = Object.assign({}, f, { label: '' });
+      preview.innerHTML = renderFormFields([fakeField], 'fbwy-' + i);
+    }
+    row.appendChild(preview);
 
-    // Extras: options-based types
+    // Options editor for choice-based types
     if (f.type === 'select' || f.type === 'radio' || f.type === 'multicheck') {
       var optsDiv = document.createElement('div');
-      optsDiv.className = 'fb-field-opts';
+      optsDiv.className = 'fb-wysiwyg-opts-edit';
+      var optsLabel = document.createElement('label');
+      optsLabel.textContent = 'Options (comma separated)';
       var optsInput = document.createElement('input');
       optsInput.type = 'text';
       optsInput.value = (f.options || []).join(', ');
-      optsInput.placeholder = 'Options (comma separated, e.g. Pass, Fail, N/A)';
-      (function(idx) { optsInput.onchange = function() { fbUpdateOptions(idx, this.value); }; })(i);
+      optsInput.placeholder = 'e.g. Pass, Fail, N/A';
+      (function(idx) {
+        optsInput.onchange = function() { fbUpdateOptions(idx, this.value); };
+      })(i);
+      optsDiv.appendChild(optsLabel);
       optsDiv.appendChild(optsInput);
-      body.appendChild(optsDiv);
-    }
-    if (f.type === 'photo') {
-      var photoDiv = document.createElement('div');
-      photoDiv.className = 'fb-photo-preview';
-      photoDiv.innerHTML = '<svg width=14 height=14 fill=none stroke=currentColor viewBox=”0 0 24 24”><path stroke-linecap=round stroke-linejoin=round stroke-width=2 d=”M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z”/><circle cx=12 cy=13 r=3/></svg> Camera or photo library upload';
-      body.appendChild(photoDiv);
-    }
-    if (f.type === 'signature') {
-      var sigDiv = document.createElement('div');
-      sigDiv.className = 'fb-photo-preview';
-      sigDiv.textContent = '✍️ Signature pad (draw to sign)';
-      body.appendChild(sigDiv);
-    }
-    if (f.type === 'rating') {
-      var ratDiv = document.createElement('div');
-      ratDiv.className = 'fb-photo-preview';
-      ratDiv.textContent = '★★★★★ 1–5 star rating';
-      body.appendChild(ratDiv);
-    }
-    if (f.type === 'divider') {
-      var divDiv = document.createElement('div');
-      divDiv.className = 'fb-photo-preview';
-      divDiv.textContent = '— Horizontal divider (no input)';
-      body.appendChild(divDiv);
-    }
-    if (f.type === 'heading') {
-      var hedDiv = document.createElement('div');
-      hedDiv.className = 'fb-photo-preview';
-      hedDiv.textContent = 'Section heading (title only, no input)';
-      body.appendChild(hedDiv);
+      row.appendChild(optsDiv);
     }
 
-    div.appendChild(body);
+    // Caption editors for photopair
+    if (f.type === 'photopair') {
+      if (!f.labelA) f.labelA = 'Before';
+      if (!f.labelB) f.labelB = 'After';
+      var capDiv = document.createElement('div');
+      capDiv.className = 'fb-wysiwyg-opts-edit';
+      capDiv.style.display = 'grid';
+      capDiv.style.gridTemplateColumns = '1fr 1fr';
+      capDiv.style.gap = '8px';
+      ['A','B'].forEach(function(side) {
+        var wrap = document.createElement('div');
+        var lbl = document.createElement('label');
+        lbl.textContent = (side === 'A' ? 'Left' : 'Right') + ' caption';
+        var inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = f['label' + side] || '';
+        (function(idx, s) { inp.onchange = function() { app.formBuilderFields[idx]['label' + s] = this.value; renderFBCanvas(); }; })(i, side);
+        wrap.appendChild(lbl);
+        wrap.appendChild(inp);
+        capDiv.appendChild(wrap);
+      });
+      row.appendChild(capDiv);
+    }
 
-    // Delete button
-    var delBtn = document.createElement('button');
-    delBtn.className = 'fb-del';
-    delBtn.title = 'Remove field';
-    delBtn.innerHTML = '<svg width=16 height=16 fill=none stroke=currentColor viewBox=”0 0 24 24”><path stroke-linecap=round stroke-linejoin=round stroke-width=2 d=”M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16”/></svg>';
-    (function(idx) { delBtn.onclick = function() { fbRemoveField(idx); }; })(i);
-    div.appendChild(delBtn);
-
-    canvas.appendChild(div);
+    body.appendChild(row);
   }
 }
+
+// Re-render canvas when form name changes (so header stays in sync)
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.id === 'fb-name' && app.view === 'form-builder') {
+    // Lightweight: only update the title in the existing header
+    var titleEl = document.querySelector('#fb-canvas .fb-brand-title');
+    if (titleEl) titleEl.textContent = e.target.value || 'Untitled Form';
+  }
+});
 
 function fbDragPalette(e, type) { e.dataTransfer.setData('fb-type', type); e.dataTransfer.effectAllowed = 'copy'; }
 function fbCanvasDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; document.getElementById('fb-canvas').classList.add('drag-over'); }
@@ -5270,7 +5356,7 @@ function fbFieldDragEnd(e) { e.target.classList.remove('dragging'); fbDragIdx = 
 function fbAddField(type) {
   const id = 'f_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
   const defaults = {
-    checkbox: 'New Checkbox', text: 'New Text Field', select: 'New Dropdown', photo: 'Photo',
+    checkbox: 'New Checkbox', text: 'New Text Field', select: 'New Dropdown', photo: 'Photo', photopair: 'Before / After',
     textarea: 'Notes', number: 'Number', date: 'Date', time: 'Time', email: 'Email', phone: 'Phone',
     radio: 'Choose One', multicheck: 'Select All That Apply', rating: 'Rating',
     signature: 'Signature', heading: 'Section Heading', divider: ''
@@ -5306,7 +5392,7 @@ async function saveFormTemplate() {
     }
   }
   try {
-    const body = { name, fields: app.formBuilderFields };
+    const body = { name, fields: app.formBuilderFields, clientId: app.formBuilderClientId || '' };
     if (app.editingTemplateId) {
       const updated = await apiPost('/api/form-templates/' + app.editingTemplateId, body, 'PUT');
       const idx = db.formTemplates.findIndex(t => t.id === app.editingTemplateId);
@@ -5325,17 +5411,45 @@ async function saveFormTemplate() {
 function openFormPreview() {
   const name = (document.getElementById('fb-name').value || '').trim() || 'Untitled Form';
   const fields = app.formBuilderFields || [];
+  const client = (db.clients || []).find(c => c.id === app.formBuilderClientId) || null;
   document.getElementById('fb-preview-title').textContent = name + ' — Preview';
   const body = document.getElementById('fb-preview-body');
   if (!fields.length) {
     body.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--muted);">No fields to preview. Add fields to the canvas first.</div>';
   } else {
-    body.innerHTML = '<form onsubmit="return false" class="fb-preview-form">' +
+    body.innerHTML = renderFormBrandedHeader(client, name) +
+      '<form onsubmit="return false" class="fb-preview-form" style="padding:0 4px;">' +
       renderFormFields(fields, 'pv') + '</form>';
-    // Wire up any signature pads / ratings inside preview
     initFormFieldWidgets(fields, 'pv');
   }
   openModal('modal-fb-preview');
+}
+
+// Branded header — matches the PDF export style. Left: FieldMark. Right: client logo/details.
+function renderFormBrandedHeader(client, title) {
+  const c = client || null;
+  const logo = c && c.logo ? `<img src="${esc(c.logo)}" style="max-height:48px;max-width:160px;object-fit:contain;display:block;margin-left:auto;margin-bottom:4px;background:#fff;border-radius:4px;padding:2px;">` : '';
+  const cName = c ? esc(c.name || '') : '';
+  const cAddr = c ? [c.address, c.city, c.state].filter(Boolean).map(esc).join(', ') : '';
+  const cPhone = c && c.phone ? esc(c.phone) : '';
+  return `<div class="fb-brand-header">
+    <div class="fb-brand-left">
+      <div class="fb-brand-fm-icon">
+        <svg width="22" height="22" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      </div>
+      <div>
+        <div class="fb-brand-fm-name">FieldMark</div>
+        <div class="fb-brand-fm-sub">Service Management Platform</div>
+      </div>
+    </div>
+    <div class="fb-brand-right">
+      ${logo}
+      ${cName ? `<div class="fb-brand-client-name">${cName}</div>` : ''}
+      ${cAddr ? `<div class="fb-brand-client-meta">${cAddr}</div>` : ''}
+      ${cPhone ? `<div class="fb-brand-client-meta">${cPhone}</div>` : ''}
+    </div>
+  </div>
+  <div class="fb-brand-title">${esc(title || '')}</div>`;
 }
 
 // Shared renderer — generates HTML for a set of form-builder fields.
@@ -5400,6 +5514,27 @@ function renderFormFields(fields, prefix) {
             <div id="${id}-preview"></div>
           </div>
         </div>`;
+      case 'photopair': {
+        const la = esc(f.labelA || 'Before');
+        const lb = esc(f.labelB || 'After');
+        const pairCell = (side, capt) => `
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:4px;">${capt}${reqStar}</div>
+            <div class="photo-drop" onclick="document.getElementById('${id}-${side}').click()" id="${id}-${side}-target" style="border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;">
+              <div style="font-size:22px;margin-bottom:2px;">📷</div>
+              <div style="font-size:11px;color:var(--muted);">Tap to upload</div>
+            </div>
+            <input type="file" id="${id}-${side}" accept="image/*" style="display:none;" data-fb-photopair-idx="${i}" data-fb-photopair-side="${side}">
+            <div id="${id}-${side}-preview"></div>
+          </div>`;
+        return `<div class="fg" style="margin-bottom:12px;">
+          <label class="flbl">${lbl}</label>
+          <div class="fb-photo-pair" style="margin-top:6px;">
+            ${pairCell('a', la)}
+            ${pairCell('b', lb)}
+          </div>
+        </div>`;
+      }
       default:
         return '';
     }
@@ -6414,6 +6549,16 @@ function renderCustomFieldValue(f) {
       return row(f.value ? `<img src="${f.value}" style="max-width:320px;border:1px solid var(--border);border-radius:6px;background:#fff;">` : '<span style="color:var(--muted);">Not signed</span>');
     case 'photo':
       return row(f.value ? `<img src="${f.value}" style="max-width:280px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="openPhotoLightbox(this.src)">` : '<span style="color:var(--muted);">No photo</span>');
+    case 'photopair': {
+      const v = f.value || {};
+      const la = esc(v.labelA || 'Before');
+      const lb = esc(v.labelB || 'After');
+      const cell = (src, cap) => `<div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">${cap}</div>
+        ${src ? `<img src="${src}" style="max-width:220px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="openPhotoLightbox(this.src)">` : '<span style="color:var(--muted);">No photo</span>'}
+      </div>`;
+      return row(`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">${cell(v.a, la)}${cell(v.b, lb)}</div>`);
+    }
     default:
       return '';
   }
@@ -6429,7 +6574,41 @@ function initCustomChecklistWidgets(template) {
       const input = document.getElementById('cf-' + i);
       if (input) input.onchange = function() { handleCustomFieldPhoto(i, this); };
     }
+    if (f.type === 'photopair') {
+      ['a','b'].forEach(side => {
+        const input = document.getElementById('cf-' + i + '-' + side);
+        if (input) input.onchange = function() { handleCustomFieldPhotoPair(i, side, this); };
+      });
+    }
   });
+}
+
+function handleCustomFieldPhotoPair(idx, side, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  compressImage(file).then(dataUrl => {
+    if (!app.customFieldPhotos) app.customFieldPhotos = {};
+    if (!app.customFieldPhotos[idx] || typeof app.customFieldPhotos[idx] !== 'object' || 'dataURL' in (app.customFieldPhotos[idx] || {})) {
+      app.customFieldPhotos[idx] = {};
+    }
+    app.customFieldPhotos[idx][side] = dataUrl;
+    const preview = document.getElementById('cf-' + idx + '-' + side + '-preview');
+    const target = document.getElementById('cf-' + idx + '-' + side + '-target');
+    if (target) target.style.display = 'none';
+    if (preview) preview.innerHTML = `<div style="position:relative;display:inline-block;margin-top:6px;">
+      <img src="${dataUrl}" style="max-width:160px;border-radius:6px;border:1px solid var(--border);">
+      <button type="button" onclick="removeCustomFieldPhotoPair(${idx},'${side}')" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;">✕</button>
+    </div>`;
+  }).catch(() => showToast('Failed to process image','error'));
+  inputEl.value = '';
+}
+
+function removeCustomFieldPhotoPair(idx, side) {
+  if (app.customFieldPhotos && app.customFieldPhotos[idx]) app.customFieldPhotos[idx][side] = null;
+  const preview = document.getElementById('cf-' + idx + '-' + side + '-preview');
+  const target = document.getElementById('cf-' + idx + '-' + side + '-target');
+  if (preview) preview.innerHTML = '';
+  if (target) target.style.display = '';
 }
 
 function handleCustomFieldPhoto(idx, inputEl) {
@@ -6471,9 +6650,12 @@ function renderReportForm() {
   let checklistCard = '';
   if (type === 'maintenance') {
     if (template) {
-      checklistCard = `<div class="card">
-        <div class="card-hd"><span class="card-title">${esc(template.name)}</span><span class="badge bb">Custom</span></div>
-        <div class="card-body" style="padding:12px 20px;">
+      // Use the customer attached to this report (via equipment → location → client),
+      // falling back to the form's designed-for client if set.
+      const hdrClient = cl || (db.clients || []).find(x => x.id === template.clientId) || null;
+      checklistCard = `<div class="card" style="padding:0;overflow:hidden;">
+        ${renderFormBrandedHeader(hdrClient, template.name)}
+        <div class="card-body" style="padding:16px 20px;">
           ${renderCustomChecklistFields(template)}
         </div>
       </div>`;
@@ -6590,6 +6772,10 @@ async function submitReport(e) {
         if (f.type === 'photo') {
           value = (app.customFieldPhotos && app.customFieldPhotos[i]) || null;
           if (f.required && !value) { showToast(`"${f.label}" photo is required`, 'error'); return; }
+        } else if (f.type === 'photopair') {
+          const pair = (app.customFieldPhotos && app.customFieldPhotos[i]) || {};
+          value = { a: pair.a || null, b: pair.b || null, labelA: f.labelA || 'Before', labelB: f.labelB || 'After' };
+          if (f.required && (!value.a || !value.b)) { showToast(`"${f.label}" requires both photos`, 'error'); return; }
         } else if (f.type === 'signature') {
           const canvas = document.getElementById(id);
           if (canvas && canvas.getAttribute('data-has-ink') === '1') {
@@ -6683,11 +6869,13 @@ function renderReportDetail() {
   const statusCls = r.status==='Operational'?'bg':r.status==='Needs Attention'?'ba':'br';
   let checklistHtml = '';
   if (r.checklist && r.checklist.templateId) {
-    // Custom template format
+    // Custom template format — rendered with the branded header (matches report form)
     const cf = r.checklist;
-    checklistHtml = `<div class="card" style="margin-top:16px;">
-      <div class="card-hd"><span class="card-title">${esc(cf.templateName||'Custom Checklist')}</span><span class="badge bb">Custom</span></div>
-      <div class="card-body" style="padding:12px 20px;">
+    const tpl = (db.formTemplates || []).find(t => t.id === cf.templateId);
+    const hdrClient = cl || (tpl ? (db.clients || []).find(x => x.id === tpl.clientId) : null) || null;
+    checklistHtml = `<div class="card" style="margin-top:16px;padding:0;overflow:hidden;">
+      ${renderFormBrandedHeader(hdrClient, cf.templateName || 'Custom Form')}
+      <div class="card-body" style="padding:16px 20px;">
         ${(cf.fields||[]).map(f => renderCustomFieldValue(f)).join('')}
       </div>
     </div>`;

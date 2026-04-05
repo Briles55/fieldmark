@@ -242,6 +242,7 @@ try { db.exec(`ALTER TABLE quotes ADD COLUMN hideBreakdown INTEGER DEFAULT 0`); 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
 try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoBefore TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoAfter TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoNameplate TEXT DEFAULT ''"); } catch(e) {}
@@ -1113,25 +1114,25 @@ app.get('/api/form-templates', requireAuth, (req, res) => {
 });
 
 app.post('/api/form-templates', requireAdmin, (req, res) => {
-  const { name, fields } = req.body;
+  const { name, fields, clientId } = req.body;
   if (!name) return res.status(400).json({ error: 'Template name required' });
   if (!fields || !fields.length) return res.status(400).json({ error: 'At least one field is required' });
   const id = genId();
   const now = new Date().toISOString();
-  db.prepare('INSERT INTO form_templates (id,name,fields,createdAt,updatedAt) VALUES (?,?,?,?,?)')
-    .run(id, name, JSON.stringify(fields), now, now);
+  db.prepare('INSERT INTO form_templates (id,name,fields,clientId,createdAt,updatedAt) VALUES (?,?,?,?,?,?)')
+    .run(id, name, JSON.stringify(fields), clientId || '', now, now);
   const t = db.prepare('SELECT * FROM form_templates WHERE id=?').get(id);
   t.fields = JSON.parse(t.fields);
   res.json(t);
 });
 
 app.put('/api/form-templates/:id', requireAdmin, (req, res) => {
-  const { name, fields } = req.body;
+  const { name, fields, clientId } = req.body;
   if (!name) return res.status(400).json({ error: 'Template name required' });
   if (!fields || !fields.length) return res.status(400).json({ error: 'At least one field is required' });
   const now = new Date().toISOString();
-  db.prepare('UPDATE form_templates SET name=?,fields=?,updatedAt=? WHERE id=?')
-    .run(name, JSON.stringify(fields), now, req.params.id);
+  db.prepare('UPDATE form_templates SET name=?,fields=?,clientId=?,updatedAt=? WHERE id=?')
+    .run(name, JSON.stringify(fields), clientId || '', now, req.params.id);
   const t = db.prepare('SELECT * FROM form_templates WHERE id=?').get(req.params.id);
   if (!t) return res.status(404).json({ error: 'Template not found' });
   t.fields = JSON.parse(t.fields);

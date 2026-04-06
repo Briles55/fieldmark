@@ -707,6 +707,33 @@ function getEmailSettings() {
   try { return row ? JSON.parse(row.value) : {}; } catch { return {}; }
 }
 
+// Auto-detect SMTP host from email address
+function getSmtpConfig(emailAddr) {
+  const domain = (emailAddr || '').split('@').pop().toLowerCase();
+  const map = {
+    'gmail.com':     { host: 'smtp.gmail.com',       port: 587, secure: false },
+    'googlemail.com':{ host: 'smtp.gmail.com',       port: 587, secure: false },
+    'hotmail.com':   { host: 'smtp-mail.outlook.com', port: 587, secure: false },
+    'outlook.com':   { host: 'smtp-mail.outlook.com', port: 587, secure: false },
+    'live.com':      { host: 'smtp-mail.outlook.com', port: 587, secure: false },
+    'msn.com':       { host: 'smtp-mail.outlook.com', port: 587, secure: false },
+    'yahoo.com':     { host: 'smtp.mail.yahoo.com',   port: 587, secure: false },
+    'yahoo.ca':      { host: 'smtp.mail.yahoo.com',   port: 587, secure: false },
+    'icloud.com':    { host: 'smtp.mail.me.com',      port: 587, secure: false },
+    'me.com':        { host: 'smtp.mail.me.com',      port: 587, secure: false },
+    'aol.com':       { host: 'smtp.aol.com',           port: 587, secure: false },
+  };
+  return map[domain] || { host: 'smtp-mail.outlook.com', port: 587, secure: false };
+}
+
+function createMailTransport(cfg) {
+  const smtp = getSmtpConfig(cfg.smtpUser);
+  return nodemailer.createTransport({
+    host: smtp.host, port: smtp.port, secure: smtp.secure,
+    auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
+  });
+}
+
 async function sendClientNotification(report) {
   try {
     const cfg = getEmailSettings();
@@ -720,12 +747,7 @@ async function sendClientNotification(report) {
     const client = db.prepare('SELECT * FROM clients WHERE id=?').get(loc.clientId);
     if (!client || !client.email) return;
 
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
-    });
+    const transporter = createMailTransport(cfg);
 
     const reportDate = report.date ? new Date(report.date).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) : 'N/A';
     const reportLink = cfg.appUrl ? `${cfg.appUrl.replace(/\/$/, '')}/#report-${report.id}` : '';
@@ -1178,10 +1200,7 @@ app.post('/api/onboarding/send', requireAdmin, async (req, res) => {
     const link = appUrl ? `${appUrl}/onboard?token=${token}` : '';
     if (!link) return res.json({ ok: true, token, emailSent: false, reason: 'App URL not configured' });
     const fromName = cfg.fromName || 'FieldMark';
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com', port: 587, secure: false,
-      auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
-    });
+    const transporter = createMailTransport(cfg);
     await transporter.sendMail({
       from: `"${fromName}" <${cfg.smtpUser}>`,
       to: email,
@@ -2138,7 +2157,7 @@ app.get('/api/quotes/:id/approve-link', (req, res) => {
     if (cfg.enabled && cfg.smtpUser && cfg.smtpPass) {
       const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(qt.clientId);
       const fromName = cfg.fromName || 'FieldMark';
-      const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+      const transporter = createMailTransport(cfg);
       transporter.sendMail({
         from: `"${fromName}" <${cfg.smtpUser}>`,
         to: cfg.smtpUser,
@@ -2179,7 +2198,7 @@ app.post('/api/quotes/:id/approve', requireClientAuth, (req, res) => {
     if (cfg.enabled && cfg.smtpUser && cfg.smtpPass) {
       const cl = db.prepare('SELECT * FROM clients WHERE id=?').get(qt.clientId);
       const fromName = cfg.fromName || 'FieldMark';
-      const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+      const transporter = createMailTransport(cfg);
       transporter.sendMail({
         from: `"${fromName}" <${cfg.smtpUser}>`,
         to: cfg.smtpUser,
@@ -2234,7 +2253,7 @@ app.post('/api/quotes/:id/send', requireAdmin, async (req, res) => {
   const approveUrl = baseUrl + '/api/quotes/' + qt.id + '/approve-link?token=' + token;
 
   try {
-    const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+    const transporter = createMailTransport(cfg);
     await transporter.sendMail({
       from: `"${fromName}" <${cfg.smtpUser}>`,
       to: recipients.join(', '),
@@ -2305,10 +2324,7 @@ app.post('/api/invoices/:id/send', requireAdmin, async (req, res) => {
       console.log('PDF generation not available, sending email without attachment:', pdfErr.message);
     }
 
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com', port: 587, secure: false,
-      auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
-    });
+    const transporter = createMailTransport(cfg);
 
     await transporter.sendMail({
       from: `"${fromName}" <${cfg.smtpUser}>`,
@@ -2435,10 +2451,7 @@ app.post('/api/service-requests', requireClientAuth, serviceRequestLimiter, asyn
   // Send email if configured
   if (cfg.enabled && cfg.smtpUser && cfg.smtpPass) {
     try {
-      const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com', port: 587, secure: false,
-        auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
-      });
+      const transporter = createMailTransport(cfg);
       await transporter.sendMail({
         from: `"${fromName}" <${cfg.smtpUser}>`,
         to: cfg.smtpUser,
@@ -2819,10 +2832,7 @@ app.post('/api/email/test', requireAdmin, async (req, res) => {
   const { to } = req.body;
   if (!to) return res.status(400).json({ error: 'Test recipient email is required' });
   try {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com', port: 587, secure: false,
-      auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
-    });
+    const transporter = createMailTransport(cfg);
     await transporter.sendMail({
       from: `"${cfg.fromName || 'FieldMark'}" <${cfg.smtpUser}>`,
       to,
@@ -3036,7 +3046,7 @@ setInterval(() => {
     const cfg = getEmailSettings();
     if (!cfg.enabled || !cfg.smtpUser || !cfg.smtpPass) return;
     const fromName = cfg.fromName || 'FieldMark';
-    const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+    const transporter = createMailTransport(cfg);
 
     pending.forEach(async (qt) => {
       try {
@@ -3102,7 +3112,7 @@ setInterval(() => {
     });
 
     const fromName = cfg.fromName || 'FieldMark';
-    const transporter = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 587, secure: false, auth: { user: cfg.smtpUser, pass: cfg.smtpPass } });
+    const transporter = createMailTransport(cfg);
 
     // Check last notification date per client to avoid spamming
     try { db.exec("CREATE TABLE IF NOT EXISTS eol_notifications (clientId TEXT PRIMARY KEY, lastSentYear INTEGER DEFAULT 0)"); } catch(e) {}

@@ -344,6 +344,17 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
   .fb-mobile-reorder button:hover{color:var(--text);background:var(--surface2);}
 }
 
+/* BUTTON FEEDBACK */
+.btn-loading{position:relative;color:transparent!important;pointer-events:none;min-width:60px;}
+.btn-loading::after{content:"";position:absolute;top:50%;left:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:btn-spin .6s linear infinite;}
+.btn-secondary.btn-loading::after,.btn-ghost.btn-loading::after{border-color:rgba(100,116,139,.2);border-top-color:var(--accent);}
+.btn-danger.btn-loading::after{border-color:rgba(255,255,255,.3);border-top-color:#fff;}
+@keyframes btn-spin{to{transform:rotate(360deg)}}
+.btn-status{display:inline-block;font-size:12px;font-weight:600;margin-left:10px;vertical-align:middle;animation:btn-fade-in .2s ease;}
+.btn-status-ok{color:var(--green);}
+.btn-status-err{color:var(--red);}
+@keyframes btn-fade-in{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+
 /* EQUIPMENT THUMBNAILS */
 .eq-thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:block;}
 .eq-thumb-empty{width:42px;height:42px;border-radius:6px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);background:var(--bg2);}
@@ -2855,6 +2866,7 @@ function removeInvoiceLineItem(idx) {
 async function saveInvoice() {
   var inv = (db.invoices || []).find(function(x) { return x.id === app.invoiceId; });
   if (!inv) return;
+  var ref = btnStart(_actionBtn);
   var descs = document.querySelectorAll('.inv-li-desc');
   var qtys = document.querySelectorAll('.inv-li-qty');
   var rates = document.querySelectorAll('.inv-li-rate');
@@ -2876,9 +2888,9 @@ async function saveInvoice() {
     var updated = await apiPost('/api/invoices/' + inv.id, { lineItems: lineItems, subtotal: subtotal, taxRate: taxRate, taxAmount: taxAmount, total: total, notes: notes }, 'PUT');
     var idx = (db.invoices || []).findIndex(function(x) { return x.id === inv.id; });
     if (idx >= 0) db.invoices[idx] = updated;
-    showToast('Invoice saved', 'success');
+    btnEnd(ref,true,'Invoice saved');
     renderInvoiceDetail();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { btnEnd(ref,false,e.message); }
 }
 
 async function sendInvoice(id) {
@@ -2887,13 +2899,14 @@ async function sendInvoice(id) {
   var cl = db.clients.find(function(c) { return c.id === inv.clientId; });
   if (!cl || !cl.billingEmail) { showToast('Client has no billing email configured', 'error'); return; }
   if (!confirm('Send invoice ' + inv.invoiceNumber + ' to ' + cl.billingEmail + '?')) return;
+  var ref = btnStart(_actionBtn);
   try {
     var updated = await apiPost('/api/invoices/' + id + '/send', {});
     var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
     if (idx >= 0) db.invoices[idx] = updated;
-    showToast('Invoice sent to ' + cl.billingEmail, 'success');
+    btnEnd(ref,true,'Invoice sent');
     renderInvoiceDetail();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { btnEnd(ref,false,e.message); }
 }
 
 function markInvoicePaid(id) {
@@ -2924,21 +2937,22 @@ async function submitPayment(id) {
   var payDate = document.getElementById('pay-date').value;
   if (!amount || !payDate) { showToast('Amount and date are required', 'error'); return; }
   var method = document.getElementById('pay-method').value;
-  var ref = document.getElementById('pay-ref').value;
+  var payRef = document.getElementById('pay-ref').value;
+  var ref = btnStart(_actionBtn);
   try {
     var updated = await apiPost('/api/invoices/' + id, {
       status: 'Paid',
       paymentAmount: amount,
       paymentMethod: method,
       paymentDate: payDate,
-      paymentRef: ref
+      paymentRef: payRef
     }, 'PUT');
     var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
     if (idx >= 0) db.invoices[idx] = updated;
+    btnEnd(ref,true,'Payment recorded');
     closeGenericModal();
-    showToast('Payment recorded', 'success');
     renderInvoiceDetail();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { btnEnd(ref,false,e.message); }
 }
 
 // ─── WHOLESALERS & SUBCONTRACTORS (Settings) ─────────────────────────────────
@@ -2984,16 +2998,18 @@ async function saveWholesaler() {
   var id = document.getElementById('ws-id').value;
   var data = { name: document.getElementById('ws-name').value.trim(), accountNumber: document.getElementById('ws-account').value.trim(), phone: document.getElementById('ws-phone').value.trim(), email: document.getElementById('ws-email').value.trim(), address: document.getElementById('ws-address').value.trim() };
   if (!data.name) { showToast('Name required', 'error'); return; }
+  var ref = btnStart(_actionBtn);
   try {
     if (id) { var u = await apiPost('/api/wholesalers/' + id, data, 'PUT'); var idx = (db.wholesalers||[]).findIndex(function(x){return x.id===id;}); if (idx>=0) db.wholesalers[idx]=u; }
     else { var c = await apiPost('/api/wholesalers', data); db.wholesalers = db.wholesalers||[]; db.wholesalers.push(c); }
-    closeGenericModal(); showToast('Wholesaler saved', 'success'); renderWholesalersTable();
-  } catch(e) { showToast(e.message, 'error'); }
+    btnEnd(ref,true,'Wholesaler saved'); closeGenericModal(); renderWholesalersTable();
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function deleteWholesaler(id) {
   if (!confirm('Delete this wholesaler?')) return;
-  try { await apiPost('/api/wholesalers/' + id, {}, 'DELETE'); db.wholesalers = (db.wholesalers||[]).filter(function(x){return x.id!==id;}); showToast('Deleted', 'success'); renderWholesalersTable(); } catch(e) { showToast(e.message, 'error'); }
+  var ref = btnStart(_actionBtn);
+  try { await apiPost('/api/wholesalers/' + id, {}, 'DELETE'); db.wholesalers = (db.wholesalers||[]).filter(function(x){return x.id!==id;}); btnEnd(ref,true,'Deleted'); renderWholesalersTable(); } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 function renderSubcontractorsTable() {
@@ -3038,16 +3054,18 @@ async function saveSubcontractor() {
   var id = document.getElementById('sub-id').value;
   var data = { name: document.getElementById('sub-name').value.trim(), trade: document.getElementById('sub-trade').value.trim(), phone: document.getElementById('sub-phone').value.trim(), email: document.getElementById('sub-email').value.trim(), rate: document.getElementById('sub-rate').value.trim() };
   if (!data.name) { showToast('Name required', 'error'); return; }
+  var ref = btnStart(_actionBtn);
   try {
     if (id) { var u = await apiPost('/api/subcontractors/' + id, data, 'PUT'); var idx = (db.subcontractors||[]).findIndex(function(x){return x.id===id;}); if (idx>=0) db.subcontractors[idx]=u; }
     else { var c = await apiPost('/api/subcontractors', data); db.subcontractors = db.subcontractors||[]; db.subcontractors.push(c); }
-    closeGenericModal(); showToast('Subcontractor saved', 'success'); renderSubcontractorsTable();
-  } catch(e) { showToast(e.message, 'error'); }
+    btnEnd(ref,true,'Subcontractor saved'); closeGenericModal(); renderSubcontractorsTable();
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function deleteSubcontractor(id) {
   if (!confirm('Delete this subcontractor?')) return;
-  try { await apiPost('/api/subcontractors/' + id, {}, 'DELETE'); db.subcontractors = (db.subcontractors||[]).filter(function(x){return x.id!==id;}); showToast('Deleted', 'success'); renderSubcontractorsTable(); } catch(e) { showToast(e.message, 'error'); }
+  var ref = btnStart(_actionBtn);
+  try { await apiPost('/api/subcontractors/' + id, {}, 'DELETE'); db.subcontractors = (db.subcontractors||[]).filter(function(x){return x.id!==id;}); btnEnd(ref,true,'Deleted'); renderSubcontractorsTable(); } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 // ─── PURCHASE ORDERS (Work Order Detail) ─────────────────────────────────────
@@ -3159,12 +3177,13 @@ async function submitNewPO() {
   });
   if (items.length === 0) { showToast('Add at least one item', 'error'); return; }
   var notes = document.getElementById('po-notes').value.trim();
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/work-orders/' + woId + '/purchase-orders', { type: type, wholesalerId: wholesalerId, subcontractorId: subcontractorId, items: items, notes: notes });
+    btnEnd(ref,true,'PO created');
     closeGenericModal();
-    showToast('Purchase order created', 'success');
     renderWOPurchaseOrders(woId);
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function confirmPO(poId, woId) {
@@ -3711,6 +3730,7 @@ function qbCollectData() {
 async function saveQuote(andSend, andPreview) {
   var data = qbCollectData();
   if (!data) return;
+  var ref = btnStart(_actionBtn);
   try {
     var result;
     if (app.editingQuoteId) {
@@ -3722,7 +3742,7 @@ async function saveQuote(andSend, andPreview) {
       if (!db.quotes) db.quotes = [];
       db.quotes.unshift(result);
     }
-    showToast('Quote saved', 'success');
+    btnEnd(ref,true,'Quote saved');
     if (andSend) {
       await sendQuote(result.id);
     } else if (andPreview) {
@@ -3731,7 +3751,7 @@ async function saveQuote(andSend, andPreview) {
     app.viewQuoteId = result.id;
     app.editingQuoteId = null;
     showView('quote-detail');
-  } catch(e) { showToast(e.message || 'Error saving quote', 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 function exportQuotePDF(id) {
@@ -3743,34 +3763,37 @@ function exportQuotePDF(id) {
 
 async function sendQuote(id) {
   if (!confirm('Send this quote to all recipients?')) return;
+  var ref = btnStart(_actionBtn);
   try {
     var result = await apiPost('/api/quotes/' + id + '/send', {});
     var idx = (db.quotes || []).findIndex(function(x) { return x.id === id; });
     if (idx >= 0) db.quotes[idx] = result;
-    showToast('Quote sent successfully', 'success');
+    btnEnd(ref,true,'Quote sent');
     if (app.view === 'quote-detail') renderQuoteDetail();
-  } catch(e) { showToast(e.message || 'Failed to send quote', 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function adminApproveQuote(id) {
   if (!confirm('Mark this quote as approved?')) return;
+  var ref = btnStart(_actionBtn);
   try {
     var result = await apiPost('/api/quotes/' + id + '/admin-approve', {});
     var idx = (db.quotes || []).findIndex(function(x) { return x.id === id; });
     if (idx >= 0) db.quotes[idx] = result;
-    showToast('Quote marked as approved', 'success');
+    btnEnd(ref,true,'Quote approved');
     if (app.view === 'quote-detail') renderQuoteDetail();
-  } catch(e) { showToast(e.message || 'Failed to approve quote', 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function deleteQuote(id) {
   if (!confirm('Delete this quote? This cannot be undone.')) return;
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/quotes/' + id, {}, 'DELETE');
     db.quotes = (db.quotes || []).filter(function(x) { return x.id !== id; });
-    showToast('Quote deleted', 'success');
+    btnEnd(ref,true,'Quote deleted');
     nav('quotes');
-  } catch(e) { showToast(e.message || 'Failed to delete quote', 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 // Client portal quotes
@@ -3810,13 +3833,14 @@ function renderPortalQuotes() {
 
 async function portalApproveQuote(id) {
   if (!confirm('Approve this quote?')) return;
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/quotes/' + id + '/approve', {});
     var q = (db.quotes || []).find(function(x) { return x.id === id; });
     if (q) { q.status = 'Approved'; q.approvedAt = new Date().toISOString(); q.approvedBy = 'client'; }
-    showToast('Quote approved! Thank you.', 'success');
+    btnEnd(ref,true,'Quote approved');
     renderPortalQuotes();
-  } catch(e) { showToast(e.message || 'Failed to approve quote', 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 // ─── WARRANTY ────────────────────────────────────────────────────────────────
@@ -3886,15 +3910,15 @@ async function submitWarranty() {
   }
 
   if (!confirm(wType === 'full' ? 'Move the full invoice to warranty?' : 'Apply selected warranty credits?')) return;
-
+  var ref = btnStart(_actionBtn);
   try {
     var updated = await apiPost('/api/invoices/' + id + '/warranty', data);
     var idx = (db.invoices || []).findIndex(function(x) { return x.id === id; });
     if (idx >= 0) db.invoices[idx] = updated;
+    btnEnd(ref,true,'Warranty applied');
     closeGenericModal();
-    showToast('Warranty applied', 'success');
     renderInvoiceDetail();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { btnEnd(ref,false,e.message); }
 }
 
 // ─── SERVICE REQUEST (Client Portal) ──────────────────────────────────────────
@@ -4004,16 +4028,13 @@ async function submitServiceRequest(e) {
   const poNumber = document.getElementById('sr-po').value.trim();
   if (!locationId || !urgency || !description) { showToast('Please fill in all required fields','error'); return; }
   if (!poNumber) { showToast('Purchase Order number is required','error'); return; }
-  const btn = document.getElementById('sr-submit-btn');
-  btn.disabled = true; btn.textContent = 'Sending…';
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/service-requests', { locationId, equipmentId: equipmentId||undefined, urgency, description, photos: app.requestPhotos, poNumber });
-    showToast('Service request submitted successfully!','success');
+    btnEnd(ref,true,'Request submitted');
     renderServiceRequest(); // reset form
   } catch(err) {
-    showToast(err.message,'error');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Submit Request';
+    btnEnd(ref,false,err.message);
   }
 }
 
@@ -4134,15 +4155,16 @@ function renderServiceRequestDetail() {
 }
 
 async function updateServiceRequest() {
+  var ref = btnStart(_actionBtn);
   const status = document.getElementById('srd-status').value;
   const notes = document.getElementById('srd-notes').value;
   try {
     await apiPost('/api/service-requests/'+app.serviceRequestId, { status, notes }, 'PUT');
     const sr = (db.serviceRequests||[]).find(s=>s.id===app.serviceRequestId);
     if (sr) { sr.status = status; sr.notes = notes; }
-    showToast('Service request updated','success');
+    btnEnd(ref,true,'Request updated');
     renderServiceRequestDetail();
-  } catch(e) { showToast(e.message,'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 function confirmDeleteServiceRequest(id) {
@@ -4445,6 +4467,7 @@ function toggleApprenticeSelect() {
 async function saveTechNotes() {
   var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
   if (!wo) return;
+  var ref = btnStart(_actionBtn);
   var techNotes = document.getElementById('wod-tech-notes').value;
   var hasApprentice = document.getElementById('wod-has-apprentice');
   var apprenticeId = '';
@@ -4456,14 +4479,15 @@ async function saveTechNotes() {
     var updated = await apiPost('/api/work-orders/'+wo.id+'/close', { status: wo.status, techNotes: techNotes, apprenticeId: apprenticeId }, 'PUT');
     var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
     if (idx>=0) db.workOrders[idx] = updated;
-    showToast('Tech notes saved','success');
+    btnEnd(ref,true,'Notes saved');
     renderWorkOrderDetail();
-  } catch(e) { showToast(e.message,'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function updateWorkOrder() {
   var wo = (db.workOrders||[]).find(function(w){return w.id===app.workOrderId;});
   if (!wo) return;
+  var ref = btnStart(_actionBtn);
   var data = {
     status: document.getElementById('wod-status').value,
     priority: document.getElementById('wod-priority').value,
@@ -4474,9 +4498,9 @@ async function updateWorkOrder() {
     var updated = await apiPost('/api/work-orders/'+wo.id, data, 'PUT');
     var idx = (db.workOrders||[]).findIndex(function(w){return w.id===wo.id;});
     if (idx>=0) db.workOrders[idx] = updated;
-    showToast('Work order updated','success');
+    btnEnd(ref,true,'Work order updated');
     renderWorkOrderDetail();
-  } catch(e) { showToast(e.message,'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 function confirmDeleteWorkOrder() {
@@ -4610,6 +4634,7 @@ async function submitWorkOrder() {
   var clientId = document.getElementById('wo-m-client').value;
   var locationId = document.getElementById('wo-m-location').value;
   if (!clientId || !locationId) { showToast('Client and location are required','error'); return; }
+  var ref = btnStart(_actionBtn);
   var data = {
     clientId: clientId,
     locationId: locationId,
@@ -4623,10 +4648,10 @@ async function submitWorkOrder() {
     var created = await apiPost('/api/work-orders', data);
     db.workOrders = db.workOrders || [];
     db.workOrders.unshift(created);
+    btnEnd(ref,true,'WO ' + created.woNumber + ' created');
     closeGenericModal();
-    showToast('Work order ' + created.woNumber + ' created','success');
     openWorkOrderDetail(created.id);
-  } catch(e) { showToast(e.message,'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 // ─── SERVICE REQUEST → WORK ORDER CONVERSION ─────────────────────────────────
@@ -4931,29 +4956,32 @@ async function renderTimeCardsAdmin() {
 }
 
 async function approveTimeCard(userId, weekStart) {
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/time-cards/approve', { userId, weekStart });
-    showToast('Time card approved', 'success');
+    btnEnd(ref,true,'Approved');
     renderTimeCardsAdmin();
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function reopenTimeCard(userId, weekStart) {
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/time-cards/reopen', { userId, weekStart });
-    showToast('Time card reopened', 'success');
+    btnEnd(ref,true,'Reopened');
     if (isAdmin()) renderTimeCardsAdmin();
     else renderMyTimeCard();
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function submitTimeCard() {
   if (!confirm('Submit your time card for ' + formatWeekRange(app.tcWeekStart) + '? Once submitted, you cannot edit entries until an admin reopens it.')) return;
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/time-cards/submit', { weekStart: app.tcWeekStart });
-    showToast('Time card submitted', 'success');
+    btnEnd(ref,true,'Submitted');
     renderMyTimeCard();
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 // ─── TIME ENTRY MODAL ────────────────────────────────────────────────────────
@@ -5013,18 +5041,19 @@ async function saveTimeEntry() {
   var desc = document.getElementById('te-desc').value;
   if (!woId) { showToast('Please select a work order', 'error'); return; }
   if (!date || !hours) { showToast('Date and hours are required', 'error'); return; }
+  var ref = btnStart(_actionBtn);
   try {
     var updated = await apiPost('/api/work-orders/' + woId + '/labor', { date, hours: parseFloat(hours), desc });
     var idx = (db.workOrders||[]).findIndex(function(w) { return w.id === woId; });
     if (idx >= 0) db.workOrders[idx] = updated;
+    btnEnd(ref,true,'Entry added');
     closeGenericModal();
-    showToast('Time entry added', 'success');
     if (app.view === 'time-cards') {
       if (isAdmin()) renderTimeCardsAdmin(); else renderMyTimeCard();
     } else {
       renderWorkOrderDetail();
     }
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function updateTimeEntry() {
@@ -5034,18 +5063,19 @@ async function updateTimeEntry() {
   var hours = document.getElementById('te-hours').value;
   var desc = document.getElementById('te-desc').value;
   if (!date || !hours) { showToast('Date and hours are required', 'error'); return; }
+  var ref = btnStart(_actionBtn);
   try {
     var updated = await apiPost('/api/work-orders/' + woId + '/labor/' + entryId, { date, hours: parseFloat(hours), desc }, 'PUT');
     var idx = (db.workOrders||[]).findIndex(function(w) { return w.id === woId; });
     if (idx >= 0) db.workOrders[idx] = updated;
+    btnEnd(ref,true,'Entry updated');
     closeGenericModal();
-    showToast('Time entry updated', 'success');
     if (app.view === 'time-cards') {
       if (isAdmin()) renderTimeCardsAdmin(); else renderMyTimeCard();
     } else {
       renderWorkOrderDetail();
     }
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 async function deleteTimeEntry(woId, entryId) {
@@ -5573,23 +5603,24 @@ async function saveFormTemplate() {
     if (f.type === 'divider') continue;
     if (!f.label || !f.label.trim()) { showToast('All fields must have a label', 'error'); return; }
     if ((f.type === 'select' || f.type === 'radio' || f.type === 'multicheck') && (!f.options || !f.options.length)) {
-      showToast(`“${f.label}” needs at least one option`, 'error'); return;
+      showToast(`”${f.label}” needs at least one option`, 'error'); return;
     }
   }
+  var ref = btnStart(_actionBtn);
   try {
     const body = { name, fields: app.formBuilderFields, clientId: app.formBuilderClientId || '' };
     if (app.editingTemplateId) {
       const updated = await apiPost('/api/form-templates/' + app.editingTemplateId, body, 'PUT');
       const idx = db.formTemplates.findIndex(t => t.id === app.editingTemplateId);
       if (idx >= 0) db.formTemplates[idx] = updated; else db.formTemplates.push(updated);
-      showToast('Form updated', 'success');
+      btnEnd(ref,true,'Form updated');
     } else {
       const created = await apiPost('/api/form-templates', body);
       db.formTemplates.push(created);
-      showToast('Form created', 'success');
+      btnEnd(ref,true,'Form created');
     }
     showView('form-templates');
-  } catch (err) { showToast(err.message, 'error'); }
+  } catch (err) { btnEnd(ref,false,err.message); }
 }
 
 // ─── FORM BUILDER PREVIEW ───────────────────────────────────────────────────
@@ -5904,19 +5935,17 @@ function openDashQuotes() {
 async function sendOnboardingLink() {
   var email = document.getElementById('onboard-email').value.trim();
   if (!email) { showToast('Enter an email address', 'error'); return; }
-  var btn = document.getElementById('onboard-send-btn');
-  btn.disabled = true; btn.textContent = 'Sending...';
+  var ref = btnStart(_actionBtn);
   try {
     var resp = await apiPost('/api/onboarding/send', { email });
     if (resp.emailSent) {
-      showToast('Onboarding link sent to ' + email, 'success');
+      btnEnd(ref,true,'Link sent to ' + email);
     } else {
-      showToast('Link created but email not sent — ' + (resp.reason || 'check email settings'), 'warning');
+      btnEnd(ref,false,'Email not sent — ' + (resp.reason || 'check email settings'));
     }
     document.getElementById('onboard-email').value = '';
     renderOnboardingQueue();
-  } catch (err) { showToast(err.message, 'error'); }
-  btn.disabled = false; btn.textContent = 'Send Link';
+  } catch (err) { btnEnd(ref,false,err.message); }
 }
 
 async function renderOnboardingQueue() {
@@ -6015,13 +6044,14 @@ function reviewOnboarding(row) {
 }
 
 async function approveOnboarding(token) {
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/onboarding/' + token + '/approve', {});
-    showToast('Client created from onboarding', 'success');
     await loadDB();
+    btnEnd(ref,true,'Client created');
     renderDashboard();
     renderOnboardingQueue();
-  } catch (err) { showToast(err.message, 'error'); }
+  } catch (err) { btnEnd(ref,false,err.message); }
 }
 
 async function dismissOnboarding(token) {
@@ -6736,6 +6766,7 @@ function openEditReport(id) {
 async function saveEditReport() {
   var work = document.getElementById('er-work').value.trim();
   if (!work) { showToast('Work Performed is required', 'error'); document.getElementById('er-work').focus(); return; }
+  var ref = btnStart(_actionBtn);
   var dateVal = document.getElementById('er-date').value;
   var timeVal = document.getElementById('er-time').value;
   var body = {
@@ -6752,10 +6783,10 @@ async function saveEditReport() {
     var updated = await apiPost('/api/reports/' + app.editingReportId, body, 'PUT');
     var idx = db.reports.findIndex(function(x) { return x.id === app.editingReportId; });
     if (idx !== -1) db.reports[idx] = updated;
+    btnEnd(ref,true,'Report updated');
     closeModal('modal-edit-report');
-    showToast('Report updated', 'success');
     renderReportDetail();
-  } catch(err) { showToast(err.message, 'error'); }
+  } catch(err) { btnEnd(ref,false,err.message); }
 }
 
 // ─── EXPORT CSV ─────────────────────────────────────────────────────────────
@@ -7152,7 +7183,7 @@ async function submitReport(e) {
   if (!app.reportPhotos.before) { showToast('Before photo is required','error'); return; }
   if (!app.reportPhotos.after) { showToast('After photo is required','error'); return; }
   if (!app.reportPhotos.nameplate) { showToast('Nameplate photo is required','error'); return; }
-
+  var ref = btnStart(_actionBtn);
   const reportData = {
     equipmentId: app.equipmentId, type,
     techName: document.getElementById('rf-tech').value.trim(),
@@ -7171,9 +7202,9 @@ async function submitReport(e) {
   try {
     const created = await apiPost('/api/reports', reportData);
     db.reports.push(created);
-    showToast('Report submitted successfully', 'success');
+    btnEnd(ref,true,'Report submitted');
     openEquipmentView(app.equipmentId);
-  } catch(err) { showToast(err.message,'error'); }
+  } catch(err) { btnEnd(ref,false,err.message); }
 }
 
 // â”€â”€â”€ REPORT DETAIL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -7458,6 +7489,7 @@ async function saveClient() {
   const id = document.getElementById('client-id-field').value;
   const name = document.getElementById('c-name').value.trim();
   if (!name) { showToast('Company name is required','error'); return; }
+  var ref = btnStart(_actionBtn);
   const data = { name, phone: document.getElementById('c-phone').value.trim(), email: document.getElementById('c-email').value.trim(), address: document.getElementById('c-address').value.trim(), city: document.getElementById('c-city').value.trim(), state: document.getElementById('c-state').value.trim(), notes: document.getElementById('c-notes').value.trim(), logo: app._clientLogo || '',
     billingContact: document.getElementById('c-ar-contact').value.trim(), billingEmail: document.getElementById('c-ar-email').value.trim(), billingPhone: document.getElementById('c-ar-phone').value.trim(), billingAddress: document.getElementById('c-ar-address').value.trim(), paymentTerms: document.getElementById('c-ar-terms').value, poRequired: document.getElementById('c-ar-po').value,
     taxId: document.getElementById('c-ar-taxid').value.trim(), creditLimit: document.getElementById('c-ar-creditlimit').value.trim(), accountNumber: document.getElementById('c-ar-account').value.trim(), defaultRate: document.getElementById('c-ar-rate').value.trim(),
@@ -7466,11 +7498,11 @@ async function saveClient() {
   const portalPass = document.getElementById('c-portal-pass').value;
   if (portalPass) data.portalPassword = portalPass;
   try {
-    if (id) { const u = await apiPost('/api/clients/'+id, data, 'PUT'); const idx = db.clients.findIndex(c=>c.id===id); if(idx>=0) db.clients[idx]=u; showToast('Client updated','success'); }
-    else { const c = await apiPost('/api/clients', data); db.clients.push(c); showToast('Client added','success'); }
+    if (id) { const u = await apiPost('/api/clients/'+id, data, 'PUT'); const idx = db.clients.findIndex(c=>c.id===id); if(idx>=0) db.clients[idx]=u; btnEnd(ref,true,'Client updated'); }
+    else { const c = await apiPost('/api/clients', data); db.clients.push(c); btnEnd(ref,true,'Client added'); }
     closeModal('modal-client');
     if (app.view==='clients') renderClientsTable(''); else if (app.view==='client') renderClientDetail();
-  } catch(err) { showToast(err.message,'error'); }
+  } catch(err) { btnEnd(ref,false,err.message); }
 }
 
 function openLocationModal(id) {
@@ -7493,12 +7525,13 @@ async function saveLocation() {
   const id = document.getElementById('loc-id-field').value;
   const buildingName = document.getElementById('l-building').value.trim();
   if (!buildingName) { showToast('Building name is required','error'); return; }
+  var ref = btnStart(_actionBtn);
   const data = { clientId: app.clientId, buildingName, address: document.getElementById('l-address').value.trim(), city: document.getElementById('l-city').value.trim(), state: document.getElementById('l-state').value.trim(), zip: document.getElementById('l-zip').value.trim(), contactName: document.getElementById('l-contact').value.trim(), contactPhone: document.getElementById('l-cphone').value.trim(), notes: document.getElementById('l-notes').value.trim() };
   try {
-    if (id) { const u = await apiPost('/api/locations/'+id, data, 'PUT'); const idx = db.locations.findIndex(l=>l.id===id); if(idx>=0) db.locations[idx]=u; showToast('Location updated','success'); }
-    else { const l = await apiPost('/api/locations', data); db.locations.push(l); showToast('Location added','success'); }
+    if (id) { const u = await apiPost('/api/locations/'+id, data, 'PUT'); const idx = db.locations.findIndex(l=>l.id===id); if(idx>=0) db.locations[idx]=u; btnEnd(ref,true,'Location updated'); }
+    else { const l = await apiPost('/api/locations', data); db.locations.push(l); btnEnd(ref,true,'Location added'); }
     closeModal('modal-location'); renderLocationsTable();
-  } catch(err) { showToast(err.message,'error'); }
+  } catch(err) { btnEnd(ref,false,err.message); }
 }
 
 // ASHRAE equipment life expectancy (median service life in years)
@@ -7627,13 +7660,14 @@ async function saveEquipment() {
   const id = document.getElementById('eq-id-field').value;
   const name = document.getElementById('e-name').value.trim();
   if (!name) { showToast('Equipment name is required','error'); return; }
+  var ref = btnStart(_actionBtn);
   const data = { locationId: app.locationId, name, model: document.getElementById('e-model').value.trim(), serial: document.getElementById('e-serial').value.trim(), yearInstalled: document.getElementById('e-year').value ? parseInt(document.getElementById('e-year').value) : null, type: document.getElementById('e-type').value, notes: document.getElementById('e-notes').value.trim(), formTemplateId: document.getElementById('e-template').value, photo: app._equipmentPhoto || '', replacementBudget: parseFloat(document.getElementById('e-replacement-budget').value) || 0, ashraeLifeYears: parseInt(document.getElementById('e-ashrae-life').value) || 0 };
   try {
-    if (id) { const u = await apiPost('/api/equipment/'+id, data, 'PUT'); const idx = db.equipment.findIndex(e=>e.id===id); if(idx>=0) db.equipment[idx]=u; showToast('Equipment updated','success'); }
-    else { const e = await apiPost('/api/equipment', data); db.equipment.push(e); showToast('Equipment added \u2014 QR code generated','success'); }
+    if (id) { const u = await apiPost('/api/equipment/'+id, data, 'PUT'); const idx = db.equipment.findIndex(e=>e.id===id); if(idx>=0) db.equipment[idx]=u; btnEnd(ref,true,'Equipment updated'); }
+    else { const e = await apiPost('/api/equipment', data); db.equipment.push(e); btnEnd(ref,true,'Equipment added'); }
     closeModal('modal-equipment');
     if (app.view==='location') renderEquipmentTable(); else if (app.view==='equipment') renderEquipmentDetail();
-  } catch(err) { showToast(err.message,'error'); }
+  } catch(err) { btnEnd(ref,false,err.message); }
 }
 
 // â”€â”€â”€ DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -7649,10 +7683,10 @@ function confirmDelete(type, id) {
   openModal('modal-delete');
 }
 
-async function delClient(id) { try { await apiPost('/api/clients/'+id,{},'DELETE'); await loadDB(); showToast('Client deleted','success'); closeModal('modal-delete'); nav('clients'); } catch(e) { showToast(e.message,'error'); } }
-async function delLocation(id) { try { await apiPost('/api/locations/'+id,{},'DELETE'); await loadDB(); showToast('Location deleted','success'); closeModal('modal-delete'); renderLocationsTable(); } catch(e) { showToast(e.message,'error'); } }
-async function delEquipment(id) { try { await apiPost('/api/equipment/'+id,{},'DELETE'); await loadDB(); showToast('Equipment deleted','success'); closeModal('modal-delete'); if(app.view==='location'||app.view==='equipment') openLocationView(app.locationId); } catch(e) { showToast(e.message,'error'); } }
-async function delReport(id) { try { await apiPost('/api/reports/'+id,{},'DELETE'); db.reports=db.reports.filter(r=>r.id!==id); showToast('Report deleted','success'); closeModal('modal-delete'); goBackFromReportDetail(); } catch(e) { showToast(e.message,'error'); } }
+async function delClient(id) { var ref = btnStart(_actionBtn); try { await apiPost('/api/clients/'+id,{},'DELETE'); await loadDB(); btnEnd(ref,true,'Client deleted'); closeModal('modal-delete'); nav('clients'); } catch(e) { btnEnd(ref,false,e.message); } }
+async function delLocation(id) { var ref = btnStart(_actionBtn); try { await apiPost('/api/locations/'+id,{},'DELETE'); await loadDB(); btnEnd(ref,true,'Location deleted'); closeModal('modal-delete'); renderLocationsTable(); } catch(e) { btnEnd(ref,false,e.message); } }
+async function delEquipment(id) { var ref = btnStart(_actionBtn); try { await apiPost('/api/equipment/'+id,{},'DELETE'); await loadDB(); btnEnd(ref,true,'Equipment deleted'); closeModal('modal-delete'); if(app.view==='location'||app.view==='equipment') openLocationView(app.locationId); } catch(e) { btnEnd(ref,false,e.message); } }
+async function delReport(id) { var ref = btnStart(_actionBtn); try { await apiPost('/api/reports/'+id,{},'DELETE'); db.reports=db.reports.filter(r=>r.id!==id); btnEnd(ref,true,'Report deleted'); closeModal('modal-delete'); goBackFromReportDetail(); } catch(e) { btnEnd(ref,false,e.message); } }
 
 // â”€â”€â”€ SETTINGS / EMAIL CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function renderSettingsView() {
@@ -7680,27 +7714,18 @@ async function renderSettingsView() {
 }
 async function saveEmailConfig() {
   if (!isAdmin()) return;
-  var btn = document.getElementById('save-email-btn');
-  var status = document.getElementById('save-email-status');
-  btn.disabled = true; btn.textContent = 'Saving...';
-  status.style.display = 'none';
+  var ref = btnStart(_actionBtn);
   const cfg = { enabled: document.getElementById('email-enabled').checked, smtpUser: document.getElementById('smtp-user').value.trim(), smtpPass: document.getElementById('smtp-pass').value.trim(), fromName: document.getElementById('from-name').value.trim(), appUrl: document.getElementById('app-url').value.trim() };
   try {
     await apiPost('/api/settings', cfg);
-    status.textContent = '✓ Settings saved successfully';
-    status.style.color = 'var(--green)';
-    status.style.display = '';
-    showToast('Email settings saved', 'success');
+    btnEnd(ref,true,'Settings saved');
   } catch(err) {
-    status.textContent = '✕ Failed to save: ' + err.message;
-    status.style.color = 'var(--red)';
-    status.style.display = '';
-    showToast(err.message, 'error');
+    btnEnd(ref,false,err.message);
   }
-  btn.disabled = false; btn.textContent = 'Save Email Settings';
 }
 async function saveLaborBurden() {
   if (!isAdmin()) return;
+  var ref = btnStart(_actionBtn);
   var data = {
     plumber: parseFloat(document.getElementById('lb-plumber').value) || 0,
     hvacb: parseFloat(document.getElementById('lb-hvacb').value) || 0,
@@ -7711,8 +7736,8 @@ async function saveLaborBurden() {
   try {
     var result = await apiPost('/api/labor-burden', data);
     db.laborBurden = result;
-    showToast('Labor burden rates saved', 'success');
-  } catch(e) { showToast(e.message || 'Error saving labor burden', 'error'); }
+    btnEnd(ref,true,'Rates saved');
+  } catch(e) { btnEnd(ref,false,e.message); }
 }
 
 function getLaborBurden(trade) {
@@ -7730,23 +7755,13 @@ function getLaborBurden(trade) {
 async function sendTestEmail() {
   const addr = document.getElementById('test-email-addr').value.trim();
   if (!addr) { showToast('Enter a test email address', 'error'); return; }
-  var btn = document.getElementById('test-email-btn');
-  var status = document.getElementById('test-email-status');
-  btn.disabled = true; btn.textContent = 'Sending...';
-  status.style.display = 'none';
+  var ref = btnStart(_actionBtn);
   try {
     await apiPost('/api/email/test', { to: addr });
-    status.textContent = '✓ Test email sent successfully to ' + addr;
-    status.style.color = 'var(--green)';
-    status.style.display = '';
-    showToast('Test email sent to ' + addr, 'success');
+    btnEnd(ref,true,'Email sent to ' + addr);
   } catch(err) {
-    status.textContent = '✕ Failed: ' + err.message;
-    status.style.color = 'var(--red)';
-    status.style.display = '';
-    showToast('Test failed: ' + err.message, 'error');
+    btnEnd(ref,false,err.message);
   }
-  btn.disabled = false; btn.textContent = 'Send Test';
 }
 async function importData() {
   const raw = document.getElementById('import-data').value.trim();
@@ -7802,12 +7817,13 @@ async function saveUser() {
   if (!id && !pw) { showToast('Password is required for new users', 'error'); return; }
   if (pw && pw !== pw2) { showToast('Passwords do not match', 'error'); return; }
   if (pw && (pw.length < 8 || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw))) { showToast('Password must be at least 8 characters with 1 uppercase letter and 1 number', 'error'); return; }
+  var ref = btnStart(_actionBtn);
   try {
     const body = { name, username, role }; if (pw) body.password = pw;
-    if (id) { const u = await apiPost('/api/users/'+id, body, 'PUT'); if (currentUser && currentUser.id===id) { currentUser.name=u.name; currentUser.username=u.username; currentUser.role=u.role; updateSidebarUser(); } showToast('User updated','success'); }
-    else { await apiPost('/api/users', body); showToast('User created','success'); }
+    if (id) { const u = await apiPost('/api/users/'+id, body, 'PUT'); if (currentUser && currentUser.id===id) { currentUser.name=u.name; currentUser.username=u.username; currentUser.role=u.role; updateSidebarUser(); } btnEnd(ref,true,'User updated'); }
+    else { await apiPost('/api/users', body); btnEnd(ref,true,'User created'); }
     closeModal('modal-user'); renderUsersView();
-  } catch(err) { showToast(err.message, 'error'); }
+  } catch(err) { btnEnd(ref,false,err.message); }
 }
 
 async function confirmDeleteUser(id) {
@@ -7825,6 +7841,67 @@ async function confirmDeleteUser(id) {
 // â”€â”€â”€ UTILITIES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function sortArr(arr, field, dir) {
   return [...arr].sort((a,b)=>{ const av=(a[field]||'').toString().toLowerCase(); const bv=(b[field]||'').toString().toLowerCase(); if(av<bv) return dir==='asc'?-1:1; if(av>bv) return dir==='asc'?1:-1; return 0; });
+}
+
+// ─── BUTTON FEEDBACK HELPERS ─────────────────────────────────────────────────
+// Universal: wrap any async onclick with loading spinner + success/error feedback.
+// Buttons just work — the system auto-detects the triggering button.
+var _actionBtn = null; // tracks the button that triggered the current action
+
+// Call at the start of any async action to show loading on the triggering button
+function btnStart(btnOrId) {
+  var btn = typeof btnOrId === 'string' ? document.getElementById(btnOrId) : (btnOrId instanceof HTMLElement ? btnOrId : _actionBtn);
+  if (!btn) return {};
+  var orig = btn.textContent;
+  btn.disabled = true;
+  btn.classList.add('btn-loading');
+  btn.setAttribute('data-orig-text', orig);
+  btn.textContent = '';
+  // Find or create status element beside this button
+  var status = btn.parentNode.querySelector('.btn-status[data-for="' + (btn.id || '') + '"]');
+  if (!status) {
+    status = document.createElement('span');
+    status.className = 'btn-status';
+    if (btn.id) status.setAttribute('data-for', btn.id);
+    btn.parentNode.insertBefore(status, btn.nextSibling);
+  }
+  status.textContent = '';
+  status.className = 'btn-status';
+  status.style.display = 'none';
+  return { btn: btn, orig: orig, status: status };
+}
+
+function btnEnd(ref, success, msg) {
+  if (!ref || !ref.btn) return;
+  ref.btn.classList.remove('btn-loading');
+  ref.btn.disabled = false;
+  ref.btn.textContent = ref.orig;
+  if (ref.status && msg) {
+    ref.status.textContent = (success ? '✓ ' : '✕ ') + msg;
+    ref.status.className = 'btn-status ' + (success ? 'btn-status-ok' : 'btn-status-err');
+    ref.status.style.display = '';
+    setTimeout(function() { if (ref.status) ref.status.style.display = 'none'; }, success ? 4000 : 8000);
+  }
+}
+
+// Global click listener: track which button was clicked so async functions can find it
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.btn');
+  if (btn) _actionBtn = btn;
+}, true);
+
+// Convenience: wrap an async function with automatic button feedback
+function withBtn(asyncFn, successMsg) {
+  return async function() {
+    var ref = btnStart(_actionBtn);
+    try {
+      await asyncFn.apply(this, arguments);
+      btnEnd(ref, true, successMsg || 'Done');
+    } catch(err) {
+      btnEnd(ref, false, err.message || 'Something went wrong');
+      throw err; // re-throw so callers can still catch
+    }
+  };
 }
 
 function showToast(msg, type='info') {

@@ -1367,16 +1367,18 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
               <label class="flbl">App URL (for report links in emails)</label>
               <input class="fc" type="url" id="app-url" placeholder="https://your-app.up.railway.app">
             </div>
-            <div style="margin-top:8px;">
-              <button class="btn btn-primary" onclick="saveEmailConfig()">Save Email Settings</button>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:12px;">
+              <button class="btn btn-primary" onclick="saveEmailConfig()" id="save-email-btn">Save Email Settings</button>
+              <div id="save-email-status" style="font-size:13px;font-weight:600;display:none;"></div>
             </div>
             <hr class="div">
             <div class="fg">
               <label class="flbl">Send Test Email To</label>
               <div style="display:flex;gap:8px;">
                 <input class="fc" type="email" id="test-email-addr" placeholder="your@email.com">
-                <button class="btn btn-secondary" onclick="sendTestEmail()" style="white-space:nowrap;">Send Test</button>
+                <button class="btn btn-secondary" onclick="sendTestEmail()" id="test-email-btn" style="white-space:nowrap;">Send Test</button>
               </div>
+              <div id="test-email-status" style="font-size:13px;font-weight:600;margin-top:8px;display:none;"></div>
             </div>
             <hr class="div">
             <div style="background:var(--bg);border-radius:8px;padding:16px;">
@@ -7678,8 +7680,24 @@ async function renderSettingsView() {
 }
 async function saveEmailConfig() {
   if (!isAdmin()) return;
+  var btn = document.getElementById('save-email-btn');
+  var status = document.getElementById('save-email-status');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  status.style.display = 'none';
   const cfg = { enabled: document.getElementById('email-enabled').checked, smtpUser: document.getElementById('smtp-user').value.trim(), smtpPass: document.getElementById('smtp-pass').value.trim(), fromName: document.getElementById('from-name').value.trim(), appUrl: document.getElementById('app-url').value.trim() };
-  try { await apiPost('/api/settings', cfg); showToast('Email settings saved', 'success'); } catch(err) { showToast(err.message, 'error'); }
+  try {
+    await apiPost('/api/settings', cfg);
+    status.textContent = '✓ Settings saved successfully';
+    status.style.color = 'var(--green)';
+    status.style.display = '';
+    showToast('Email settings saved', 'success');
+  } catch(err) {
+    status.textContent = '✕ Failed to save: ' + err.message;
+    status.style.color = 'var(--red)';
+    status.style.display = '';
+    showToast(err.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Save Email Settings';
 }
 async function saveLaborBurden() {
   if (!isAdmin()) return;
@@ -7712,7 +7730,23 @@ function getLaborBurden(trade) {
 async function sendTestEmail() {
   const addr = document.getElementById('test-email-addr').value.trim();
   if (!addr) { showToast('Enter a test email address', 'error'); return; }
-  try { await apiPost('/api/email/test', { to: addr }); showToast('Test email sent to ' + addr, 'success'); } catch(err) { showToast('Test failed: ' + err.message, 'error'); }
+  var btn = document.getElementById('test-email-btn');
+  var status = document.getElementById('test-email-status');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  status.style.display = 'none';
+  try {
+    await apiPost('/api/email/test', { to: addr });
+    status.textContent = '✓ Test email sent successfully to ' + addr;
+    status.style.color = 'var(--green)';
+    status.style.display = '';
+    showToast('Test email sent to ' + addr, 'success');
+  } catch(err) {
+    status.textContent = '✕ Failed: ' + err.message;
+    status.style.color = 'var(--red)';
+    status.style.display = '';
+    showToast('Test failed: ' + err.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Send Test';
 }
 async function importData() {
   const raw = document.getElementById('import-data').value.trim();

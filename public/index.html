@@ -7695,7 +7695,10 @@ async function renderSettingsView() {
     const cfg = await apiGet('/api/settings');
     document.getElementById('email-enabled').checked = cfg.enabled || false;
     document.getElementById('smtp-user').value = cfg.smtpUser || '';
-    document.getElementById('smtp-pass').value = cfg.smtpPass || '';
+    // Never prefill the password field with the mask — leave blank with a hint
+    var passField = document.getElementById('smtp-pass');
+    passField.value = '';
+    passField.placeholder = cfg.smtpPass === '••••••••' ? 'Password saved ✓ — leave blank to keep, or enter new' : 'Enter your app password';
     document.getElementById('from-name').value = cfg.fromName || '';
     document.getElementById('app-url').value = cfg.appUrl || '';
   } catch(err) { /* first time, no settings yet */ }
@@ -7715,10 +7718,32 @@ async function renderSettingsView() {
 async function saveEmailConfig() {
   if (!isAdmin()) return;
   var ref = btnStart(_actionBtn);
-  const cfg = { enabled: document.getElementById('email-enabled').checked, smtpUser: document.getElementById('smtp-user').value.trim(), smtpPass: document.getElementById('smtp-pass').value.trim(), fromName: document.getElementById('from-name').value.trim(), appUrl: document.getElementById('app-url').value.trim() };
+  var passVal = document.getElementById('smtp-pass').value.trim();
+  const cfg = {
+    enabled: document.getElementById('email-enabled').checked,
+    smtpUser: document.getElementById('smtp-user').value.trim(),
+    smtpPass: passVal || '••••••••', // blank means keep existing (server handles this)
+    fromName: document.getElementById('from-name').value.trim(),
+    appUrl: document.getElementById('app-url').value.trim()
+  };
+  if (!cfg.smtpUser) { btnEnd(ref,false,'Email address is required'); return; }
   try {
-    await apiPost('/api/settings', cfg);
-    btnEnd(ref,true,'Settings saved');
+    var result = await apiPost('/api/settings', cfg);
+    // Update the placeholder to confirm password is saved
+    var passField = document.getElementById('smtp-pass');
+    if (passVal) {
+      passField.value = '';
+      passField.placeholder = 'Password saved ✓ — leave blank to keep, or enter new';
+    }
+    // Show connection verification result
+    if (result.connectionOk === true) {
+      btnEnd(ref,true,'Settings saved — SMTP connection verified ✓');
+    } else if (result.connectionOk === false) {
+      btnEnd(ref,false,'Settings saved, but SMTP connection failed: ' + (result.connectionError || 'Unknown error'));
+      showToast('Settings saved but email won\'t work — check your email/password', 'warning');
+    } else {
+      btnEnd(ref,true,'Settings saved');
+    }
   } catch(err) {
     btnEnd(ref,false,err.message);
   }

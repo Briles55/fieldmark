@@ -2789,9 +2789,9 @@ app.get('/api/settings', requireAdmin, (req, res) => {
   res.json(safe);
 });
 
-app.post('/api/settings', requireAdmin, (req, res) => {
+app.post('/api/settings', requireAdmin, async (req, res) => {
   const existing = getEmailSettings();
-  const { enabled, smtpUser, smtpPass, fromName, appUrl } = req.body;
+  const { enabled, smtpUser, smtpPass, fromName, appUrl, verifyConnection } = req.body;
   const cfg = {
     enabled: !!enabled,
     smtpUser: smtpUser || existing.smtpUser || '',
@@ -2799,10 +2799,27 @@ app.post('/api/settings', requireAdmin, (req, res) => {
     fromName: fromName || '',
     appUrl:   appUrl || '',
   };
+
+  // Save settings
   const row = db.prepare("SELECT key FROM settings WHERE key='email'").get();
   if (row) db.prepare("UPDATE settings SET value=? WHERE key='email'").run(JSON.stringify(cfg));
   else db.prepare("INSERT INTO settings (key,value) VALUES ('email',?)").run(JSON.stringify(cfg));
-  res.json({ ok: true });
+
+  // Verify SMTP connection if credentials are present
+  let connectionOk = null;
+  let connectionError = null;
+  if (cfg.smtpUser && cfg.smtpPass) {
+    try {
+      const transporter = createMailTransport(cfg);
+      await transporter.verify();
+      connectionOk = true;
+    } catch (err) {
+      connectionOk = false;
+      connectionError = err.message;
+    }
+  }
+
+  res.json({ ok: true, connectionOk, connectionError });
 });
 
 // ─── LABOR BURDEN ─────────────────────────────────────────────────────────────

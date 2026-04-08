@@ -731,6 +731,9 @@ function createMailTransport(cfg) {
   return nodemailer.createTransport({
     host: smtp.host, port: smtp.port, secure: smtp.secure,
     auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 }
 
@@ -2805,13 +2808,16 @@ app.post('/api/settings', requireAdmin, async (req, res) => {
   if (row) db.prepare("UPDATE settings SET value=? WHERE key='email'").run(JSON.stringify(cfg));
   else db.prepare("INSERT INTO settings (key,value) VALUES ('email',?)").run(JSON.stringify(cfg));
 
-  // Verify SMTP connection if credentials are present
+  // Verify SMTP connection with a timeout so it never hangs
   let connectionOk = null;
   let connectionError = null;
   if (cfg.smtpUser && cfg.smtpPass) {
     try {
       const transporter = createMailTransport(cfg);
-      await transporter.verify();
+      await Promise.race([
+        transporter.verify(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out after 10 seconds')), 10000))
+      ]);
       connectionOk = true;
     } catch (err) {
       connectionOk = false;

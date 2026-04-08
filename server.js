@@ -2792,7 +2792,7 @@ app.get('/api/settings', requireAdmin, (req, res) => {
   res.json(safe);
 });
 
-app.post('/api/settings', requireAdmin, async (req, res) => {
+app.post('/api/settings', requireAdmin, (req, res) => {
   const existing = getEmailSettings();
   const { enabled, smtpUser, smtpPass, fromName, appUrl, verifyConnection } = req.body;
   const cfg = {
@@ -2808,24 +2808,7 @@ app.post('/api/settings', requireAdmin, async (req, res) => {
   if (row) db.prepare("UPDATE settings SET value=? WHERE key='email'").run(JSON.stringify(cfg));
   else db.prepare("INSERT INTO settings (key,value) VALUES ('email',?)").run(JSON.stringify(cfg));
 
-  // Verify SMTP connection with a timeout so it never hangs
-  let connectionOk = null;
-  let connectionError = null;
-  if (cfg.smtpUser && cfg.smtpPass) {
-    try {
-      const transporter = createMailTransport(cfg);
-      await Promise.race([
-        transporter.verify(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out after 10 seconds')), 10000))
-      ]);
-      connectionOk = true;
-    } catch (err) {
-      connectionOk = false;
-      connectionError = err.message;
-    }
-  }
-
-  res.json({ ok: true, connectionOk, connectionError });
+  res.json({ ok: true, hasCreds: !!(cfg.smtpUser && cfg.smtpPass) });
 });
 
 // ─── LABOR BURDEN ─────────────────────────────────────────────────────────────

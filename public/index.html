@@ -7738,21 +7738,12 @@ async function saveEmailConfig() {
   if (!cfg.smtpUser) { btnEnd(ref,false,'Email address is required'); return; }
   try {
     var result = await apiPost('/api/settings', cfg);
-    // Update the placeholder to confirm password is saved
     var passField = document.getElementById('smtp-pass');
     if (passVal) {
       passField.value = '';
       passField.placeholder = 'Password saved ✓ — leave blank to keep, or enter new';
     }
-    // Show connection verification result
-    if (result.connectionOk === true) {
-      btnEnd(ref,true,'Settings saved — SMTP connection verified ✓');
-    } else if (result.connectionOk === false) {
-      btnEnd(ref,false,'Settings saved, but SMTP connection failed: ' + (result.connectionError || 'Unknown error'));
-      showToast('Settings saved but email won\'t work — check your email/password', 'warning');
-    } else {
-      btnEnd(ref,true,'Settings saved');
-    }
+    btnEnd(ref,true, result.hasCreds ? 'Settings saved — now send a test email below to verify' : 'Settings saved');
   } catch(err) {
     btnEnd(ref,false,err.message);
   }

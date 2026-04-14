@@ -707,23 +707,24 @@ function getEmailSettings() {
   try { return row ? JSON.parse(row.value) : {}; } catch { return {}; }
 }
 
-// Auto-detect SMTP host from email address
+// Auto-detect SMTP host from email address. Use port 465 (implicit TLS) — more
+// reliable across cloud hosts than 587 (STARTTLS).
 function getSmtpConfig(emailAddr) {
   const domain = (emailAddr || '').split('@').pop().toLowerCase();
   const map = {
-    'gmail.com':     { host: 'smtp.gmail.com',       port: 587, secure: false },
-    'googlemail.com':{ host: 'smtp.gmail.com',       port: 587, secure: false },
+    'gmail.com':     { host: 'smtp.gmail.com',       port: 465, secure: true },
+    'googlemail.com':{ host: 'smtp.gmail.com',       port: 465, secure: true },
     'hotmail.com':   { host: 'smtp-mail.outlook.com', port: 587, secure: false },
     'outlook.com':   { host: 'smtp-mail.outlook.com', port: 587, secure: false },
     'live.com':      { host: 'smtp-mail.outlook.com', port: 587, secure: false },
     'msn.com':       { host: 'smtp-mail.outlook.com', port: 587, secure: false },
-    'yahoo.com':     { host: 'smtp.mail.yahoo.com',   port: 587, secure: false },
-    'yahoo.ca':      { host: 'smtp.mail.yahoo.com',   port: 587, secure: false },
+    'yahoo.com':     { host: 'smtp.mail.yahoo.com',   port: 465, secure: true },
+    'yahoo.ca':      { host: 'smtp.mail.yahoo.com',   port: 465, secure: true },
     'icloud.com':    { host: 'smtp.mail.me.com',      port: 587, secure: false },
     'me.com':        { host: 'smtp.mail.me.com',      port: 587, secure: false },
-    'aol.com':       { host: 'smtp.aol.com',           port: 587, secure: false },
+    'aol.com':       { host: 'smtp.aol.com',           port: 465, secure: true },
   };
-  return map[domain] || { host: 'smtp-mail.outlook.com', port: 587, secure: false };
+  return map[domain] || { host: 'smtp.gmail.com', port: 465, secure: true };
 }
 
 function createMailTransport(cfg) {
@@ -731,9 +732,10 @@ function createMailTransport(cfg) {
   return nodemailer.createTransport({
     host: smtp.host, port: smtp.port, secure: smtp.secure,
     auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 45000,
+    tls: { rejectUnauthorized: false },
   });
 }
 
@@ -2846,7 +2848,7 @@ app.post('/api/email/test', requireAdmin, async (req, res) => {
         subject: 'FieldMark — Test Email',
         html: '<p>This is a test email from <strong>FieldMark</strong>. Your email notifications are working correctly.</p>',
       }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout after 20s — check credentials or provider is reachable')), 20000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout after 45s — check credentials or that port 465 is reachable from Railway')), 45000))
     ]);
     res.json({ ok: true });
   } catch (err) {

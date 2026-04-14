@@ -1359,24 +1359,62 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
             </label>
           </div>
           <div class="card-body">
-            <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">
-              Automatically email clients when a report is completed for their equipment. Works with <strong style="color:var(--text);">Gmail, Hotmail, Outlook, Yahoo,</strong> and more — uses an App Password for secure access.
-            </p>
             <div class="fg">
-              <label class="flbl">Email Address</label>
-              <input class="fc" type="email" id="smtp-user" placeholder="yourcompany@gmail.com or you@hotmail.com">
+              <label class="flbl">Provider</label>
+              <select class="fc" id="email-provider" onchange="toggleEmailProviderFields()">
+                <option value="ses">AWS SES (Recommended — scales to millions)</option>
+                <option value="smtp">SMTP (Gmail / Outlook / Yahoo)</option>
+              </select>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">AWS SES uses HTTPS — bypasses cloud SMTP restrictions and scales cheaply.</div>
             </div>
-            <div class="fg">
-              <label class="flbl">App Password</label>
-              <input class="fc" type="password" id="smtp-pass" placeholder="App password (not your regular login password)">
+
+            <!-- AWS SES fields -->
+            <div id="ses-fields">
+              <div class="fg">
+                <label class="flbl">AWS Access Key ID</label>
+                <input class="fc" type="text" id="aws-access-key" placeholder="AKIA...">
+              </div>
+              <div class="fg">
+                <label class="flbl">AWS Secret Access Key</label>
+                <input class="fc" type="password" id="aws-secret-key" placeholder="Secret access key from IAM">
+              </div>
+              <div class="fg">
+                <label class="flbl">AWS Region</label>
+                <select class="fc" id="aws-region">
+                  <option value="us-east-1">US East (N. Virginia) — us-east-1</option>
+                  <option value="us-east-2">US East (Ohio) — us-east-2</option>
+                  <option value="us-west-2">US West (Oregon) — us-west-2</option>
+                  <option value="eu-west-1">EU (Ireland) — eu-west-1</option>
+                  <option value="eu-central-1">EU (Frankfurt) — eu-central-1</option>
+                  <option value="ap-southeast-1">Asia Pacific (Singapore) — ap-southeast-1</option>
+                  <option value="ap-southeast-2">Asia Pacific (Sydney) — ap-southeast-2</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="flbl">Verified Sender Email</label>
+                <input class="fc" type="email" id="ses-from-email" placeholder="fieldmarktestemail@gmail.com (must be verified in SES)">
+              </div>
             </div>
+
+            <!-- SMTP fields -->
+            <div id="smtp-fields" style="display:none;">
+              <div class="fg">
+                <label class="flbl">Email Address</label>
+                <input class="fc" type="email" id="smtp-user" placeholder="yourcompany@gmail.com">
+              </div>
+              <div class="fg">
+                <label class="flbl">App Password</label>
+                <input class="fc" type="password" id="smtp-pass" placeholder="App password (not your regular login password)">
+              </div>
+            </div>
+
             <div class="fg">
               <label class="flbl">From Name</label>
               <input class="fc" type="text" id="from-name" placeholder="Your Company Name">
             </div>
             <div class="fg">
               <label class="flbl">App URL (for report links in emails)</label>
-              <input class="fc" type="url" id="app-url" placeholder="https://your-app.up.railway.app">
+              <input class="fc" type="url" id="app-url" placeholder="https://www.field-mark.app">
             </div>
             <div style="margin-top:8px;display:flex;align-items:center;gap:12px;">
               <button class="btn btn-primary" onclick="saveEmailConfig()" id="save-email-btn">Save Email Settings</button>
@@ -1393,12 +1431,12 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
             </div>
             <hr class="div">
             <div style="background:var(--bg);border-radius:8px;padding:16px;">
-              <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">Gmail App Password Setup</div>
+              <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">AWS SES Setup</div>
               <div style="font-size:13px;color:var(--muted);line-height:1.8;">
-                <div><strong style="color:var(--text);">1.</strong> Go to <strong style="color:var(--accent);">myaccount.google.com/security</strong></div>
-                <div><strong style="color:var(--text);">2.</strong> Enable <strong style="color:var(--text);">2-Step Verification</strong> if not already on</div>
-                <div><strong style="color:var(--text);">3.</strong> Search for <strong style="color:var(--text);">App Passwords</strong> in the search bar</div>
-                <div><strong style="color:var(--text);">4.</strong> Create an app password named "FieldMark" and copy the 16-character code above</div>
+                <div><strong style="color:var(--text);">1.</strong> In AWS Console: <strong style="color:var(--accent);">SES → Identities</strong> → verify your sender email</div>
+                <div><strong style="color:var(--text);">2.</strong> In <strong style="color:var(--accent);">IAM → Users</strong> → create a user with the <strong style="color:var(--text);">AmazonSESFullAccess</strong> policy</div>
+                <div><strong style="color:var(--text);">3.</strong> Create an <strong style="color:var(--text);">Access key</strong> for that user and paste both values above</div>
+                <div><strong style="color:var(--text);">4.</strong> While in sandbox mode, you can only send to verified addresses. Request production access in SES for unlimited sending.</div>
               </div>
             </div>
           </div>
@@ -7703,11 +7741,23 @@ async function renderSettingsView() {
   try {
     const cfg = await apiGet('/api/settings');
     document.getElementById('email-enabled').checked = cfg.enabled || false;
+    document.getElementById('email-provider').value = cfg.provider || 'ses';
+    toggleEmailProviderFields();
+
+    // SMTP fields
     document.getElementById('smtp-user').value = cfg.smtpUser || '';
-    // Never prefill the password field with the mask — leave blank with a hint
     var passField = document.getElementById('smtp-pass');
     passField.value = '';
     passField.placeholder = cfg.smtpPass === '••••••••' ? 'Password saved ✓ — leave blank to keep, or enter new' : 'Enter your app password';
+
+    // SES fields
+    document.getElementById('aws-access-key').value = cfg.awsAccessKey || '';
+    var secretField = document.getElementById('aws-secret-key');
+    secretField.value = '';
+    secretField.placeholder = cfg.awsSecretKey === '••••••••' ? 'Secret saved ✓ — leave blank to keep, or enter new' : 'Secret access key from IAM';
+    document.getElementById('aws-region').value = cfg.awsRegion || 'us-east-1';
+    document.getElementById('ses-from-email').value = cfg.sesFromEmail || '';
+
     document.getElementById('from-name').value = cfg.fromName || '';
     document.getElementById('app-url').value = cfg.appUrl || '';
   } catch(err) { /* first time, no settings yet */ }
@@ -7724,24 +7774,47 @@ async function renderSettingsView() {
   renderWholesalersTable();
   renderSubcontractorsTable();
 }
+function toggleEmailProviderFields() {
+  var provider = document.getElementById('email-provider').value;
+  document.getElementById('ses-fields').style.display = provider === 'ses' ? '' : 'none';
+  document.getElementById('smtp-fields').style.display = provider === 'smtp' ? '' : 'none';
+}
+
 async function saveEmailConfig() {
   if (!isAdmin()) return;
   var ref = btnStart(_actionBtn);
+  var provider = document.getElementById('email-provider').value;
   var passVal = document.getElementById('smtp-pass').value.trim();
+  var secretVal = document.getElementById('aws-secret-key').value.trim();
   const cfg = {
     enabled: document.getElementById('email-enabled').checked,
+    provider: provider,
     smtpUser: document.getElementById('smtp-user').value.trim(),
-    smtpPass: passVal || '••••••••', // blank means keep existing (server handles this)
+    smtpPass: passVal || '••••••••',
+    awsAccessKey: document.getElementById('aws-access-key').value.trim(),
+    awsSecretKey: secretVal || '••••••••',
+    awsRegion: document.getElementById('aws-region').value,
+    sesFromEmail: document.getElementById('ses-from-email').value.trim(),
     fromName: document.getElementById('from-name').value.trim(),
     appUrl: document.getElementById('app-url').value.trim()
   };
-  if (!cfg.smtpUser) { btnEnd(ref,false,'Email address is required'); return; }
+  if (provider === 'ses') {
+    if (!cfg.awsAccessKey) { btnEnd(ref,false,'AWS Access Key is required'); return; }
+    if (!cfg.sesFromEmail) { btnEnd(ref,false,'Verified Sender Email is required'); return; }
+  } else {
+    if (!cfg.smtpUser) { btnEnd(ref,false,'Email address is required'); return; }
+  }
   try {
     var result = await apiPost('/api/settings', cfg);
-    var passField = document.getElementById('smtp-pass');
     if (passVal) {
+      var passField = document.getElementById('smtp-pass');
       passField.value = '';
       passField.placeholder = 'Password saved ✓ — leave blank to keep, or enter new';
+    }
+    if (secretVal) {
+      var secretField = document.getElementById('aws-secret-key');
+      secretField.value = '';
+      secretField.placeholder = 'Secret saved ✓ — leave blank to keep, or enter new';
     }
     btnEnd(ref,true, result.hasCreds ? 'Settings saved — now send a test email below to verify' : 'Settings saved');
   } catch(err) {

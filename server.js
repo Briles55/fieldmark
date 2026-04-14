@@ -5,6 +5,7 @@ const session    = require('express-session');
 const bcrypt     = require('bcrypt');
 const Database   = require('better-sqlite3');
 const nodemailer = require('nodemailer');
+const { SESv2Client, SendEmailCommand } = require('@aws-sdk/client-sesv2');
 const path       = require('path');
 const crypto     = require('crypto');
 const helmet     = require('helmet');
@@ -727,7 +728,44 @@ function getSmtpConfig(emailAddr) {
   return map[domain] || { host: 'smtp.gmail.com', port: 465, secure: true };
 }
 
-function createMailTransport(cfg) {
+// createMailTransport returns an object with a .sendMail(mailOptions) method.
+// If AWS SES is configured (provider='ses' or just has SES creds), emails go
+// through the SES HTTPS API — bypasses Railway's outbound SMTP restrictions.
+// Otherwise, it returns a real nodemailer SMTP transport.
+function createMailTransport(cfgOverride) {
+  const cfg = cfgOverride || getEmailSettings();
+  const useSes = (cfg.provider === 'ses') || (cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
+
+  if (useSes && cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail) {
+    const client = new SESv2Client({
+      region: cfg.awsRegion || 'us-east-1',
+      credentials: {
+        accessKeyId: cfg.awsAccessKey,
+        secretAccessKey: cfg.awsSecretKey,
+      },
+      requestHandler: { requestTimeout: 20000 },
+    });
+    // Return a wrapper that mimics nodemailer's sendMail API
+    return {
+      async sendMail(opts) {
+        const fromAddress = opts.from || `"${cfg.fromName || 'FieldMark'}" <${cfg.sesFromEmail}>`;
+        const toList = Array.isArray(opts.to) ? opts.to : [opts.to];
+        const cmd = new SendEmailCommand({
+          FromEmailAddress: fromAddress,
+          Destination: { ToAddresses: toList },
+          Content: {
+            Simple: {
+              Subject: { Data: opts.subject || '', Charset: 'UTF-8' },
+              Body: { Html: { Data: opts.html || '', Charset: 'UTF-8' } },
+            },
+          },
+        });
+        return client.send(cmd);
+      },
+    };
+  }
+
+  // SMTP fallback
   const smtp = getSmtpConfig(cfg.smtpUser);
   return nodemailer.createTransport({
     host: smtp.host, port: smtp.port, secure: smtp.secure,
@@ -737,6 +775,13 @@ function createMailTransport(cfg) {
     socketTimeout: 45000,
     tls: { rejectUnauthorized: false },
   });
+}
+
+// Unified send helper — uses createMailTransport which auto-picks SES vs SMTP
+async function sendEmail({ from, to, subject, html }) {
+  const cfg = getEmailSettings();
+  const t = createMailTransport(cfg);
+  return t.sendMail({ from, to, subject, html });
 }
 
 async function sendClientNotification(report) {
@@ -2788,29 +2833,36 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
 // ─── SETTINGS ─────────────────────────────────────────────────────────────────
 app.get('/api/settings', requireAdmin, (req, res) => {
   const cfg = getEmailSettings();
-  // Never return the password to the client
   const safe = { ...cfg };
   if (safe.smtpPass) safe.smtpPass = '••••••••';
+  if (safe.awsSecretKey) safe.awsSecretKey = '••••••••';
   res.json(safe);
 });
 
 app.post('/api/settings', requireAdmin, (req, res) => {
   const existing = getEmailSettings();
-  const { enabled, smtpUser, smtpPass, fromName, appUrl, verifyConnection } = req.body;
+  const { enabled, provider, smtpUser, smtpPass, fromName, appUrl,
+          awsAccessKey, awsSecretKey, awsRegion, sesFromEmail } = req.body;
   const cfg = {
     enabled: !!enabled,
-    smtpUser: smtpUser || existing.smtpUser || '',
+    provider: provider || existing.provider || 'smtp',
+    smtpUser: smtpUser !== undefined ? smtpUser : (existing.smtpUser || ''),
     smtpPass: smtpPass && smtpPass !== '••••••••' ? smtpPass : (existing.smtpPass || ''),
-    fromName: fromName || '',
-    appUrl:   appUrl || '',
+    fromName: fromName !== undefined ? fromName : (existing.fromName || ''),
+    appUrl:   appUrl !== undefined ? appUrl : (existing.appUrl || ''),
+    awsAccessKey: awsAccessKey !== undefined ? awsAccessKey : (existing.awsAccessKey || ''),
+    awsSecretKey: awsSecretKey && awsSecretKey !== '••••••••' ? awsSecretKey : (existing.awsSecretKey || ''),
+    awsRegion:    awsRegion !== undefined ? awsRegion : (existing.awsRegion || 'us-east-1'),
+    sesFromEmail: sesFromEmail !== undefined ? sesFromEmail : (existing.sesFromEmail || ''),
   };
 
-  // Save settings
   const row = db.prepare("SELECT key FROM settings WHERE key='email'").get();
   if (row) db.prepare("UPDATE settings SET value=? WHERE key='email'").run(JSON.stringify(cfg));
   else db.prepare("INSERT INTO settings (key,value) VALUES ('email',?)").run(JSON.stringify(cfg));
 
-  res.json({ ok: true, hasCreds: !!(cfg.smtpUser && cfg.smtpPass) });
+  const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
+  const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
+  res.json({ ok: true, hasCreds: hasSes || hasSmtp, provider: cfg.provider });
 });
 
 // ─── LABOR BURDEN ─────────────────────────────────────────────────────────────
@@ -2836,21 +2888,23 @@ app.post('/api/labor-burden', requireAdmin, (req, res) => {
 // ─── TEST EMAIL ───────────────────────────────────────────────────────────────
 app.post('/api/email/test', requireAdmin, async (req, res) => {
   const cfg = getEmailSettings();
-  if (!cfg.smtpUser || !cfg.smtpPass) return res.status(400).json({ error: 'Email address and App Password are required' });
   const { to } = req.body;
   if (!to) return res.status(400).json({ error: 'Test recipient email is required' });
+
+  const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
+  const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
+  if (!hasSes && !hasSmtp) return res.status(400).json({ error: 'Configure an email provider first (AWS SES or SMTP)' });
+
   try {
-    const transporter = createMailTransport(cfg);
     await Promise.race([
-      transporter.sendMail({
-        from: `"${cfg.fromName || 'FieldMark'}" <${cfg.smtpUser}>`,
+      sendEmail({
         to,
         subject: 'FieldMark — Test Email',
         html: '<p>This is a test email from <strong>FieldMark</strong>. Your email notifications are working correctly.</p>',
       }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout after 45s — check credentials or that port 465 is reachable from Railway')), 45000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Send timed out after 30s')), 30000))
     ]);
-    res.json({ ok: true });
+    res.json({ ok: true, provider: cfg.provider });
   } catch (err) {
     console.error('Test email failed:', err.message);
     res.status(500).json({ error: err.message });

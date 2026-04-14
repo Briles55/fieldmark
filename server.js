@@ -2834,19 +2834,23 @@ app.post('/api/labor-burden', requireAdmin, (req, res) => {
 // ─── TEST EMAIL ───────────────────────────────────────────────────────────────
 app.post('/api/email/test', requireAdmin, async (req, res) => {
   const cfg = getEmailSettings();
-  if (!cfg.smtpUser || !cfg.smtpPass) return res.status(400).json({ error: 'Gmail address and App Password are required' });
+  if (!cfg.smtpUser || !cfg.smtpPass) return res.status(400).json({ error: 'Email address and App Password are required' });
   const { to } = req.body;
   if (!to) return res.status(400).json({ error: 'Test recipient email is required' });
   try {
     const transporter = createMailTransport(cfg);
-    await transporter.sendMail({
-      from: `"${cfg.fromName || 'FieldMark'}" <${cfg.smtpUser}>`,
-      to,
-      subject: 'FieldMark — Test Email',
-      html: '<p>This is a test email from <strong>FieldMark</strong>. Your email notifications are working correctly.</p>',
-    });
+    await Promise.race([
+      transporter.sendMail({
+        from: `"${cfg.fromName || 'FieldMark'}" <${cfg.smtpUser}>`,
+        to,
+        subject: 'FieldMark — Test Email',
+        html: '<p>This is a test email from <strong>FieldMark</strong>. Your email notifications are working correctly.</p>',
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout after 20s — check credentials or provider is reachable')), 20000))
+    ]);
     res.json({ ok: true });
   } catch (err) {
+    console.error('Test email failed:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

@@ -3451,6 +3451,17 @@ function renderQuoteDetail() {
     h += '<div class="card-body" style="white-space:pre-wrap;font-size:13px;">' + esc(q.exclusions) + '</div></div>';
   }
 
+  // Photos
+  var photos = Array.isArray(q.photos) ? q.photos : [];
+  if (photos.length > 0) {
+    h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Photos</span><span class="badge bgr">' + photos.length + '</span></div>';
+    h += '<div class="card-body"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;">';
+    photos.forEach(function(src) {
+      h += '<img src="' + esc(src) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="openPhotoLightbox(\'' + esc(src) + '\')">';
+    });
+    h += '</div></div></div>';
+  }
+
   // Recipients
   var recips = q.recipients || [];
   if (recips.length > 0) {
@@ -3469,6 +3480,7 @@ function renderQuoteDetail() {
 
 function openQuoteBuilder(quoteId) {
   app.editingQuoteId = quoteId || null;
+  app.qbPhotos = null; // reset — will be initialized from quote.photos in renderQuoteBuilder
   showView('quote-builder');
 }
 
@@ -3535,6 +3547,15 @@ function renderQuoteBuilder() {
   recips.forEach(function(e) { h += '<span class="qb-recip-tag" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;margin:2px;background:#e8f0fe;border-radius:12px;font-size:12px;">' + esc(e) + '<span style="cursor:pointer;color:#999;font-weight:700;" onclick="qbRemoveRecipient(this)">&times;</span></span>'; });
   h += '</div></div></div>';
 
+  // Photos (optional)
+  if (!app.qbPhotos) app.qbPhotos = q && Array.isArray(q.photos) ? q.photos.slice() : [];
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Photos</span><span class="badge bgr">Optional</span></div><div class="card-body">';
+  h += '<p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Attach photos of the site, equipment, or reference images. These will appear on the quote sent to the customer.</p>';
+  h += '<div id="qb-photos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;"></div>';
+  h += '<div style="margin-top:12px;"><label class="btn btn-outline btn-sm" for="qb-photo-input" style="cursor:pointer;">+ Add Photo</label>';
+  h += '<input id="qb-photo-input" type="file" accept="image/*" multiple style="display:none;" onchange="qbAddPhotos(this)"></div>';
+  h += '</div></div>';
+
   // Valid until, notes, grand total
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">';
   h += '<div class="card"><div class="card-hd"><span class="card-title">Valid Until</span></div><div class="card-body">';
@@ -3569,6 +3590,7 @@ function renderQuoteBuilder() {
     if (cs) makeSearchable('qb-client');
     if (ls) makeSearchable('qb-location');
     qbRecalc();
+    qbRenderPhotos();
     // Pre-populate billing email if new quote and client is selected
     if (!q) {
       var cid = cs ? cs.value : '';
@@ -3674,6 +3696,52 @@ function qbRemoveRecipient(el) {
   el.parentElement.remove();
 }
 
+// ─── Quote Builder: Photos ───────────────────────────────────────────────
+function qbRenderPhotos() {
+  var grid = document.getElementById('qb-photos-grid');
+  if (!grid) return;
+  var photos = app.qbPhotos || [];
+  if (!photos.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:18px;border:2px dashed var(--border);border-radius:8px;text-align:center;color:var(--muted);font-size:12px;">No photos added yet</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  photos.forEach(function(src, idx) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;aspect-ratio:1;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg2);';
+    var img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;cursor:pointer;';
+    img.onclick = function() { openPhotoLightbox(src); };
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.innerHTML = '&times;';
+    del.style.cssText = 'position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;';
+    del.onclick = function() { qbRemovePhoto(idx); };
+    wrap.appendChild(img);
+    wrap.appendChild(del);
+    grid.appendChild(wrap);
+  });
+}
+
+function qbAddPhotos(inputEl) {
+  var files = Array.from(inputEl.files || []);
+  if (!files.length) return;
+  if (!app.qbPhotos) app.qbPhotos = [];
+  var tasks = files.map(function(f) { return compressImage(f).catch(function(){ return null; }); });
+  Promise.all(tasks).then(function(urls) {
+    urls.forEach(function(u) { if (u) app.qbPhotos.push(u); });
+    qbRenderPhotos();
+  });
+  inputEl.value = '';
+}
+
+function qbRemovePhoto(idx) {
+  if (!app.qbPhotos) return;
+  app.qbPhotos.splice(idx, 1);
+  qbRenderPhotos();
+}
+
 function qbRecalc() {
   var laborTotal = 0, laborBase = 0, laborBurdenTotal = 0;
   document.querySelectorAll('.qb-labor-row').forEach(function(row) {
@@ -3770,8 +3838,9 @@ function qbCollectData() {
   });
 
   var hideBreakdown = document.getElementById('qb-hide-breakdown').checked ? 1 : 0;
+  var photos = Array.isArray(app.qbPhotos) ? app.qbPhotos.slice() : [];
 
-  return { clientId: clientId, locationId: locationId, scopeOfWork: scopeOfWork, laborEntries: laborEntries, partsEntries: partsEntries, inclusions: inclusions, exclusions: exclusions, recipients: recipients, notes: notes, validUntil: validUntil, hideBreakdown: hideBreakdown };
+  return { clientId: clientId, locationId: locationId, scopeOfWork: scopeOfWork, laborEntries: laborEntries, partsEntries: partsEntries, inclusions: inclusions, exclusions: exclusions, recipients: recipients, notes: notes, validUntil: validUntil, hideBreakdown: hideBreakdown, photos: photos };
 }
 
 async function saveQuote(andSend, andPreview) {

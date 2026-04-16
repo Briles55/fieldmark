@@ -246,6 +246,7 @@ db.exec(`
 
 // Migration: add hideBreakdown column if missing
 try { db.exec(`ALTER TABLE quotes ADD COLUMN hideBreakdown INTEGER DEFAULT 0`); } catch(e) { /* already exists */ }
+try { db.exec(`ALTER TABLE quotes ADD COLUMN photos TEXT DEFAULT '[]'`); } catch(e) { /* already exists */ }
 
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
 try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } catch(e) {}
@@ -1010,6 +1011,7 @@ app.get('/api/client-data', requireClientAuth, (req, res) => {
     try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
     q.partsEntries = q.partsEntries.map(p => ({ description: p.description, qty: p.qty, unitPrice: Math.round((parseFloat(p.unitCost)||0) * (1 + (parseFloat(p.markup)||0)/100) * 100)/100, total: p.total }));
     try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
+    q.photos = expandQuotePhotos(q.photos);
     delete q.laborSubtotal; delete q.partsSubtotal; delete q.notes;
   });
   res.json({ locations, equipment, reports, formTemplates, quotes });
@@ -1062,6 +1064,7 @@ app.get('/api/data', requireAuth, (req, res) => {
     try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
     try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
     try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
+    q.photos = expandQuotePhotos(q.photos);
   });
   res.json({ clients, locations, equipment, reports, formTemplates, serviceRequests, workOrders, users, timeCards, invoices, wholesalers, subcontractors, quotes });
 });
@@ -1743,52 +1746,85 @@ app.delete('/api/purchase-orders/:id', requireAdmin, (req, res) => {
 
 // ─── QUOTES ──────────────────────────────────────────────────────────────────
 
+// Normalize incoming photos: convert data URIs to saved files, keep existing refs as-is.
+// Returns array of filename/ref strings.
+function normalizeQuotePhotos(photos) {
+  if (!Array.isArray(photos)) return [];
+  return photos.map(p => {
+    if (!p) return null;
+    // Client may send data URI string, filename, or object { url/ref }
+    const val = typeof p === 'string' ? p : (p.url || p.ref || '');
+    if (!val) return null;
+    if (val.startsWith('data:')) {
+      const saved = savePhotoFile(val);
+      return saved || null;
+    }
+    if (val.startsWith('/api/photos/')) {
+      return val.replace('/api/photos/', '');
+    }
+    return val; // already a filename
+  }).filter(Boolean);
+}
+
+// Convert stored photo refs to browser-loadable URLs (/api/photos/<filename>)
+function expandQuotePhotos(photosJsonString) {
+  let arr;
+  try { arr = JSON.parse(photosJsonString || '[]'); } catch { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  return arr.map(v => {
+    if (!v) return '';
+    if (typeof v !== 'string') return '';
+    if (v.startsWith('data:') || v.startsWith('/') || v.startsWith('http')) return v;
+    return '/api/photos/' + v;
+  }).filter(Boolean);
+}
+
+function parseQuote(q) {
+  if (!q) return q;
+  try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
+  try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
+  try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
+  q.photos = expandQuotePhotos(q.photos);
+  return q;
+}
+
 app.post('/api/quotes', requireAdmin, (req, res) => {
-  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil, hideBreakdown } = req.body;
+  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil, hideBreakdown, photos } = req.body;
   if (!clientId) return res.status(400).json({ error: 'Client required' });
   let labor = Array.isArray(laborEntries) ? laborEntries : [];
   let parts = Array.isArray(partsEntries) ? partsEntries : [];
   const totals = calcQuoteTotals(labor, parts);
+  const photoRefs = normalizeQuotePhotos(photos);
   const now = new Date().toISOString();
   const id = genId();
-  db.prepare(`INSERT INTO quotes (id, quoteNumber, clientId, locationId, status, scopeOfWork, inclusions, exclusions, laborEntries, partsEntries, laborSubtotal, laborTotal, partsSubtotal, partsTotal, grandTotal, recipients, notes, validUntil, hideBreakdown, createdBy, createdAt, updatedAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+  db.prepare(`INSERT INTO quotes (id, quoteNumber, clientId, locationId, status, scopeOfWork, inclusions, exclusions, laborEntries, partsEntries, laborSubtotal, laborTotal, partsSubtotal, partsTotal, grandTotal, recipients, notes, validUntil, hideBreakdown, photos, createdBy, createdAt, updatedAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, nextQuoteNumber(), clientId, locationId || '', 'Draft', scopeOfWork || '', inclusions || '', exclusions || '',
       JSON.stringify(labor), JSON.stringify(parts), totals.laborSubtotal, totals.laborTotal, totals.partsSubtotal, totals.partsTotal, totals.grandTotal,
-      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', hideBreakdown ? 1 : 0, req.session.user.name || '', now, now);
-  const q = db.prepare('SELECT * FROM quotes WHERE id=?').get(id);
-  try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
-  try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
-  try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
-  res.json(q);
+      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', hideBreakdown ? 1 : 0, JSON.stringify(photoRefs), req.session.user.name || '', now, now);
+  res.json(parseQuote(db.prepare('SELECT * FROM quotes WHERE id=?').get(id)));
 });
 
 app.get('/api/quotes/:id', requireAuth, (req, res) => {
   const q = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
   if (!q) return res.status(404).json({ error: 'Quote not found' });
-  try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
-  try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
-  try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
-  res.json(q);
+  res.json(parseQuote(q));
 });
 
 app.put('/api/quotes/:id', requireAdmin, (req, res) => {
   const existing = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Quote not found' });
-  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil, hideBreakdown } = req.body;
+  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil, hideBreakdown, photos } = req.body;
   let labor = Array.isArray(laborEntries) ? laborEntries : [];
   let parts = Array.isArray(partsEntries) ? partsEntries : [];
   const totals = calcQuoteTotals(labor, parts);
+  const photoRefs = normalizeQuotePhotos(photos);
   const now = new Date().toISOString();
-  db.prepare(`UPDATE quotes SET clientId=?, locationId=?, scopeOfWork=?, inclusions=?, exclusions=?, laborEntries=?, partsEntries=?, laborSubtotal=?, laborTotal=?, partsSubtotal=?, partsTotal=?, grandTotal=?, recipients=?, notes=?, validUntil=?, hideBreakdown=?, updatedAt=? WHERE id=?`)
+  db.prepare(`UPDATE quotes SET clientId=?, locationId=?, scopeOfWork=?, inclusions=?, exclusions=?, laborEntries=?, partsEntries=?, laborSubtotal=?, laborTotal=?, partsSubtotal=?, partsTotal=?, grandTotal=?, recipients=?, notes=?, validUntil=?, hideBreakdown=?, photos=?, updatedAt=? WHERE id=?`)
     .run(clientId || existing.clientId, locationId || '', scopeOfWork || '', inclusions || '', exclusions || '',
       JSON.stringify(labor), JSON.stringify(parts), totals.laborSubtotal, totals.laborTotal, totals.partsSubtotal, totals.partsTotal, totals.grandTotal,
-      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', hideBreakdown ? 1 : 0, now, req.params.id);
-  const q = db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id);
-  try { q.laborEntries = JSON.parse(q.laborEntries); } catch(e) { q.laborEntries = []; }
-  try { q.partsEntries = JSON.parse(q.partsEntries); } catch(e) { q.partsEntries = []; }
-  try { q.recipients = JSON.parse(q.recipients); } catch(e) { q.recipients = []; }
-  res.json(q);
+      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', hideBreakdown ? 1 : 0, JSON.stringify(photoRefs), now, req.params.id);
+  res.json(parseQuote(db.prepare('SELECT * FROM quotes WHERE id=?').get(req.params.id)));
 });
 
 app.delete('/api/quotes/:id', requireAdmin, (req, res) => {
@@ -2140,6 +2176,29 @@ body { font-family: Arial, Helvetica, sans-serif; }
   if (qt.exclusions) {
     h += `<div style="font-size:15px;font-weight:700;margin:20px 0 8px;color:#1a1a1a;">Exclusions</div>`;
     h += `<div style="margin-bottom:16px;padding:10px 14px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:4px;font-size:12px;line-height:1.6;">${nl2br(qt.exclusions)}</div>`;
+  }
+
+  // PHOTOS — embed as data URIs so they render in the printed PDF
+  let photoList = [];
+  try { photoList = typeof qt.photos === 'string' ? JSON.parse(qt.photos) : (qt.photos || []); } catch(e) { photoList = []; }
+  if (Array.isArray(photoList) && photoList.length) {
+    h += `<div style="font-size:15px;font-weight:700;margin:20px 0 8px;color:#1a1a1a;">Reference Photos</div>`;
+    h += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">`;
+    photoList.forEach(function(p) {
+      let val = typeof p === 'string' ? p : (p && p.url) || '';
+      if (!val) return;
+      // Accept filenames, /api/photos/<file>, data URIs, or full URLs
+      let dataUri = '';
+      if (val.startsWith('data:')) dataUri = val;
+      else {
+        const fn = val.startsWith('/api/photos/') ? val.replace('/api/photos/', '') : val;
+        dataUri = readPhotoAsDataUri(fn) || '';
+      }
+      if (dataUri) {
+        h += `<div style="border:1px solid #ddd;border-radius:6px;overflow:hidden;background:#fafafa;"><img src="${dataUri}" style="display:block;width:100%;height:220px;object-fit:cover;"></div>`;
+      }
+    });
+    h += `</div>`;
   }
 
   // FOOTER

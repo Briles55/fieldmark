@@ -254,6 +254,7 @@ try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''")
 try { db.exec("ALTER TABLE equipment ADD COLUMN serviceFormTemplateId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN additionalPhotos TEXT DEFAULT '[]'"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN createdByUserId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE reports ADD COLUMN techNotes TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE work_orders ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE quotes ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
@@ -1044,7 +1045,7 @@ app.get('/api/data', requireAuth, (req, res) => {
       else if (eq.photo.startsWith('data:')) eq.photo = ''; // strip legacy base64 from bulk load
     }
   });
-  const reports   = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdByUserId,createdAt FROM reports ORDER BY createdAt DESC').all();
+  const reports   = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdByUserId,techNotes,createdAt FROM reports ORDER BY createdAt DESC').all();
   const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
   // Parse checklist JSON for each report
   reports.forEach(r => {
@@ -1386,15 +1387,15 @@ function expandReportPhotos(photosJson) {
 app.post('/api/reports', requireAuth, async (req, res) => {
   const { equipmentId, type, techName, date, status, workPerformed, cause, parts,
           recommendations, nextDate, checklist, refrigerantType, suctionPressure,
-          dischargePressure, supplyTemp, returnTemp, photoBefore, photoAfter, photoNameplate, workOrderNumber, additionalPhotos } = req.body;
+          dischargePressure, supplyTemp, returnTemp, photoBefore, photoAfter, photoNameplate, workOrderNumber, additionalPhotos, techNotes } = req.body;
   if (!equipmentId || !type) return res.status(400).json({ error: 'equipmentId and type required' });
   const id = genId();
   const addlPhotos = normalizeReportPhotos(additionalPhotos);
   // Capture creator from session for tech ownership
   const createdByUserId = req.session.user ? (req.session.user.id || '') : '';
   db.prepare(`INSERT INTO reports
-    (id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,photoBefore,photoAfter,photoNameplate,workOrderNumber,additionalPhotos,createdByUserId,createdAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    (id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,photoBefore,photoAfter,photoNameplate,workOrderNumber,additionalPhotos,createdByUserId,techNotes,createdAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, equipmentId, type, techName||'', date||'', status||'', workPerformed||'', cause||'',
          parts||'', recommendations||'', nextDate||'', JSON.stringify(checklist||[]),
          refrigerantType||'', suctionPressure||'', dischargePressure||'', supplyTemp||'', returnTemp||'',
@@ -1404,8 +1405,9 @@ app.post('/api/reports', requireAuth, async (req, res) => {
          workOrderNumber||'',
          JSON.stringify(addlPhotos),
          createdByUserId,
+         techNotes||'',
          new Date().toISOString());
-  const report = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdByUserId,createdAt FROM reports WHERE id=?').get(id);
+  const report = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdByUserId,techNotes,createdAt FROM reports WHERE id=?').get(id);
   report.checklist = checklist || [];
   report.additionalPhotos = expandReportPhotos(report.additionalPhotos);
   // Send email in background (don't block response)
@@ -1417,10 +1419,10 @@ app.put('/api/reports/:id', requireAdmin, (req, res) => {
   const existing = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Report not found' });
   const { techName, date, status, workPerformed, cause, parts, recommendations, nextDate,
-          refrigerantType, suctionPressure, dischargePressure, supplyTemp, returnTemp, workOrderNumber } = req.body;
+          refrigerantType, suctionPressure, dischargePressure, supplyTemp, returnTemp, workOrderNumber, techNotes } = req.body;
   db.prepare(`UPDATE reports SET techName=?, date=?, status=?, workPerformed=?, cause=?, parts=?,
     recommendations=?, nextDate=?, refrigerantType=?, suctionPressure=?, dischargePressure=?,
-    supplyTemp=?, returnTemp=?, workOrderNumber=? WHERE id=?`)
+    supplyTemp=?, returnTemp=?, workOrderNumber=?, techNotes=? WHERE id=?`)
     .run(techName||existing.techName, date||existing.date, status||existing.status,
          workPerformed!==undefined?workPerformed:existing.workPerformed,
          cause!==undefined?cause:existing.cause, parts!==undefined?parts:existing.parts,
@@ -1432,8 +1434,9 @@ app.put('/api/reports/:id', requireAdmin, (req, res) => {
          supplyTemp!==undefined?supplyTemp:existing.supplyTemp,
          returnTemp!==undefined?returnTemp:existing.returnTemp,
          workOrderNumber!==undefined?workOrderNumber:existing.workOrderNumber,
+         techNotes!==undefined?techNotes:existing.techNotes,
          req.params.id);
-  const updated = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdAt FROM reports WHERE id=?').get(req.params.id);
+  const updated = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,techNotes,createdAt FROM reports WHERE id=?').get(req.params.id);
   try { updated.checklist = JSON.parse(updated.checklist); } catch(e) { updated.checklist = []; }
   updated.additionalPhotos = expandReportPhotos(updated.additionalPhotos);
   res.json(updated);

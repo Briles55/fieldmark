@@ -1812,6 +1812,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div class="fg"><label class="flbl">Cause / Finding</label><textarea class="fc" id="er-cause" rows="2"></textarea></div>
       <div class="fg"><label class="flbl">Parts Used</label><textarea class="fc" id="er-parts" rows="2"></textarea></div>
       <div class="fg"><label class="flbl">Recommendations</label><textarea class="fc" id="er-recs" rows="2"></textarea></div>
+      <div class="fg" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:10px;">
+        <label class="flbl" style="color:#b45309;display:flex;align-items:center;gap:6px;">🔒 Tech Notes <span style="font-weight:400;font-size:10px;color:var(--muted);">(internal only — hidden from customer)</span></label>
+        <textarea class="fc" id="er-tech-notes" rows="2" placeholder="Private notes for the office/admin" style="background:#fff;"></textarea>
+      </div>
     </div>
     <div class="modal-ft">
       <button class="btn btn-secondary" onclick="closeModal('modal-edit-report')">Cancel</button>
@@ -7136,6 +7140,7 @@ function openEditReport(id) {
   document.getElementById('er-cause').value = r.cause || '';
   document.getElementById('er-parts').value = r.parts || '';
   document.getElementById('er-recs').value = r.recommendations || '';
+  if (document.getElementById('er-tech-notes')) document.getElementById('er-tech-notes').value = r.techNotes || '';
   openModal('modal-edit-report');
 }
 
@@ -7153,7 +7158,8 @@ async function saveEditReport() {
     workPerformed: work,
     cause: document.getElementById('er-cause').value.trim(),
     parts: document.getElementById('er-parts').value.trim(),
-    recommendations: document.getElementById('er-recs').value.trim()
+    recommendations: document.getElementById('er-recs').value.trim(),
+    techNotes: (document.getElementById('er-tech-notes') ? document.getElementById('er-tech-notes').value.trim() : '')
   };
   try {
     var updated = await apiPost('/api/reports/' + app.editingReportId, body, 'PUT');
@@ -7481,6 +7487,14 @@ function renderReportForm() {
             <div class="fg" id="rf-cause-wrap"><label class="flbl" id="rf-cause-label">Cause / Finding</label><textarea class="fc" id="rf-cause" placeholder="Root cause or finding (required when status is not Operational)\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Parts Used / Replaced</label><textarea class="fc" id="rf-parts" placeholder="List any parts used or replaced\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Recommendations</label><textarea class="fc" id="rf-recs" placeholder="Recommendations for follow-up or future work\u2026"></textarea></div>
+            <div class="fg" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:12px;">
+              <label class="flbl" style="display:flex;align-items:center;gap:6px;color:#b45309;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                Tech Notes (Internal — admins only)
+              </label>
+              <textarea class="fc" id="rf-tech-notes" placeholder="Private notes for the office/admin. Never shown to the customer, not included in their report PDF, email, or invoicing." style="background:#fff;"></textarea>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">🔒 This field is hidden from the customer's view of the report.</div>
+            </div>
           </div>
         </div>
         <div class="card">
@@ -7589,6 +7603,7 @@ function saveReportDraft(silent) {
       cause: document.getElementById('rf-cause')?.value || '',
       parts: document.getElementById('rf-parts')?.value || '',
       recs: document.getElementById('rf-recs')?.value || '',
+      techNotes: document.getElementById('rf-tech-notes')?.value || '',
     },
     // Default maintenance checklist state
     checklist: (function() {
@@ -7670,6 +7685,7 @@ function applyDraftToForm() {
   if (document.getElementById('rf-cause')) document.getElementById('rf-cause').value = f.cause || '';
   if (document.getElementById('rf-parts')) document.getElementById('rf-parts').value = f.parts || '';
   if (document.getElementById('rf-recs')) document.getElementById('rf-recs').value = f.recs || '';
+  if (document.getElementById('rf-tech-notes')) document.getElementById('rf-tech-notes').value = f.techNotes || '';
   // Restore default maintenance checklist
   (draft.checklist || []).forEach(function(checked, i) {
     var cb = document.getElementById('chk-' + i);
@@ -8218,6 +8234,7 @@ async function submitReport(e) {
     photoNameplate: app.reportPhotos.nameplate,
     workOrderNumber: document.getElementById('rf-wo-number')?.value.trim()||'',
     additionalPhotos: app.reportAdditionalPhotos || [],
+    techNotes: document.getElementById('rf-tech-notes')?.value.trim()||'',
   };
   try {
     const created = await apiPost('/api/reports', reportData);
@@ -8302,6 +8319,13 @@ function renderReportDetail() {
           ${r.cause?`<hr class="div"><div class="ii-lbl">Cause / Finding</div><div style="margin-top:6px;font-size:13.5px;">${esc(r.cause)}</div>`:''}
           ${r.parts?`<hr class="div"><div class="ii-lbl">Parts Used</div><div style="margin-top:6px;font-size:13.5px;">${esc(r.parts)}</div>`:''}
           ${r.recommendations?`<hr class="div"><div class="ii-lbl">Recommendations</div><div style="margin-top:6px;font-size:13.5px;">${esc(r.recommendations)}</div>`:''}
+          ${r.techNotes?`<hr class="div"><div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:10px 12px;margin-top:8px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+              Tech Notes <span style="font-weight:400;font-size:10px;color:var(--muted);">(internal — not shown to customer)</span>
+            </div>
+            <div style="font-size:13.5px;white-space:pre-wrap;color:var(--text);">${esc(r.techNotes)}</div>
+          </div>`:''}
         </div>
       </div>
       <div>

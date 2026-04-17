@@ -369,6 +369,8 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .photo-field .photo-drop .ph-text{font-size:11px;color:var(--muted);text-align:center;padding:0 8px;}
 .photo-field .photo-drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;}
 .photo-field .photo-drop .photo-remove{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;z-index:2;}
+.photo-field .photo-drop .photo-annotate{position:absolute;top:4px;right:32px;width:24px;height:24px;border-radius:50%;background:rgba(59,130,246,.85);color:#fff;border:none;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;z-index:2;}
+.photo-field .photo-drop .photo-annotate:hover{background:rgba(37,99,235,1);}
 .photo-field .photo-drop .photo-remove:hover{background:var(--red);}
 .photo-field input[type="file"]{display:none;}
 .photo-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:pointer;}
@@ -1816,6 +1818,46 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 </div>
 
 <!-- Form Preview Modal -->
+<!-- Photo Annotation Modal -->
+<div class="overlay" id="modal-annotate">
+  <div class="modal" style="max-width:900px;width:95vw;">
+    <div class="modal-hd">
+      <span class="modal-title">Annotate Photo</span>
+      <button class="modal-x" onclick="closeAnnotator(false)">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding:8px;">
+      <div id="annot-toolbar" style="display:flex;gap:6px;padding:8px;flex-wrap:wrap;align-items:center;background:var(--bg2);border-radius:6px;margin-bottom:8px;">
+        <button type="button" class="btn btn-sm" id="annot-tool-pen" onclick="annotSetTool('pen')">✏️ Pen</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="annot-tool-arrow" onclick="annotSetTool('arrow')">→ Arrow</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="annot-tool-rect" onclick="annotSetTool('rect')">▢ Box</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="annot-tool-text" onclick="annotSetTool('text')">T Text</button>
+        <div style="width:1px;height:24px;background:var(--border);margin:0 4px;"></div>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;">
+          <span>Color:</span>
+          <input type="color" id="annot-color" value="#ef4444" onchange="annotColor=this.value;" style="width:28px;height:28px;border:none;cursor:pointer;padding:0;background:transparent;">
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;">
+          <span>Size:</span>
+          <input type="range" id="annot-size" min="2" max="20" value="4" oninput="annotSize=parseInt(this.value);">
+        </label>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="annotUndo()">↶ Undo</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="annotClear()">Clear All</button>
+        </div>
+      </div>
+      <div id="annot-canvas-wrap" style="background:#222;border-radius:6px;text-align:center;overflow:hidden;">
+        <canvas id="annot-canvas" style="max-width:100%;max-height:70vh;touch-action:none;cursor:crosshair;"></canvas>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-secondary" onclick="closeAnnotator(false)">Cancel</button>
+      <button class="btn btn-primary" onclick="closeAnnotator(true)">Save Annotations</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-fb-preview">
   <div class="modal" style="max-width:680px;">
     <div class="modal-hd">
@@ -1930,8 +1972,27 @@ function handlePhotoSelect(key, inputEl) {
   compressImage(file).then(dataUrl => {
     app.reportPhotos[key] = dataUrl;
     const drop = inputEl.previousElementSibling;
-    drop.innerHTML = `<img src="${dataUrl}" alt=""><button type="button" class="photo-remove" onclick="event.stopPropagation();clearPhoto('${key}',this)">✕</button>`;
+    drop.innerHTML = `<img src="${dataUrl}" alt=""><button type="button" class="photo-remove" onclick="event.stopPropagation();clearPhoto('${key}',this)">✕</button><button type="button" class="photo-annotate" onclick="event.stopPropagation();annotateRequiredPhoto('${key}')">✎</button>`;
   }).catch(() => showToast('Failed to process image','error'));
+}
+
+function annotateRequiredPhoto(key) {
+  var cur = app.reportPhotos && app.reportPhotos[key];
+  if (!cur) { showToast('No photo to annotate', 'error'); return; }
+  openAnnotator(cur, function(newUrl) {
+    app.reportPhotos[key] = newUrl;
+    // Refresh the img in the photo drop
+    var inputs = document.querySelectorAll('.photo-field input[type="file"]');
+    inputs.forEach(function(inp) {
+      if (inp.getAttribute('onchange') && inp.getAttribute('onchange').indexOf("'" + key + "'") >= 0) {
+        var drop = inp.previousElementSibling;
+        if (drop) {
+          var img = drop.querySelector('img');
+          if (img) img.src = newUrl;
+        }
+      }
+    });
+  });
 }
 
 function clearPhoto(key, btn) {
@@ -7607,6 +7668,173 @@ function deleteDraft(key) {
   showToast('Draft deleted', 'success');
 }
 
+// ─── PHOTO ANNOTATION ──────────────────────────────────────────────────────
+var annotState = null;
+var annotTool = 'pen';
+var annotColor = '#ef4444';
+var annotSize = 4;
+var annotDone = null; // callback to receive new data URL
+
+function openAnnotator(dataUrl, onSave) {
+  if (!dataUrl) { showToast('No photo to annotate', 'error'); return; }
+  annotDone = onSave;
+  annotTool = 'pen';
+  annotColor = '#ef4444';
+  annotSize = 4;
+  document.getElementById('annot-color').value = annotColor;
+  document.getElementById('annot-size').value = annotSize;
+  annotSetTool('pen');
+  var canvas = document.getElementById('annot-canvas');
+  var img = new Image();
+  img.onload = function() {
+    // Fit to a reasonable max while keeping aspect
+    var maxW = Math.min(1200, img.naturalWidth);
+    var scale = maxW / img.naturalWidth;
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    annotState = {
+      image: img,
+      strokes: [], // completed strokes
+      current: null, // in-progress stroke
+    };
+    annotRedraw();
+    openModal('modal-annotate');
+    annotAttachEvents(canvas);
+  };
+  img.src = dataUrl;
+}
+
+function annotSetTool(tool) {
+  annotTool = tool;
+  ['pen','arrow','rect','text'].forEach(function(t) {
+    var el = document.getElementById('annot-tool-' + t);
+    if (el) {
+      el.classList.toggle('btn-ghost', t !== tool);
+      if (t === tool) el.classList.remove('btn-ghost');
+    }
+  });
+}
+
+function annotRedraw() {
+  if (!annotState) return;
+  var canvas = document.getElementById('annot-canvas');
+  var ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(annotState.image, 0, 0, canvas.width, canvas.height);
+  annotState.strokes.forEach(function(s) { drawStroke(ctx, s); });
+  if (annotState.current) drawStroke(ctx, annotState.current);
+}
+
+function drawStroke(ctx, s) {
+  ctx.save();
+  ctx.strokeStyle = s.color;
+  ctx.fillStyle = s.color;
+  ctx.lineWidth = s.size;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (s.tool === 'pen' && s.points.length) {
+    ctx.beginPath();
+    ctx.moveTo(s.points[0].x, s.points[0].y);
+    for (var i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+    ctx.stroke();
+  } else if (s.tool === 'arrow' && s.points.length >= 2) {
+    var a = s.points[0], b = s.points[s.points.length - 1];
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    // arrowhead
+    var ang = Math.atan2(b.y - a.y, b.x - a.x);
+    var h = Math.max(10, s.size * 3);
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x - h * Math.cos(ang - Math.PI/6), b.y - h * Math.sin(ang - Math.PI/6));
+    ctx.lineTo(b.x - h * Math.cos(ang + Math.PI/6), b.y - h * Math.sin(ang + Math.PI/6));
+    ctx.closePath();
+    ctx.fill();
+  } else if (s.tool === 'rect' && s.points.length >= 2) {
+    var a2 = s.points[0], b2 = s.points[s.points.length - 1];
+    ctx.strokeRect(Math.min(a2.x, b2.x), Math.min(a2.y, b2.y), Math.abs(b2.x - a2.x), Math.abs(b2.y - a2.y));
+  } else if (s.tool === 'text' && s.points.length && s.text) {
+    ctx.font = 'bold ' + Math.max(18, s.size * 6) + 'px Arial';
+    ctx.fillText(s.text, s.points[0].x, s.points[0].y);
+  }
+  ctx.restore();
+}
+
+function annotAttachEvents(canvas) {
+  // Only attach once per canvas
+  if (canvas._annotAttached) return;
+  canvas._annotAttached = true;
+  function getPos(e) {
+    var rect = canvas.getBoundingClientRect();
+    var t = e.touches ? e.touches[0] : e;
+    return {
+      x: (t.clientX - rect.left) * (canvas.width / rect.width),
+      y: (t.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+  function start(e) {
+    if (!annotState) return;
+    e.preventDefault();
+    var p = getPos(e);
+    if (annotTool === 'text') {
+      var txt = prompt('Enter text:');
+      if (txt) {
+        annotState.strokes.push({ tool: 'text', color: annotColor, size: annotSize, points: [p], text: txt });
+        annotRedraw();
+      }
+      return;
+    }
+    annotState.current = { tool: annotTool, color: annotColor, size: annotSize, points: [p] };
+    annotRedraw();
+  }
+  function move(e) {
+    if (!annotState || !annotState.current) return;
+    e.preventDefault();
+    var p = getPos(e);
+    if (annotTool === 'pen') annotState.current.points.push(p);
+    else annotState.current.points = [annotState.current.points[0], p]; // keep only endpoints
+    annotRedraw();
+  }
+  function end() {
+    if (!annotState || !annotState.current) return;
+    annotState.strokes.push(annotState.current);
+    annotState.current = null;
+    annotRedraw();
+  }
+  canvas.addEventListener('mousedown', start);
+  canvas.addEventListener('mousemove', move);
+  canvas.addEventListener('mouseup', end);
+  canvas.addEventListener('mouseleave', end);
+  canvas.addEventListener('touchstart', start, { passive: false });
+  canvas.addEventListener('touchmove', move, { passive: false });
+  canvas.addEventListener('touchend', end);
+}
+
+function annotUndo() {
+  if (!annotState || !annotState.strokes.length) return;
+  annotState.strokes.pop();
+  annotRedraw();
+}
+
+function annotClear() {
+  if (!annotState) return;
+  if (annotState.strokes.length && !confirm('Clear all annotations?')) return;
+  annotState.strokes = [];
+  annotState.current = null;
+  annotRedraw();
+}
+
+function closeAnnotator(save) {
+  if (save && annotState && annotDone) {
+    var canvas = document.getElementById('annot-canvas');
+    var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    try { annotDone(dataUrl); } catch(e) { console.error(e); }
+  }
+  closeModal('modal-annotate');
+  annotState = null;
+  annotDone = null;
+}
+
 // ─── ADDITIONAL PHOTOS (Multi-photo + captions + GPS) ──────────────────────
 function rfRenderAdditionalPhotos() {
   var grid = document.getElementById('rf-addl-photos-grid');
@@ -7641,13 +7869,28 @@ function rfRenderAdditionalPhotos() {
       gps.innerHTML = '\u{1F4CD} ' + parseFloat(p.lat).toFixed(5) + ', ' + parseFloat(p.lng).toFixed(5);
       body.appendChild(gps);
     }
+    var btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:4px;margin-top:6px;';
+    var annot = document.createElement('button');
+    annot.type = 'button';
+    annot.className = 'btn btn-outline btn-sm';
+    annot.style.cssText = 'flex:1;font-size:11px;padding:4px;';
+    annot.textContent = '✎ Annotate';
+    annot.onclick = function() {
+      openAnnotator(app.reportAdditionalPhotos[idx].url, function(newUrl) {
+        app.reportAdditionalPhotos[idx].url = newUrl;
+        rfRenderAdditionalPhotos();
+      });
+    };
+    btns.appendChild(annot);
     var del = document.createElement('button');
     del.type = 'button';
     del.className = 'btn btn-danger btn-sm';
-    del.style.cssText = 'margin-top:6px;width:100%;font-size:11px;padding:4px;';
-    del.textContent = 'Remove';
+    del.style.cssText = 'flex:1;font-size:11px;padding:4px;';
+    del.textContent = '✕ Remove';
     del.onclick = function() { rfRemoveAdditionalPhoto(idx); };
-    body.appendChild(del);
+    btns.appendChild(del);
+    body.appendChild(btns);
     wrap.appendChild(body);
     grid.appendChild(wrap);
   });

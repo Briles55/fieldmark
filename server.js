@@ -1450,7 +1450,8 @@ app.delete('/api/reports/:id', requireAdmin, (req, res) => {
 // Accepts either a staff session OR a client session (client must own the equipment)
 app.get('/api/reports/:id/photos', (req, res) => {
   const isStaff = !!req.session?.user;
-  const clientId = req.session?.client?.clientId;
+  // Client sessions store { id, name, email } — id IS the client's id
+  const clientId = req.session?.client?.id || null;
   if (!isStaff && !clientId) return res.status(401).json({ error: 'Not authenticated' });
 
   const row = db.prepare('SELECT equipmentId,photoBefore,photoAfter,photoNameplate FROM reports WHERE id=?').get(req.params.id);

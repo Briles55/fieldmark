@@ -1638,13 +1638,25 @@ function renderReportSection(r) {
 }
 
 // ─── PDF VIEW (server-rendered HTML with photos) ──────────────────────────────
-app.get('/api/reports/:id/pdf-view', requireAuth, (req, res) => {
+// Accepts either a staff session OR a client session (client must own the equipment)
+app.get('/api/reports/:id/pdf-view', (req, res) => {
+  const isStaff = !!req.session?.user;
+  const clientIdSess = req.session?.client?.id || null;
+  if (!isStaff && !clientIdSess) return res.status(401).send('Not authenticated');
+
   const r = db.prepare('SELECT * FROM reports WHERE id=?').get(req.params.id);
   if (!r) return res.status(404).send('Report not found');
 
   const eq = r.equipmentId ? db.prepare('SELECT * FROM equipment WHERE id=?').get(r.equipmentId) : null;
   const loc = eq && eq.locationId ? db.prepare('SELECT * FROM locations WHERE id=?').get(eq.locationId) : null;
   const cl = loc && loc.clientId ? db.prepare('SELECT * FROM clients WHERE id=?').get(loc.clientId) : null;
+
+  // Client ownership check
+  if (!isStaff && (!loc || loc.clientId !== clientIdSess)) return res.status(403).send('Forbidden');
+
+  // Clients never see internal tech notes in PDFs (extra belt-and-suspenders:
+  // renderReportSection doesn't render them anyway, but scrub to be safe)
+  if (!isStaff) r.techNotes = '';
 
   // Use shared renderReportSection for the body, wrap in full HTML document
   let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>FieldMark Report</title>

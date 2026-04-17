@@ -1979,7 +1979,13 @@ function isNetworkError(err) {
 
 async function apiGet(url) {
   const res = await fetch(url, { credentials: 'include' });
-  if (res.status === 401) { currentUser = null; showLoginScreen(); throw new Error('Not authenticated'); }
+  if (res.status === 401) {
+    // Client portal sessions: a 401 on some endpoint doesn't mean the client
+    // session is dead — just that the endpoint doesn't accept clients. Throw
+    // without kicking them out of the app.
+    if (isClient()) throw new Error('Not authorized for this resource');
+    currentUser = null; showLoginScreen(); throw new Error('Not authenticated');
+  }
   if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error || res.statusText); }
   return res.json();
 }
@@ -1989,7 +1995,10 @@ async function apiPost(url, body, method='POST') {
   try {
     const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body), signal: controller.signal });
     clearTimeout(timeout);
-    if (res.status === 401) { currentUser = null; showLoginScreen(); throw new Error('Not authenticated'); }
+    if (res.status === 401) {
+      if (isClient()) throw new Error('Not authorized for this resource');
+      currentUser = null; showLoginScreen(); throw new Error('Not authenticated');
+    }
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error || res.statusText); }
     return res.json();
   } catch(err) {

@@ -1447,13 +1447,28 @@ app.delete('/api/reports/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/reports/:id/photos', requireAuth, (req, res) => {
-  const row = db.prepare('SELECT photoBefore,photoAfter,photoNameplate FROM reports WHERE id=?').get(req.params.id);
+// Accepts either a staff session OR a client session (client must own the equipment)
+app.get('/api/reports/:id/photos', (req, res) => {
+  const isStaff = !!req.session?.user;
+  const clientId = req.session?.client?.clientId;
+  if (!isStaff && !clientId) return res.status(401).json({ error: 'Not authenticated' });
+
+  const row = db.prepare('SELECT equipmentId,photoBefore,photoAfter,photoNameplate FROM reports WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Report not found' });
+
+  // For clients, verify they own this report's equipment via location → client
+  if (!isStaff) {
+    const eq = db.prepare('SELECT locationId FROM equipment WHERE id=?').get(row.equipmentId);
+    if (!eq) return res.status(404).json({ error: 'Not found' });
+    const loc = db.prepare('SELECT clientId FROM locations WHERE id=?').get(eq.locationId);
+    if (!loc || loc.clientId !== clientId) return res.status(403).json({ error: 'Forbidden' });
+  }
+
   // Convert file refs to URLs for frontend display
   if (row.photoBefore && isPhotoRef(row.photoBefore)) row.photoBefore = '/api/photos/' + row.photoBefore;
   if (row.photoAfter && isPhotoRef(row.photoAfter)) row.photoAfter = '/api/photos/' + row.photoAfter;
   if (row.photoNameplate && isPhotoRef(row.photoNameplate)) row.photoNameplate = '/api/photos/' + row.photoNameplate;
+  delete row.equipmentId; // don't leak internal id
   res.json(row);
 });
 

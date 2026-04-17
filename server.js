@@ -252,6 +252,7 @@ try { db.exec(`ALTER TABLE quotes ADD COLUMN photos TEXT DEFAULT '[]'`); } catch
 try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN serviceFormTemplateId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE reports ADD COLUMN additionalPhotos TEXT DEFAULT '[]'"); } catch(e) {}
 try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoBefore TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoAfter TEXT DEFAULT ''"); } catch(e) {}
@@ -997,8 +998,11 @@ app.get('/api/client-data', requireClientAuth, (req, res) => {
     const equipmentIds = equipment.map(e => e.id);
     if (equipmentIds.length) {
       const ePlaceholders = equipmentIds.map(() => '?').join(',');
-      reports = db.prepare(`SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,createdAt FROM reports WHERE equipmentId IN (${ePlaceholders}) ORDER BY createdAt DESC`).all(...equipmentIds);
-      reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
+      reports = db.prepare(`SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,additionalPhotos,createdAt FROM reports WHERE equipmentId IN (${ePlaceholders}) ORDER BY createdAt DESC`).all(...equipmentIds);
+      reports.forEach(r => {
+        try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; }
+        r.additionalPhotos = expandReportPhotos(r.additionalPhotos);
+      });
     }
   }
   const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
@@ -1037,10 +1041,13 @@ app.get('/api/data', requireAuth, (req, res) => {
       else if (eq.photo.startsWith('data:')) eq.photo = ''; // strip legacy base64 from bulk load
     }
   });
-  const reports   = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,createdAt FROM reports ORDER BY createdAt DESC').all();
+  const reports   = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdAt FROM reports ORDER BY createdAt DESC').all();
   const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
   // Parse checklist JSON for each report
-  reports.forEach(r => { try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; } });
+  reports.forEach(r => {
+    try { r.checklist = r.checklist ? JSON.parse(r.checklist) : []; } catch { r.checklist = []; }
+    r.additionalPhotos = expandReportPhotos(r.additionalPhotos);
+  });
   formTemplates.forEach(t => { try { t.fields = JSON.parse(t.fields); } catch { t.fields = []; } });
   const serviceRequests = db.prepare('SELECT * FROM service_requests ORDER BY createdAt DESC').all();
   serviceRequests.forEach(sr => {
@@ -1336,15 +1343,53 @@ app.delete('/api/onboarding/:token', requireAdmin, (req, res) => {
 });
 
 // ─── REPORTS ──────────────────────────────────────────────────────────────────
+// Normalize additional photos: save any data URIs, keep existing refs.
+// Each entry is { url, caption, lat, lng, takenAt } — url becomes a filename.
+function normalizeReportPhotos(photos) {
+  if (!Array.isArray(photos)) return [];
+  return photos.map(function(p) {
+    if (!p) return null;
+    var url = typeof p === 'string' ? p : (p.url || '');
+    if (!url) return null;
+    var ref;
+    if (url.startsWith('data:')) ref = savePhotoFile(url) || '';
+    else if (url.startsWith('/api/photos/')) ref = url.replace('/api/photos/', '');
+    else ref = url;
+    if (!ref) return null;
+    return {
+      url: ref,
+      caption: (typeof p === 'object' && p.caption) || '',
+      lat: (typeof p === 'object' && p.lat !== undefined && p.lat !== null) ? p.lat : null,
+      lng: (typeof p === 'object' && p.lng !== undefined && p.lng !== null) ? p.lng : null,
+      takenAt: (typeof p === 'object' && p.takenAt) || new Date().toISOString(),
+    };
+  }).filter(Boolean);
+}
+
+function expandReportPhotos(photosJson) {
+  var arr;
+  try { arr = JSON.parse(photosJson || '[]'); } catch(e) { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  return arr.map(function(p) {
+    if (!p) return null;
+    var out = typeof p === 'object' ? Object.assign({}, p) : { url: p };
+    if (out.url && typeof out.url === 'string' && !out.url.startsWith('data:') && !out.url.startsWith('/') && !out.url.startsWith('http')) {
+      out.url = '/api/photos/' + out.url;
+    }
+    return out;
+  }).filter(Boolean);
+}
+
 app.post('/api/reports', requireAuth, async (req, res) => {
   const { equipmentId, type, techName, date, status, workPerformed, cause, parts,
           recommendations, nextDate, checklist, refrigerantType, suctionPressure,
-          dischargePressure, supplyTemp, returnTemp, photoBefore, photoAfter, photoNameplate, workOrderNumber } = req.body;
+          dischargePressure, supplyTemp, returnTemp, photoBefore, photoAfter, photoNameplate, workOrderNumber, additionalPhotos } = req.body;
   if (!equipmentId || !type) return res.status(400).json({ error: 'equipmentId and type required' });
   const id = genId();
+  const addlPhotos = normalizeReportPhotos(additionalPhotos);
   db.prepare(`INSERT INTO reports
-    (id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,photoBefore,photoAfter,photoNameplate,workOrderNumber,createdAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    (id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,photoBefore,photoAfter,photoNameplate,workOrderNumber,additionalPhotos,createdAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, equipmentId, type, techName||'', date||'', status||'', workPerformed||'', cause||'',
          parts||'', recommendations||'', nextDate||'', JSON.stringify(checklist||[]),
          refrigerantType||'', suctionPressure||'', dischargePressure||'', supplyTemp||'', returnTemp||'',
@@ -1352,9 +1397,11 @@ app.post('/api/reports', requireAuth, async (req, res) => {
          photoAfter && photoAfter.startsWith('data:') ? savePhotoFile(photoAfter) : (photoAfter||''),
          photoNameplate && photoNameplate.startsWith('data:') ? savePhotoFile(photoNameplate) : (photoNameplate||''),
          workOrderNumber||'',
+         JSON.stringify(addlPhotos),
          new Date().toISOString());
-  const report = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,createdAt FROM reports WHERE id=?').get(id);
+  const report = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdAt FROM reports WHERE id=?').get(id);
   report.checklist = checklist || [];
+  report.additionalPhotos = expandReportPhotos(report.additionalPhotos);
   // Send email in background (don't block response)
   sendClientNotification(report);
   res.json(report);
@@ -1380,8 +1427,9 @@ app.put('/api/reports/:id', requireAdmin, (req, res) => {
          returnTemp!==undefined?returnTemp:existing.returnTemp,
          workOrderNumber!==undefined?workOrderNumber:existing.workOrderNumber,
          req.params.id);
-  const updated = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,createdAt FROM reports WHERE id=?').get(req.params.id);
+  const updated = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdAt FROM reports WHERE id=?').get(req.params.id);
   try { updated.checklist = JSON.parse(updated.checklist); } catch(e) { updated.checklist = []; }
+  updated.additionalPhotos = expandReportPhotos(updated.additionalPhotos);
   res.json(updated);
 });
 
@@ -1537,6 +1585,28 @@ function renderReportSection(r) {
 <img src="${nameplateUri}" style="max-width:100%;max-height:240px;border:1px solid #ccc;display:block;margin:0 auto;">
 <div style="font-size:11px;color:#555;margin-top:4px;">Nameplate</div>
 </td><td style="width:50%;"></td></tr></table>`;
+  }
+
+  // ADDITIONAL PHOTOS (multi-photo + captions + GPS)
+  let addlPhotos = [];
+  try { addlPhotos = typeof r.additionalPhotos === 'string' ? JSON.parse(r.additionalPhotos || '[]') : (r.additionalPhotos || []); } catch(err) { addlPhotos = []; }
+  if (Array.isArray(addlPhotos) && addlPhotos.length) {
+    h += `<div style="font-size:20px;font-weight:700;text-align:center;margin:30px 0 16px;color:#1a1a1a;">Photo Gallery</div>`;
+    h += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;">`;
+    addlPhotos.forEach(function(p) {
+      var url = typeof p === 'string' ? p : (p && p.url);
+      if (!url) return;
+      var uri = url.startsWith('data:') ? url : (url.startsWith('/api/photos/') ? readPhotoAsDataUri(url.replace('/api/photos/', '')) : readPhotoAsDataUri(url));
+      if (!uri) return;
+      var cap = (typeof p === 'object' && p.caption) ? p.caption : '';
+      var hasGps = typeof p === 'object' && p.lat !== null && p.lat !== undefined;
+      h += `<div style="border:1px solid #ddd;padding:6px;border-radius:6px;">
+        <img src="${uri}" style="display:block;width:100%;height:220px;object-fit:cover;border-radius:4px;">
+        ${cap ? `<div style="font-size:12px;padding:6px 4px 0;color:#333;">${e(cap)}</div>` : ''}
+        ${hasGps ? `<div style="font-size:10px;padding:2px 4px 0;color:#666;">\u{1F4CD} ${e(String(p.lat).slice(0,8))}, ${e(String(p.lng).slice(0,8))}</div>` : ''}
+      </div>`;
+    });
+    h += `</div>`;
   }
 
   return h;

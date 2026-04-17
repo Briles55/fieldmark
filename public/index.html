@@ -7204,6 +7204,7 @@ function renderReportForm() {
   }
 
   app.reportPhotos = { before: null, after: null, nameplate: null };
+  app.reportAdditionalPhotos = [];
 
   // Check for existing draft
   const existingDraft = loadReportDraft(app.equipmentId, type);
@@ -7271,6 +7272,17 @@ function renderReportForm() {
         </div>
         ${checklistCard}
       </div>
+      <div class="card" style="margin-top:16px;">
+        <div class="card-hd"><span class="card-title">Additional Photos</span><span class="badge bgr">Optional</span></div>
+        <div class="card-body">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Attach any extra photos of the equipment, site conditions, or work area. Add captions, and GPS is auto-captured on mobile.</p>
+          <div id="rf-addl-photos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;"></div>
+          <div style="margin-top:12px;">
+            <label class="btn btn-outline btn-sm" for="rf-addl-photo-input" style="cursor:pointer;">+ Add Photo(s)</label>
+            <input id="rf-addl-photo-input" type="file" accept="image/*" multiple style="display:none;" onchange="rfAddAdditionalPhotos(this)">
+          </div>
+        </div>
+      </div>
       <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;">
         <button type="button" class="btn btn-secondary" onclick="goBackFromReport()">Cancel</button>
         <button type="button" class="btn btn-ghost" onclick="saveReportDraft()" id="rf-save-draft-btn">
@@ -7283,6 +7295,8 @@ function renderReportForm() {
   `;
   // Wire up rating/signature widgets for any custom-form fields (both service + maintenance)
   if (template) initCustomChecklistWidgets(template);
+  // Render additional photos (will show empty state initially)
+  rfRenderAdditionalPhotos();
   // Start auto-save timer (every 30s)
   if (app._reportDraftTimer) clearInterval(app._reportDraftTimer);
   app._reportDraftTimer = setInterval(function() {
@@ -7348,6 +7362,8 @@ function saveReportDraft(silent) {
     })(),
     // Required photos (data URIs)
     reportPhotos: app.reportPhotos || null,
+    // Additional optional photos
+    additionalPhotos: app.reportAdditionalPhotos || [],
     // Custom form field values (including photos)
     customFields: captureCustomFieldDraftState(),
   };
@@ -7430,6 +7446,11 @@ function applyDraftToForm() {
     ['before','after','nameplate'].forEach(function(key) {
       if (draft.reportPhotos[key]) renderRestoredReportPhoto(key, draft.reportPhotos[key]);
     });
+  }
+  // Restore additional photos
+  if (Array.isArray(draft.additionalPhotos)) {
+    app.reportAdditionalPhotos = draft.additionalPhotos;
+    rfRenderAdditionalPhotos();
   }
   // Restore custom field state
   if (draft.customFields) applyCustomFieldDraftState(draft.customFields);
@@ -7586,6 +7607,93 @@ function deleteDraft(key) {
   showToast('Draft deleted', 'success');
 }
 
+// ─── ADDITIONAL PHOTOS (Multi-photo + captions + GPS) ──────────────────────
+function rfRenderAdditionalPhotos() {
+  var grid = document.getElementById('rf-addl-photos-grid');
+  if (!grid) return;
+  var photos = app.reportAdditionalPhotos || [];
+  if (!photos.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;border:2px dashed var(--border);border-radius:8px;text-align:center;color:var(--muted);font-size:12px;">No additional photos yet. Tap "Add Photo(s)" below to attach.</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  photos.forEach(function(p, idx) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg2);';
+    var img = document.createElement('img');
+    img.src = p.url;
+    img.style.cssText = 'width:100%;aspect-ratio:4/3;object-fit:cover;cursor:pointer;display:block;';
+    img.onclick = function() { openPhotoLightbox(p.url); };
+    wrap.appendChild(img);
+    var body = document.createElement('div');
+    body.style.cssText = 'padding:8px;';
+    var capInp = document.createElement('input');
+    capInp.type = 'text';
+    capInp.className = 'fc';
+    capInp.style.cssText = 'font-size:12px;padding:6px 8px;';
+    capInp.placeholder = 'Caption (optional)';
+    capInp.value = p.caption || '';
+    capInp.oninput = function() { if (app.reportAdditionalPhotos[idx]) app.reportAdditionalPhotos[idx].caption = this.value; };
+    body.appendChild(capInp);
+    if (p.lat !== null && p.lat !== undefined) {
+      var gps = document.createElement('div');
+      gps.style.cssText = 'font-size:10px;color:var(--muted);margin-top:4px;';
+      gps.innerHTML = '\u{1F4CD} ' + parseFloat(p.lat).toFixed(5) + ', ' + parseFloat(p.lng).toFixed(5);
+      body.appendChild(gps);
+    }
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn btn-danger btn-sm';
+    del.style.cssText = 'margin-top:6px;width:100%;font-size:11px;padding:4px;';
+    del.textContent = 'Remove';
+    del.onclick = function() { rfRemoveAdditionalPhoto(idx); };
+    body.appendChild(del);
+    wrap.appendChild(body);
+    grid.appendChild(wrap);
+  });
+}
+
+function rfGetPosition() {
+  return new Promise(function(resolve) {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      function(pos) { resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
+      function() { resolve(null); },
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+    );
+  });
+}
+
+function rfAddAdditionalPhotos(inputEl) {
+  var files = Array.from(inputEl.files || []);
+  if (!files.length) return;
+  if (!app.reportAdditionalPhotos) app.reportAdditionalPhotos = [];
+  // Try to get GPS once for this batch
+  rfGetPosition().then(function(coords) {
+    var tasks = files.map(function(f) { return compressImage(f).catch(function(){ return null; }); });
+    Promise.all(tasks).then(function(urls) {
+      urls.forEach(function(u) {
+        if (!u) return;
+        app.reportAdditionalPhotos.push({
+          url: u,
+          caption: '',
+          lat: coords ? coords.lat : null,
+          lng: coords ? coords.lng : null,
+          takenAt: new Date().toISOString()
+        });
+      });
+      rfRenderAdditionalPhotos();
+    });
+  });
+  inputEl.value = '';
+}
+
+function rfRemoveAdditionalPhoto(idx) {
+  if (!app.reportAdditionalPhotos) return;
+  app.reportAdditionalPhotos.splice(idx, 1);
+  rfRenderAdditionalPhotos();
+}
+
 // Show/hide required indicator on Cause/Finding depending on status
 function rfStatusChanged() {
   var sel = document.getElementById('rf-status');
@@ -7692,6 +7800,7 @@ async function submitReport(e) {
     photoAfter: app.reportPhotos.after,
     photoNameplate: app.reportPhotos.nameplate,
     workOrderNumber: document.getElementById('rf-wo-number')?.value.trim()||'',
+    additionalPhotos: app.reportAdditionalPhotos || [],
   };
   try {
     const created = await apiPost('/api/reports', reportData);
@@ -7788,9 +7897,32 @@ function renderReportDetail() {
     </div>
     ${checklistHtml}
     <div id="rpt-photos-card"></div>
+    ${renderAdditionalPhotosSection(r.additionalPhotos)}
   `;
   // Lazy-load photos
   loadReportPhotos(r.id);
+}
+
+function renderAdditionalPhotosSection(photos) {
+  if (!Array.isArray(photos) || !photos.length) return '';
+  return `<div class="card" style="margin-top:16px;">
+    <div class="card-hd"><span class="card-title">Additional Photos</span><span class="badge bgr">${photos.length}</span></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+        ${photos.map(function(p) {
+          var url = p && p.url ? p.url : '';
+          if (!url) return '';
+          var hasGps = p && p.lat !== null && p.lat !== undefined;
+          var mapLink = hasGps ? `<a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent);text-decoration:none;">📍 ${parseFloat(p.lat).toFixed(5)}, ${parseFloat(p.lng).toFixed(5)}</a>` : '';
+          return `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg2);">
+            <img src="${esc(url)}" style="width:100%;aspect-ratio:4/3;object-fit:cover;cursor:pointer;" onclick="openPhotoLightbox('${esc(url)}')">
+            ${p.caption ? `<div style="padding:6px 10px;font-size:12px;">${esc(p.caption)}</div>` : ''}
+            ${mapLink ? `<div style="padding:0 10px 8px;">${mapLink}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
 }
 
 async function loadReportPhotos(reportId) {

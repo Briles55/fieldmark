@@ -253,6 +253,8 @@ try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } 
 try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN serviceFormTemplateId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN additionalPhotos TEXT DEFAULT '[]'"); } catch(e) {}
+try { db.exec("ALTER TABLE work_orders ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE quotes ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoBefore TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoAfter TEXT DEFAULT ''"); } catch(e) {}
@@ -1861,7 +1863,7 @@ function parseQuote(q) {
 }
 
 app.post('/api/quotes', requireAdmin, (req, res) => {
-  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil, hideBreakdown, photos } = req.body;
+  const { clientId, locationId, scopeOfWork, laborEntries, partsEntries, inclusions, exclusions, recipients, notes, validUntil, hideBreakdown, photos, reportId } = req.body;
   if (!clientId) return res.status(400).json({ error: 'Client required' });
   let labor = Array.isArray(laborEntries) ? laborEntries : [];
   let parts = Array.isArray(partsEntries) ? partsEntries : [];
@@ -1869,11 +1871,11 @@ app.post('/api/quotes', requireAdmin, (req, res) => {
   const photoRefs = normalizeQuotePhotos(photos);
   const now = new Date().toISOString();
   const id = genId();
-  db.prepare(`INSERT INTO quotes (id, quoteNumber, clientId, locationId, status, scopeOfWork, inclusions, exclusions, laborEntries, partsEntries, laborSubtotal, laborTotal, partsSubtotal, partsTotal, grandTotal, recipients, notes, validUntil, hideBreakdown, photos, createdBy, createdAt, updatedAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+  db.prepare(`INSERT INTO quotes (id, quoteNumber, clientId, locationId, status, scopeOfWork, inclusions, exclusions, laborEntries, partsEntries, laborSubtotal, laborTotal, partsSubtotal, partsTotal, grandTotal, recipients, notes, validUntil, hideBreakdown, photos, reportId, createdBy, createdAt, updatedAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, nextQuoteNumber(), clientId, locationId || '', 'Draft', scopeOfWork || '', inclusions || '', exclusions || '',
       JSON.stringify(labor), JSON.stringify(parts), totals.laborSubtotal, totals.laborTotal, totals.partsSubtotal, totals.partsTotal, totals.grandTotal,
-      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', hideBreakdown ? 1 : 0, JSON.stringify(photoRefs), req.session.user.name || '', now, now);
+      JSON.stringify(Array.isArray(recipients) ? recipients : []), notes || '', validUntil || '', hideBreakdown ? 1 : 0, JSON.stringify(photoRefs), reportId || '', req.session.user.name || '', now, now);
   res.json(parseQuote(db.prepare('SELECT * FROM quotes WHERE id=?').get(id)));
 });
 
@@ -2665,15 +2667,15 @@ app.delete('/api/service-requests/:id', requireAdmin, (req, res) => {
 
 // ─── WORK ORDERS ──────────────────────────────────────────────────────────────
 app.post('/api/work-orders', requireAdmin, (req, res) => {
-  const { clientId, locationId, equipmentId, description, priority, assignedTo, serviceRequestId } = req.body;
+  const { clientId, locationId, equipmentId, description, priority, assignedTo, serviceRequestId, reportId } = req.body;
   if (!clientId || !locationId) return res.status(400).json({ error: 'Client and location required' });
   const id = genId();
   const woNumber = nextWONumber();
   const now = new Date().toISOString();
   const assignedArr = Array.isArray(assignedTo) ? JSON.stringify(assignedTo) : (assignedTo ? JSON.stringify([assignedTo]) : '[]');
-  db.prepare(`INSERT INTO work_orders (id,woNumber,clientId,locationId,equipmentId,description,status,priority,assignedTo,serviceRequestId,laborEntries,notes,createdAt,updatedAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(id, woNumber, clientId, locationId, equipmentId||'', description||'', 'Open', priority||'Normal', assignedArr, serviceRequestId||'', '[]', '', now, now);
+  db.prepare(`INSERT INTO work_orders (id,woNumber,clientId,locationId,equipmentId,description,status,priority,assignedTo,serviceRequestId,reportId,laborEntries,notes,createdAt,updatedAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, woNumber, clientId, locationId, equipmentId||'', description||'', 'Open', priority||'Normal', assignedArr, serviceRequestId||'', reportId||'', '[]', '', now, now);
   const wo = db.prepare('SELECT * FROM work_orders WHERE id=?').get(id);
   try { wo.laborEntries = JSON.parse(wo.laborEntries); } catch { wo.laborEntries = []; }
   res.json(wo);

@@ -1514,11 +1514,13 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
       <div class="ph">
         <div><div class="ph-title" id="rpt-detail-title">Report</div><div class="ph-sub" id="rpt-detail-sub"></div></div>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-ghost btn-sm" onclick="exportReportPDF(app.reportId)">
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3"/></svg>
             Export PDF
           </button>
+          <button class="btn btn-outline btn-sm admin-only" onclick="createWorkOrderFromReport(app.reportId)">+ Work Order</button>
+          <button class="btn btn-outline btn-sm admin-only" onclick="createQuoteFromReport(app.reportId)">+ Quote</button>
           <button class="btn btn-sm admin-only" onclick="openEditReport(app.reportId)">Edit Report</button>
           <button class="btn btn-danger btn-sm admin-only" onclick="deleteReport(app.reportId)">Delete Report</button>
         </div>
@@ -3558,14 +3560,21 @@ function renderQuoteDetail() {
   document.getElementById('qtd-content').innerHTML = h;
 }
 
-function openQuoteBuilder(quoteId) {
-  app.editingQuoteId = quoteId || null;
-  app.qbPhotos = null; // reset — will be initialized from quote.photos in renderQuoteBuilder
+function openQuoteBuilder(quoteIdOrPrefill) {
+  app.editingQuoteId = null;
+  app.qbPhotos = null;
+  app.qbPrefill = null;
+  if (typeof quoteIdOrPrefill === 'string') {
+    app.editingQuoteId = quoteIdOrPrefill;
+  } else if (quoteIdOrPrefill && typeof quoteIdOrPrefill === 'object') {
+    app.qbPrefill = quoteIdOrPrefill;
+  }
   showView('quote-builder');
 }
 
 function renderQuoteBuilder() {
   var q = app.editingQuoteId ? (db.quotes || []).find(function(x) { return x.id === app.editingQuoteId; }) : null;
+  var prefill = (!q && app.qbPrefill) ? app.qbPrefill : null;
   document.getElementById('qb-title').textContent = q ? 'Edit Quote — ' + q.quoteNumber : 'New Quote';
 
   var defaultValid = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -3573,17 +3582,22 @@ function renderQuoteBuilder() {
   var parts = q ? (q.partsEntries || []) : [];
   var recips = q ? (q.recipients || []) : [];
 
+  // Resolve initial selections (edit mode uses q, new quote can use prefill)
+  var initClientId = q ? q.clientId : (prefill ? prefill.clientId : '');
+  var initLocationId = q ? q.locationId : (prefill ? prefill.locationId : '');
+  var initScope = q ? q.scopeOfWork : (prefill ? (prefill.scopeOfWork || '') : '');
+
   var h = '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Client & Location</span></div><div class="card-body">';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
   h += '<div><label class="fl">Client *</label><select class="fc" id="qb-client" onchange="qbClientChanged()">';
   h += '<option value="">Select client...</option>';
-  (db.clients || []).forEach(function(c) { h += '<option value="' + c.id + '"' + (q && q.clientId === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'; });
+  (db.clients || []).forEach(function(c) { h += '<option value="' + c.id + '"' + (initClientId === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'; });
   h += '</select></div>';
   h += '<div><label class="fl">Location</label><select class="fc" id="qb-location">';
   h += '<option value="">Select location...</option>';
-  if (q && q.clientId) {
-    (db.locations || []).filter(function(l) { return l.clientId === q.clientId; }).forEach(function(l) {
-      h += '<option value="' + l.id + '"' + (q.locationId === l.id ? ' selected' : '') + '>' + esc(l.buildingName) + '</option>';
+  if (initClientId) {
+    (db.locations || []).filter(function(l) { return l.clientId === initClientId; }).forEach(function(l) {
+      h += '<option value="' + l.id + '"' + (initLocationId === l.id ? ' selected' : '') + '>' + esc(l.buildingName) + '</option>';
     });
   }
   h += '</select></div>';
@@ -3591,7 +3605,7 @@ function renderQuoteBuilder() {
 
   // Scope of work
   h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Scope of Work</span></div><div class="card-body">';
-  h += '<textarea class="fc" id="qb-scope" rows="5" placeholder="Describe the scope of work...">' + esc(q ? q.scopeOfWork : '') + '</textarea>';
+  h += '<textarea class="fc" id="qb-scope" rows="5" placeholder="Describe the scope of work...">' + esc(initScope) + '</textarea>';
   h += '</div></div>';
 
   // Labor
@@ -3920,7 +3934,8 @@ function qbCollectData() {
   var hideBreakdown = document.getElementById('qb-hide-breakdown').checked ? 1 : 0;
   var photos = Array.isArray(app.qbPhotos) ? app.qbPhotos.slice() : [];
 
-  return { clientId: clientId, locationId: locationId, scopeOfWork: scopeOfWork, laborEntries: laborEntries, partsEntries: partsEntries, inclusions: inclusions, exclusions: exclusions, recipients: recipients, notes: notes, validUntil: validUntil, hideBreakdown: hideBreakdown, photos: photos };
+  var reportId = app.qbPrefill ? (app.qbPrefill.reportId || '') : '';
+  return { clientId: clientId, locationId: locationId, scopeOfWork: scopeOfWork, laborEntries: laborEntries, partsEntries: partsEntries, inclusions: inclusions, exclusions: exclusions, recipients: recipients, notes: notes, validUntil: validUntil, hideBreakdown: hideBreakdown, photos: photos, reportId: reportId };
 }
 
 async function saveQuote(andSend, andPreview) {
@@ -4738,7 +4753,8 @@ function openWorkOrderModal(prefill) {
     '<option' + (prefill.priority==='Emergency'?' selected':'') + '>Emergency</option>' +
     '</select></div>' +
     '<div class="fg"><label class="flbl">Assigned To</label><div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;max-height:160px;overflow-y:auto;">' + techCbs + '</div></div></div>' +
-    '<input type="hidden" id="wo-m-sr-id" value="' + (prefill.serviceRequestId||'') + '">';
+    '<input type="hidden" id="wo-m-sr-id" value="' + (prefill.serviceRequestId||'') + '">' +
+    '<input type="hidden" id="wo-m-report-id" value="' + (prefill.reportId||'') + '">';
 
   modal.querySelector('.modal-footer').innerHTML =
     '<button class="btn btn-secondary" onclick="closeGenericModal()">Cancel</button>' +
@@ -4838,7 +4854,8 @@ async function submitWorkOrder() {
     description: document.getElementById('wo-m-desc').value.trim(),
     priority: document.getElementById('wo-m-priority').value,
     assignedTo: Array.from(document.querySelectorAll('.wo-m-assign-cb:checked')).map(function(cb){return cb.value;}),
-    serviceRequestId: document.getElementById('wo-m-sr-id').value || ''
+    serviceRequestId: document.getElementById('wo-m-sr-id').value || '',
+    reportId: document.getElementById('wo-m-report-id') ? document.getElementById('wo-m-report-id').value || '' : ''
   };
   try {
     var created = await apiPost('/api/work-orders', data);
@@ -8141,9 +8158,66 @@ function renderReportDetail() {
     ${checklistHtml}
     <div id="rpt-photos-card"></div>
     ${renderAdditionalPhotosSection(r.additionalPhotos)}
+    ${renderReportFollowUps(r.id)}
   `;
   // Lazy-load photos
   loadReportPhotos(r.id);
+}
+
+// ─── Report → Work Order / Quote follow-up ────────────────────────────────
+function createWorkOrderFromReport(reportId) {
+  var r = (db.reports || []).find(function(x) { return x.id === reportId; });
+  if (!r) { showToast('Report not found', 'error'); return; }
+  var eq = (db.equipment || []).find(function(e) { return e.id === r.equipmentId; });
+  var loc = eq ? (db.locations || []).find(function(l) { return l.id === eq.locationId; }) : null;
+  var clientId = loc ? loc.clientId : '';
+  var priorityMap = {
+    'Critical \u2014 Immediate Action Required': 'Emergency',
+    'Out of Service': 'High',
+    'Needs Attention': 'Normal',
+    'Operational': 'Low'
+  };
+  var description = '';
+  if (r.recommendations) description = 'Follow-up from Report: ' + r.recommendations;
+  else if (r.workPerformed) description = 'Follow-up from report dated ' + fmtDate(r.date);
+  openWorkOrderModal({
+    clientId: clientId,
+    locationId: eq ? eq.locationId : '',
+    equipmentId: r.equipmentId || '',
+    description: description,
+    priority: priorityMap[r.status] || 'Normal',
+    reportId: r.id
+  });
+}
+
+function createQuoteFromReport(reportId) {
+  var r = (db.reports || []).find(function(x) { return x.id === reportId; });
+  if (!r) { showToast('Report not found', 'error'); return; }
+  var eq = (db.equipment || []).find(function(e) { return e.id === r.equipmentId; });
+  var loc = eq ? (db.locations || []).find(function(l) { return l.id === eq.locationId; }) : null;
+  var scope = '';
+  if (r.recommendations) scope = 'Follow-up from Report:\n\n' + r.recommendations;
+  else if (r.workPerformed) scope = 'Follow-up from report dated ' + fmtDate(r.date);
+  openQuoteBuilder({
+    clientId: loc ? loc.clientId : '',
+    locationId: eq ? eq.locationId : '',
+    scopeOfWork: scope,
+    reportId: r.id
+  });
+}
+
+function renderReportFollowUps(reportId) {
+  var linkedWOs = (db.workOrders || []).filter(function(w) { return w.reportId === reportId; });
+  var linkedQuotes = (db.quotes || []).filter(function(q) { return q.reportId === reportId; });
+  if (!linkedWOs.length && !linkedQuotes.length) return '';
+  var chips = '';
+  linkedWOs.forEach(function(w) {
+    chips += '<span class="badge bb" style="cursor:pointer;margin-right:6px;padding:4px 10px;" onclick="openWorkOrderDetail(\'' + esc(w.id) + '\')">' + esc(w.woNumber || 'WO') + '</span>';
+  });
+  linkedQuotes.forEach(function(q) {
+    chips += '<span class="badge bg" style="cursor:pointer;margin-right:6px;padding:4px 10px;" onclick="openQuoteBuilder(\'' + esc(q.id) + '\')">' + esc(q.quoteNumber || 'QT') + '</span>';
+  });
+  return '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-title">Follow-ups</span></div><div class="card-body">' + chips + '</div></div>';
 }
 
 function renderAdditionalPhotosSection(photos) {

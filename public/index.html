@@ -1067,6 +1067,14 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <div id="wod-content"></div>
     </div>
 
+    <!-- MY DRAFTS -->
+    <div id="view-drafts" class="view">
+      <div class="ph">
+        <div><div class="ph-title">My Drafts</div><div class="ph-sub" id="drafts-sub">Reports you haven't submitted yet</div></div>
+      </div>
+      <div id="drafts-content"></div>
+    </div>
+
     <!-- TIME CARDS -->
     <div id="view-time-cards" class="view">
       <div class="ph">
@@ -2398,6 +2406,10 @@ function renderView(name) {
       setNav('time-cards');
       if (isAdmin()) renderTimeCardsAdmin();
       else renderMyTimeCard();
+      break;
+    case 'drafts':
+      bc.innerHTML = '<span class="cur">My Drafts</span>';
+      renderMyDrafts();
       break;
     case 'invoices':
       bc.innerHTML = '<span class="cur">Invoices</span>';
@@ -5947,16 +5959,17 @@ function fbClearSignature(canvasId) {
 function renderDashboard() {
   var dashView = document.getElementById('view-dashboard');
 
-  // Technician dashboard — three tiles only
+  // Technician dashboard — tiles
   if (!isAdmin()) {
     var myWOs = (db.workOrders||[]).filter(function(wo){return isAssignedTo(wo, currentUser?.id) && wo.status!=='Completed' && wo.status!=='Cancelled';});
     var openWOs = myWOs.filter(function(wo){return wo.status==='Open'||wo.status==='In Progress';}).length;
     var onHoldWOs = myWOs.filter(function(wo){return wo.status==='On Hold';}).length;
+    var draftCount = listAllReportDrafts().length;
     document.getElementById('dash-stats').innerHTML = '';
     var belowStats = dashView.querySelector('.g2');
     if (belowStats) belowStats.style.display = 'none';
     document.getElementById('dash-stats').innerHTML =
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:20px;">' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-top:20px;">' +
       '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:box-shadow .2s;" onclick="nav(\'work-orders\')" onmouseenter="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.1)\'" onmouseleave="this.style.boxShadow=\'none\'">' +
         '<svg width="40" height="40" fill="none" stroke="var(--accent)" viewBox="0 0 24 24" style="margin-bottom:12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>' +
         '<div style="font-size:18px;font-weight:600;color:var(--fg);">Work Orders</div>' +
@@ -5971,6 +5984,11 @@ function renderDashboard() {
         '<svg width="40" height="40" fill="none" stroke="var(--amber)" viewBox="0 0 24 24" style="margin-bottom:12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
         '<div style="font-size:18px;font-weight:600;color:var(--fg);">Time Card</div>' +
         '<div style="font-size:13px;color:var(--muted);margin-top:6px;">Log &amp; view hours</div>' +
+      '</div>' +
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:box-shadow .2s;" onclick="nav(\'drafts\')" onmouseenter="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.1)\'" onmouseleave="this.style.boxShadow=\'none\'">' +
+        '<svg width="40" height="40" fill="none" stroke="#a855f7" viewBox="0 0 24 24" style="margin-bottom:12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' +
+        '<div style="font-size:18px;font-weight:600;color:var(--fg);">My Drafts</div>' +
+        '<div style="font-size:13px;color:var(--muted);margin-top:6px;">' + draftCount + ' saved draft' + (draftCount === 1 ? '' : 's') + '</div>' +
       '</div>' +
       '</div>';
     return;
@@ -7187,7 +7205,22 @@ function renderReportForm() {
 
   app.reportPhotos = { before: null, after: null, nameplate: null };
 
+  // Check for existing draft
+  const existingDraft = loadReportDraft(app.equipmentId, type);
+  const draftBanner = existingDraft ? `
+    <div id="rf-draft-banner" style="background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div><strong>Draft available</strong> — saved ${esc(draftRelativeTime(existingDraft.savedAt))}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button type="button" class="btn btn-primary btn-sm" onclick="applyDraftToForm()">Restore</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="discardReportDraft()">Discard</button>
+      </div>
+    </div>` : '';
+
   document.getElementById('rpt-form-content').innerHTML = `
+    ${draftBanner}
     <form onsubmit="submitReport(event)" id="rpt-form">
       <div class="g2">
         <div class="card">
@@ -7238,14 +7271,319 @@ function renderReportForm() {
         </div>
         ${checklistCard}
       </div>
-      <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;">
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;">
         <button type="button" class="btn btn-secondary" onclick="goBackFromReport()">Cancel</button>
+        <button type="button" class="btn btn-ghost" onclick="saveReportDraft()" id="rf-save-draft-btn">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+          Save Draft
+        </button>
         <button type="submit" class="btn btn-primary">Submit Report</button>
       </div>
     </form>
   `;
-  // Wire up rating/signature widgets for any custom-form fields
-  if (type === 'maintenance' && template) initCustomChecklistWidgets(template);
+  // Wire up rating/signature widgets for any custom-form fields (both service + maintenance)
+  if (template) initCustomChecklistWidgets(template);
+  // Start auto-save timer (every 30s)
+  if (app._reportDraftTimer) clearInterval(app._reportDraftTimer);
+  app._reportDraftTimer = setInterval(function() {
+    if (app.view !== 'report-form') { clearInterval(app._reportDraftTimer); app._reportDraftTimer = null; return; }
+    saveReportDraft(true); // silent autosave
+  }, 30000);
+}
+
+// ─── REPORT DRAFT HELPERS ──────────────────────────────────────────────────
+function reportDraftKey(equipmentId, type) {
+  return 'fm_report_draft_' + (equipmentId || '_') + '_' + (type || '_');
+}
+
+function draftRelativeTime(iso) {
+  if (!iso) return 'unknown time';
+  var d = new Date(iso);
+  var diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+}
+
+function loadReportDraft(equipmentId, type) {
+  try { return JSON.parse(localStorage.getItem(reportDraftKey(equipmentId, type))); } catch(e) { return null; }
+}
+
+function listAllReportDrafts() {
+  var out = [];
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k && k.indexOf('fm_report_draft_') === 0) {
+      try {
+        var v = JSON.parse(localStorage.getItem(k));
+        if (v) out.push(Object.assign({ _key: k }, v));
+      } catch(e) {}
+    }
+  }
+  return out.sort(function(a, b) { return (b.savedAt || '').localeCompare(a.savedAt || ''); });
+}
+
+function saveReportDraft(silent) {
+  if (app.view !== 'report-form' || !app.equipmentId || !app.reportType) return;
+  var draft = {
+    equipmentId: app.equipmentId,
+    type: app.reportType,
+    savedAt: new Date().toISOString(),
+    fields: {
+      tech: document.getElementById('rf-tech')?.value || '',
+      woNumber: document.getElementById('rf-wo-number')?.value || '',
+      date: document.getElementById('rf-date')?.value || '',
+      time: document.getElementById('rf-time')?.value || '',
+      status: document.getElementById('rf-status')?.value || '',
+      work: document.getElementById('rf-work')?.value || '',
+      cause: document.getElementById('rf-cause')?.value || '',
+      parts: document.getElementById('rf-parts')?.value || '',
+      recs: document.getElementById('rf-recs')?.value || '',
+    },
+    // Default maintenance checklist state
+    checklist: (function() {
+      var boxes = document.querySelectorAll('[id^="chk-"]');
+      return Array.from(boxes).map(function(b) { return b.checked; });
+    })(),
+    // Required photos (data URIs)
+    reportPhotos: app.reportPhotos || null,
+    // Custom form field values (including photos)
+    customFields: captureCustomFieldDraftState(),
+  };
+  try {
+    localStorage.setItem(reportDraftKey(app.equipmentId, app.reportType), JSON.stringify(draft));
+    if (!silent) {
+      var ref = btnStart(document.getElementById('rf-save-draft-btn'));
+      btnEnd(ref, true, 'Draft saved');
+    }
+  } catch(e) {
+    if (!silent) {
+      var ref2 = btnStart(document.getElementById('rf-save-draft-btn'));
+      btnEnd(ref2, false, 'Draft too large — try fewer photos');
+    }
+  }
+}
+
+function captureCustomFieldDraftState() {
+  // Snapshot values from every custom form field currently rendered with cf-* ids
+  var state = {};
+  var inputs = document.querySelectorAll('[data-cf-idx], [data-fb-radio-idx], [data-fb-mc-idx], [data-fb-rating-idx], [data-fb-sig-idx], [data-fb-photo-idx], [data-fb-photopair-idx]');
+  inputs.forEach(function(el) {
+    var idx;
+    if (el.hasAttribute('data-cf-idx')) idx = el.getAttribute('data-cf-idx');
+    else if (el.hasAttribute('data-fb-radio-idx')) idx = el.getAttribute('data-fb-radio-idx');
+    else if (el.hasAttribute('data-fb-mc-idx')) idx = el.getAttribute('data-fb-mc-idx');
+    else if (el.hasAttribute('data-fb-rating-idx')) idx = el.getAttribute('data-fb-rating-idx');
+    else if (el.hasAttribute('data-fb-sig-idx')) idx = el.getAttribute('data-fb-sig-idx');
+    else if (el.hasAttribute('data-fb-photo-idx')) idx = el.getAttribute('data-fb-photo-idx');
+    else if (el.hasAttribute('data-fb-photopair-idx')) idx = el.getAttribute('data-fb-photopair-idx');
+    if (idx === undefined) return;
+    state['v_' + idx] = state['v_' + idx] || {};
+    if (el.type === 'checkbox') {
+      if (el.hasAttribute('data-fb-mc-idx')) {
+        state['v_' + idx].multi = state['v_' + idx].multi || [];
+        if (el.checked) state['v_' + idx].multi.push(el.value);
+      } else {
+        state['v_' + idx].checked = el.checked;
+      }
+    } else if (el.type === 'radio') {
+      if (el.checked) state['v_' + idx].value = el.value;
+    } else if (el.tagName === 'SELECT' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      state['v_' + idx].value = el.value;
+    }
+    // Ratings
+    if (el.hasAttribute('data-fb-rating-idx')) {
+      state['v_' + idx].rating = parseInt(el.getAttribute('data-value') || '0');
+    }
+    // Signatures (capture as data URL if drawn)
+    if (el.hasAttribute('data-fb-sig-idx') && el.getAttribute('data-has-ink') === '1') {
+      try { state['v_' + idx].signature = el.toDataURL('image/png'); } catch(e) {}
+    }
+  });
+  // Photos captured separately from app.customFieldPhotos
+  state._photos = app.customFieldPhotos || {};
+  return state;
+}
+
+function applyDraftToForm() {
+  var draft = loadReportDraft(app.equipmentId, app.reportType);
+  if (!draft) { showToast('No draft found', 'error'); return; }
+  var f = draft.fields || {};
+  if (document.getElementById('rf-tech')) document.getElementById('rf-tech').value = f.tech || '';
+  if (document.getElementById('rf-wo-number')) document.getElementById('rf-wo-number').value = f.woNumber || '';
+  if (document.getElementById('rf-date')) document.getElementById('rf-date').value = f.date || '';
+  if (document.getElementById('rf-time')) document.getElementById('rf-time').value = f.time || '';
+  if (document.getElementById('rf-status')) { document.getElementById('rf-status').value = f.status || ''; rfStatusChanged(); }
+  if (document.getElementById('rf-work')) document.getElementById('rf-work').value = f.work || '';
+  if (document.getElementById('rf-cause')) document.getElementById('rf-cause').value = f.cause || '';
+  if (document.getElementById('rf-parts')) document.getElementById('rf-parts').value = f.parts || '';
+  if (document.getElementById('rf-recs')) document.getElementById('rf-recs').value = f.recs || '';
+  // Restore default maintenance checklist
+  (draft.checklist || []).forEach(function(checked, i) {
+    var cb = document.getElementById('chk-' + i);
+    if (cb) cb.checked = !!checked;
+  });
+  // Restore required photos
+  if (draft.reportPhotos) {
+    app.reportPhotos = draft.reportPhotos;
+    ['before','after','nameplate'].forEach(function(key) {
+      if (draft.reportPhotos[key]) renderRestoredReportPhoto(key, draft.reportPhotos[key]);
+    });
+  }
+  // Restore custom field state
+  if (draft.customFields) applyCustomFieldDraftState(draft.customFields);
+  // Hide banner
+  var banner = document.getElementById('rf-draft-banner');
+  if (banner) banner.remove();
+  showToast('Draft restored', 'success');
+}
+
+function renderRestoredReportPhoto(key, dataUrl) {
+  // Find the photo-field container for this key and inject an img
+  var inputs = document.querySelectorAll('.photo-field input[type="file"]');
+  inputs.forEach(function(inp) {
+    if (inp.getAttribute('onchange') && inp.getAttribute('onchange').indexOf("'" + key + "'") >= 0) {
+      var dropZone = inp.previousElementSibling; // the .photo-drop
+      if (!dropZone) return;
+      dropZone.innerHTML = '';
+      var img = document.createElement('img');
+      img.src = dataUrl;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+      dropZone.appendChild(img);
+    }
+  });
+}
+
+function applyCustomFieldDraftState(state) {
+  if (!state) return;
+  Object.keys(state).forEach(function(k) {
+    if (k === '_photos') return;
+    var idx = k.replace(/^v_/, '');
+    var v = state[k];
+    if (v.value !== undefined) {
+      var el = document.getElementById('cf-' + idx);
+      if (el) el.value = v.value;
+    }
+    if (v.checked !== undefined) {
+      var cb = document.getElementById('cf-' + idx);
+      if (cb) cb.checked = v.checked;
+    }
+    if (v.multi && v.multi.length) {
+      document.querySelectorAll('[data-fb-mc-idx="' + idx + '"]').forEach(function(box) {
+        box.checked = v.multi.indexOf(box.value) >= 0;
+      });
+    }
+    if (v.value && document.querySelectorAll('[data-fb-radio-idx="' + idx + '"] input[type="radio"]').length) {
+      document.querySelectorAll('[data-fb-radio-idx="' + idx + '"] input[type="radio"]').forEach(function(r) {
+        r.checked = r.value === v.value;
+      });
+    }
+    if (v.rating) {
+      var container = document.getElementById('cf-' + idx);
+      if (container) {
+        container.setAttribute('data-value', v.rating);
+        container.querySelectorAll('[data-star]').forEach(function(s) {
+          var n = parseInt(s.getAttribute('data-star'));
+          s.style.color = n <= v.rating ? '#fbbf24' : '#d1d5db';
+        });
+      }
+    }
+    if (v.signature) {
+      var canvas = document.getElementById('cf-' + idx);
+      if (canvas && canvas.getContext) {
+        var ctx = canvas.getContext('2d');
+        var img = new Image();
+        img.onload = function() { ctx.drawImage(img, 0, 0); };
+        img.src = v.signature;
+        canvas.setAttribute('data-has-ink', '1');
+      }
+    }
+  });
+  // Photos
+  if (state._photos) {
+    app.customFieldPhotos = state._photos;
+    Object.keys(state._photos).forEach(function(idx) {
+      var v = state._photos[idx];
+      if (!v) return;
+      if (typeof v === 'string') {
+        // Single photo field
+        var preview = document.getElementById('cf-' + idx + '-preview');
+        var target = document.getElementById('cf-' + idx + '-target');
+        if (target) target.style.display = 'none';
+        if (preview) preview.innerHTML = '<div style="position:relative;display:inline-block;margin-top:8px;"><img src="' + v + '" style="max-width:200px;border-radius:8px;border:1px solid var(--border);"><button type="button" onclick="removeCustomFieldPhoto(' + idx + ')" style="position:absolute;top:-8px;right:-8px;background:var(--red);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;">✕</button></div>';
+      } else if (v && typeof v === 'object') {
+        // Photo pair
+        ['a','b'].forEach(function(side) {
+          if (v[side]) {
+            var preview = document.getElementById('cf-' + idx + '-' + side + '-preview');
+            var target = document.getElementById('cf-' + idx + '-' + side + '-target');
+            if (target) target.style.display = 'none';
+            if (preview) preview.innerHTML = '<div style="position:relative;display:inline-block;margin-top:6px;"><img src="' + v[side] + '" style="max-width:160px;border-radius:6px;border:1px solid var(--border);"><button type="button" onclick="removeCustomFieldPhotoPair(' + idx + ',\'' + side + '\')" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;">✕</button></div>';
+          }
+        });
+      }
+    });
+  }
+}
+
+function discardReportDraft() {
+  if (!confirm('Discard this draft permanently?')) return;
+  localStorage.removeItem(reportDraftKey(app.equipmentId, app.reportType));
+  var banner = document.getElementById('rf-draft-banner');
+  if (banner) banner.remove();
+  showToast('Draft discarded', 'success');
+}
+
+function renderMyDrafts() {
+  var drafts = listAllReportDrafts();
+  var sub = document.getElementById('drafts-sub');
+  if (sub) sub.textContent = drafts.length + ' draft' + (drafts.length === 1 ? '' : 's');
+  var c = document.getElementById('drafts-content');
+  if (!c) return;
+  if (!drafts.length) {
+    c.innerHTML = '<div class="empty"><div class="empty-ico">\uD83D\uDCDD</div><div class="empty-title">No drafts</div><div class="empty-desc">When you save a report as a draft, it will show up here.</div></div>';
+    return;
+  }
+  var rows = drafts.map(function(d) {
+    var eq = (db.equipment || []).find(function(e) { return e.id === d.equipmentId; });
+    var loc = eq ? (db.locations || []).find(function(l) { return l.id === eq.locationId; }) : null;
+    var cl = loc ? (db.clients || []).find(function(x) { return x.id === loc.clientId; }) : null;
+    var safeKey = d._key.replace(/'/g, "\\'");
+    return '<tr>' +
+      '<td><strong>' + esc(eq ? eq.name : '(Equipment missing)') + '</strong>' + (cl ? '<br><span style="font-size:11px;color:var(--muted);">' + esc(cl.name) + ' — ' + esc(loc?.buildingName || '') + '</span>' : '') + '</td>' +
+      '<td><span class="badge ' + (d.type === 'service' ? 'bb' : 'bg') + '">' + esc(d.type || '') + '</span></td>' +
+      '<td>' + esc(draftRelativeTime(d.savedAt)) + '</td>' +
+      '<td style="text-align:right;"><div style="display:flex;gap:6px;justify-content:flex-end;">' +
+      '<button class="btn btn-primary btn-sm" onclick="resumeDraft(\'' + safeKey + '\')">Resume</button>' +
+      '<button class="btn btn-danger btn-sm" onclick="deleteDraft(\'' + safeKey + '\')">Delete</button>' +
+      '</div></td>' +
+      '</tr>';
+  }).join('');
+  c.innerHTML = '<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Equipment</th><th>Type</th><th>Saved</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+}
+
+function resumeDraft(key) {
+  var raw = localStorage.getItem(key);
+  if (!raw) { showToast('Draft no longer exists', 'error'); return; }
+  try {
+    var d = JSON.parse(raw);
+    if (!d.equipmentId) { showToast('Draft is missing equipment info', 'error'); return; }
+    app.equipmentId = d.equipmentId;
+    app.reportType = d.type || 'service';
+    app.prevView = 'drafts';
+    app.customFieldPhotos = {};
+    showView('report-form');
+    // Apply draft after the form renders
+    setTimeout(applyDraftToForm, 150);
+  } catch(e) { showToast('Couldn\'t open draft', 'error'); }
+}
+
+function deleteDraft(key) {
+  if (!confirm('Delete this draft?')) return;
+  localStorage.removeItem(key);
+  renderMyDrafts();
+  showToast('Draft deleted', 'success');
 }
 
 // Show/hide required indicator on Cause/Finding depending on status
@@ -7358,6 +7696,9 @@ async function submitReport(e) {
   try {
     const created = await apiPost('/api/reports', reportData);
     db.reports.push(created);
+    // Clear any saved draft for this equipment+type
+    try { localStorage.removeItem(reportDraftKey(app.equipmentId, app.reportType)); } catch(e) {}
+    if (app._reportDraftTimer) { clearInterval(app._reportDraftTimer); app._reportDraftTimer = null; }
     btnEnd(ref,true,'Report submitted');
     openEquipmentView(app.equipmentId);
   } catch(err) { btnEnd(ref,false,err.message); }

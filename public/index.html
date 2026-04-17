@@ -1701,11 +1701,18 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         </div>
       </div>
       <div class="fg admin-only">
-        <label class="flbl">Custom Form</label>
+        <label class="flbl">Maintenance Form Template</label>
         <select class="fc" id="e-template">
-          <option value="">Default Checklist</option>
+          <option value="">Default Maintenance Checklist</option>
         </select>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Assign a custom form (built in Form Builder) for maintenance reports on this equipment.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Assign a custom form (built in Form Builder) for <strong>maintenance</strong> reports on this equipment.</div>
+      </div>
+      <div class="fg admin-only">
+        <label class="flbl">Service Form Template</label>
+        <select class="fc" id="e-service-template">
+          <option value="">Default (Equipment Info only)</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Assign a custom form for <strong>service</strong> reports on this equipment.</div>
       </div>
       <div class="fg">
         <label class="flbl">Equipment Photo</label>
@@ -6960,9 +6967,13 @@ function exportReportPDF(id) {
 function startReport(type) { app.reportType = type; app.prevView = 'equipment'; app.customFieldPhotos = {}; showView('report-form'); }
 function goBackFromReport() { openEquipmentView(app.equipmentId); }
 
-function getEquipmentTemplate(eq) {
-  if (!eq || !eq.formTemplateId) return null;
-  return (db.formTemplates||[]).find(t => t.id === eq.formTemplateId) || null;
+function getEquipmentTemplate(eq, reportType) {
+  if (!eq) return null;
+  var tmplId;
+  if (reportType === 'service') tmplId = eq.serviceFormTemplateId;
+  else tmplId = eq.formTemplateId; // default to maintenance
+  if (!tmplId) return null;
+  return (db.formTemplates||[]).find(t => t.id === tmplId) || null;
 }
 
 function renderCustomChecklistFields(template) {
@@ -7118,33 +7129,47 @@ function renderReportForm() {
   const loc = eq ? db.locations.find(l=>l.id===eq.locationId) : null;
   const cl = loc ? db.clients.find(c=>c.id===loc.clientId) : null;
   const type = app.reportType;
-  const template = type === 'maintenance' ? getEquipmentTemplate(eq) : null;
+  const template = getEquipmentTemplate(eq, type);
   document.getElementById('rpt-form-title').textContent = type==='service' ? 'Service Report' : 'Maintenance Report';
   document.getElementById('rpt-form-sub').textContent = `${eq?.name||''} \u2014 ${loc?.buildingName||''} \u2014 ${cl?.name||''}`;
   const today = new Date().toISOString().split('T')[0];
   const maintChecklist = ['Filter Replacement','Belt Inspection/Adjustment','Lubricate Moving Parts','Clean Condenser Coil','Clean Evaporator Coil','Check Refrigerant Charge','Inspect Electrical Connections','Check/Test Safety Controls','Drain Pan & Condensate Drain','Check/Record Operating Pressures','Check/Record Temperatures','Inspect Ductwork','Test Thermostat/Controls','Record Amp Draw','Visual Inspection'];
 
+  // Auto-fill work order # if tech has exactly one open WO for this equipment
+  let prefilledWO = '';
+  try {
+    const matchingWOs = (db.workOrders || []).filter(function(w) {
+      if (w.status !== 'Open' && w.status !== 'In Progress') return false;
+      if (w.equipmentId && w.equipmentId !== app.equipmentId) return false;
+      if (!w.equipmentId && w.locationId !== (eq ? eq.locationId : '')) return false;
+      if (currentUser && currentUser.role === 'technician') {
+        return isAssignedTo(w, currentUser.id);
+      }
+      return true;
+    });
+    if (matchingWOs.length === 1) prefilledWO = matchingWOs[0].woNumber || '';
+  } catch(e) { /* non-fatal */ }
+
   let checklistCard = '';
-  if (type === 'maintenance') {
-    if (template) {
-      // Use the customer attached to this report (via equipment → location → client),
-      // falling back to the form's designed-for client if set.
-      const hdrClient = cl || (db.clients || []).find(x => x.id === template.clientId) || null;
-      checklistCard = `<div class="card" style="padding:0;overflow:hidden;">
-        ${renderFormBrandedHeader(hdrClient, template.name)}
-        <div class="card-body" style="padding:16px 20px;">
-          ${renderCustomChecklistFields(template)}
-        </div>
-      </div>`;
-    } else {
-      checklistCard = `<div class="card">
-        <div class="card-hd"><span class="card-title">Maintenance Checklist</span></div>
-        <div class="card-body" style="padding:12px 20px;">
-          ${maintChecklist.map((item,i)=>`<div class="chk-item"><input type="checkbox" id="chk-${i}"><label for="chk-${i}" style="cursor:pointer;flex:1;">${esc(item)}</label></div>`).join('')}
-        </div>
-      </div>`;
-    }
+  if (template) {
+    // Custom form — used for both service and maintenance if assigned
+    const hdrClient = cl || (db.clients || []).find(x => x.id === template.clientId) || null;
+    checklistCard = `<div class="card" style="padding:0;overflow:hidden;">
+      ${renderFormBrandedHeader(hdrClient, template.name)}
+      <div class="card-body" style="padding:16px 20px;">
+        ${renderCustomChecklistFields(template)}
+      </div>
+    </div>`;
+  } else if (type === 'maintenance') {
+    // Default maintenance checklist
+    checklistCard = `<div class="card">
+      <div class="card-hd"><span class="card-title">Maintenance Checklist</span></div>
+      <div class="card-body" style="padding:12px 20px;">
+        ${maintChecklist.map((item,i)=>`<div class="chk-item"><input type="checkbox" id="chk-${i}"><label for="chk-${i}" style="cursor:pointer;flex:1;">${esc(item)}</label></div>`).join('')}
+      </div>
+    </div>`;
   } else {
+    // Service report default: Equipment Info card
     checklistCard = `<div class="card">
       <div class="card-hd"><span class="card-title">Equipment Info</span></div>
       <div class="card-body">
@@ -7169,13 +7194,13 @@ function renderReportForm() {
           <div class="card-hd"><span class="card-title">Report Details</span></div>
           <div class="card-body">
             <div class="fg"><label class="flbl">Technician Name *</label><input class="fc" type="text" id="rf-tech" placeholder="Your name" value="${esc(currentUser?.name||'')}" required></div>
-            <div class="fg"><label class="flbl">Work Order #</label><input class="fc" type="text" id="rf-wo-number" placeholder="WO-2026-0001 (optional)" list="wo-numbers-list"><datalist id="wo-numbers-list">${(db.workOrders||[]).filter(function(w){return w.status==='Open'||w.status==='In Progress';}).map(function(w){return '<option value="'+esc(w.woNumber)+'">';}).join('')}</datalist></div>
+            <div class="fg"><label class="flbl">Work Order #</label><input class="fc" type="text" id="rf-wo-number" placeholder="WO-2026-0001 (optional)" value="${esc(prefilledWO)}" list="wo-numbers-list"><datalist id="wo-numbers-list">${(db.workOrders||[]).filter(function(w){return w.status==='Open'||w.status==='In Progress';}).map(function(w){return '<option value="'+esc(w.woNumber)+'">';}).join('')}</datalist>${prefilledWO?`<div style="font-size:11px;color:var(--green);margin-top:3px;">\u2713 Auto-filled from your assigned work order</div>`:``}</div>
             <div class="fr">
               <div class="fg"><label class="flbl">Date *</label><input class="fc" type="date" id="rf-date" value="${today}" required></div>
               <div class="fg"><label class="flbl">Time</label><input class="fc" type="time" id="rf-time" value="${new Date().toTimeString().slice(0,5)}"></div>
             </div>
             <div class="fg"><label class="flbl">Equipment Status *</label>
-              <select class="fc" id="rf-status" required>
+              <select class="fc" id="rf-status" required onchange="rfStatusChanged()">
                 <option value="">\u2014 Select Status \u2014</option>
                 <option>Operational</option>
                 <option>Needs Attention</option>
@@ -7184,9 +7209,7 @@ function renderReportForm() {
               </select>
             </div>
             <div class="fg"><label class="flbl">Work Performed *</label><textarea class="fc" id="rf-work" placeholder="Describe all work performed\u2026" style="min-height:120px;" required></textarea></div>
-            ${type==='service'?`
-            <div class="fg"><label class="flbl">Cause / Finding</label><textarea class="fc" id="rf-cause" placeholder="Root cause or finding (if applicable)\u2026"></textarea></div>
-            `:``}
+            <div class="fg" id="rf-cause-wrap"><label class="flbl" id="rf-cause-label">Cause / Finding</label><textarea class="fc" id="rf-cause" placeholder="Root cause or finding (required when status is not Operational)\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Parts Used / Replaced</label><textarea class="fc" id="rf-parts" placeholder="List any parts used or replaced\u2026"></textarea></div>
             <div class="fg"><label class="flbl">Recommendations</label><textarea class="fc" id="rf-recs" placeholder="Recommendations for follow-up or future work\u2026"></textarea></div>
           </div>
@@ -7223,6 +7246,15 @@ function renderReportForm() {
   `;
   // Wire up rating/signature widgets for any custom-form fields
   if (type === 'maintenance' && template) initCustomChecklistWidgets(template);
+}
+
+// Show/hide required indicator on Cause/Finding depending on status
+function rfStatusChanged() {
+  var sel = document.getElementById('rf-status');
+  var label = document.getElementById('rf-cause-label');
+  if (!sel || !label) return;
+  var needsCause = sel.value && sel.value !== 'Operational';
+  label.innerHTML = needsCause ? 'Cause / Finding <span style="color:var(--red);">*</span>' : 'Cause / Finding';
 }
 
 async function submitReport(e) {
@@ -7295,6 +7327,14 @@ async function submitReport(e) {
   // Validate work performed
   var workVal = document.getElementById('rf-work')?.value.trim()||'';
   if (!workVal) { showToast('Work Performed is required','error'); document.getElementById('rf-work')?.focus(); return; }
+  // Conditional: Cause/Finding required when status is not Operational
+  var statusVal = document.getElementById('rf-status')?.value || '';
+  var causeVal = document.getElementById('rf-cause')?.value.trim() || '';
+  if (statusVal && statusVal !== 'Operational' && !causeVal) {
+    showToast('Cause / Finding is required when status is not Operational','error');
+    document.getElementById('rf-cause')?.focus();
+    return;
+  }
   // Validate photos
   if (!app.reportPhotos.before) { showToast('Before photo is required','error'); return; }
   if (!app.reportPhotos.after) { showToast('After photo is required','error'); return; }
@@ -7711,11 +7751,16 @@ function openEquipmentModal(id) {
   document.getElementById('e-type').onchange = function() { autoSetAshraeLife(); updateLifecyclePreview(); };
   document.getElementById('e-year').oninput = updateLifecyclePreview;
   document.getElementById('e-ashrae-life').oninput = updateLifecyclePreview;
-  // Populate template dropdown
+  // Populate template dropdowns — shared options for both maintenance and service
+  const tmplOpts = (db.formTemplates||[]).map(t => `<option value="${t.id}">${esc(t.name)} (${(t.fields||[]).length} fields)</option>`).join('');
   const tmplSelect = document.getElementById('e-template');
-  tmplSelect.innerHTML = '<option value="">Default Checklist</option>' +
-    (db.formTemplates||[]).map(t => `<option value="${t.id}">${esc(t.name)} (${(t.fields||[]).length} fields)</option>`).join('');
+  tmplSelect.innerHTML = '<option value="">Default Maintenance Checklist</option>' + tmplOpts;
   tmplSelect.value = e?.formTemplateId || '';
+  const svcTmplSelect = document.getElementById('e-service-template');
+  if (svcTmplSelect) {
+    svcTmplSelect.innerHTML = '<option value="">Default (Equipment Info only)</option>' + tmplOpts;
+    svcTmplSelect.value = e?.serviceFormTemplateId || '';
+  }
   // Equipment photo
   var previewEl = document.getElementById('e-photo-preview');
   var placeholderEl = document.getElementById('e-photo-placeholder');
@@ -7777,7 +7822,7 @@ async function saveEquipment() {
   const name = document.getElementById('e-name').value.trim();
   if (!name) { showToast('Equipment name is required','error'); return; }
   var ref = btnStart(_actionBtn);
-  const data = { locationId: app.locationId, name, model: document.getElementById('e-model').value.trim(), serial: document.getElementById('e-serial').value.trim(), yearInstalled: document.getElementById('e-year').value ? parseInt(document.getElementById('e-year').value) : null, type: document.getElementById('e-type').value, notes: document.getElementById('e-notes').value.trim(), formTemplateId: document.getElementById('e-template').value, photo: app._equipmentPhoto || '', replacementBudget: parseFloat(document.getElementById('e-replacement-budget').value) || 0, ashraeLifeYears: parseInt(document.getElementById('e-ashrae-life').value) || 0 };
+  const data = { locationId: app.locationId, name, model: document.getElementById('e-model').value.trim(), serial: document.getElementById('e-serial').value.trim(), yearInstalled: document.getElementById('e-year').value ? parseInt(document.getElementById('e-year').value) : null, type: document.getElementById('e-type').value, notes: document.getElementById('e-notes').value.trim(), formTemplateId: document.getElementById('e-template').value, serviceFormTemplateId: (document.getElementById('e-service-template')?.value || ''), photo: app._equipmentPhoto || '', replacementBudget: parseFloat(document.getElementById('e-replacement-budget').value) || 0, ashraeLifeYears: parseInt(document.getElementById('e-ashrae-life').value) || 0 };
   try {
     if (id) { const u = await apiPost('/api/equipment/'+id, data, 'PUT'); const idx = db.equipment.findIndex(e=>e.id===id); if(idx>=0) db.equipment[idx]=u; btnEnd(ref,true,'Equipment updated'); }
     else { const e = await apiPost('/api/equipment', data); db.equipment.push(e); btnEnd(ref,true,'Equipment added'); }

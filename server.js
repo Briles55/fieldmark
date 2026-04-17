@@ -251,6 +251,7 @@ try { db.exec(`ALTER TABLE quotes ADD COLUMN photos TEXT DEFAULT '[]'`); } catch
 // ─── MIGRATIONS ──────────────────────────────────────────────────────────────
 try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE equipment ADD COLUMN serviceFormTemplateId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoBefore TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN photoAfter TEXT DEFAULT ''"); } catch(e) {}
@@ -1159,23 +1160,23 @@ app.delete('/api/locations/:id', requireAdmin, (req, res) => {
 
 // ─── EQUIPMENT ────────────────────────────────────────────────────────────────
 app.post('/api/equipment', requireAdmin, (req, res) => {
-  const { locationId, name, model, serial, yearInstalled, type, notes, formTemplateId, photo, replacementBudget, ashraeLifeYears } = req.body;
+  const { locationId, name, model, serial, yearInstalled, type, notes, formTemplateId, serviceFormTemplateId, photo, replacementBudget, ashraeLifeYears } = req.body;
   if (!locationId || !name) return res.status(400).json({ error: 'locationId and name required' });
   const id = genId();
   const photoRef = photo && photo.startsWith('data:') ? savePhotoFile(photo) : (photo || '');
-  db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,formTemplateId,photo,replacementBudget,ashraeLifeYears,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photoRef, parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, new Date().toISOString());
+  db.prepare('INSERT INTO equipment (id,locationId,name,model,serial,yearInstalled,type,notes,formTemplateId,serviceFormTemplateId,photo,replacementBudget,ashraeLifeYears,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, locationId, name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', serviceFormTemplateId||'', photoRef, parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, new Date().toISOString());
   const eq = db.prepare('SELECT * FROM equipment WHERE id=?').get(id);
   if (isPhotoRef(eq.photo)) eq.photo = '/api/photos/' + eq.photo;
   res.json(eq);
 });
 
 app.put('/api/equipment/:id', requireAdmin, (req, res) => {
-  const { name, model, serial, yearInstalled, type, notes, formTemplateId, photo, replacementBudget, ashraeLifeYears } = req.body;
+  const { name, model, serial, yearInstalled, type, notes, formTemplateId, serviceFormTemplateId, photo, replacementBudget, ashraeLifeYears } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const photoRef = photo && photo.startsWith('data:') ? savePhotoFile(photo) : (photo && photo.startsWith('/api/photos/') ? photo.replace('/api/photos/', '') : (photo || ''));
-  db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=?,formTemplateId=?,photo=?,replacementBudget=?,ashraeLifeYears=? WHERE id=?')
-    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', photoRef, parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, req.params.id);
+  db.prepare('UPDATE equipment SET name=?,model=?,serial=?,yearInstalled=?,type=?,notes=?,formTemplateId=?,serviceFormTemplateId=?,photo=?,replacementBudget=?,ashraeLifeYears=? WHERE id=?')
+    .run(name, model||'', serial||'', yearInstalled||null, type||'', notes||'', formTemplateId||'', serviceFormTemplateId||'', photoRef, parseFloat(replacementBudget)||0, parseInt(ashraeLifeYears)||0, req.params.id);
   const eq = db.prepare('SELECT * FROM equipment WHERE id=?').get(req.params.id);
   if (isPhotoRef(eq.photo)) eq.photo = '/api/photos/' + eq.photo;
   res.json(eq);
@@ -1223,8 +1224,9 @@ app.put('/api/form-templates/:id', requireAdmin, (req, res) => {
 
 app.delete('/api/form-templates/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM form_templates WHERE id=?').run(req.params.id);
-  // Clear formTemplateId from any equipment using this template
+  // Clear formTemplateId / serviceFormTemplateId from any equipment using this template
   db.prepare("UPDATE equipment SET formTemplateId='' WHERE formTemplateId=?").run(req.params.id);
+  db.prepare("UPDATE equipment SET serviceFormTemplateId='' WHERE serviceFormTemplateId=?").run(req.params.id);
   res.json({ ok: true });
 });
 

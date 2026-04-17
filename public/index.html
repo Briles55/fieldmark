@@ -502,7 +502,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     </button>
     <button id="nav-reports" class="nav-item" onclick="nav('reports',this)">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-      All Reports
+      <span id="nav-reports-label">All Reports</span>
     </button>
     <button id="nav-work-orders" class="nav-item" onclick="nav('work-orders',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
@@ -2429,6 +2429,9 @@ function applyRoleUI() {
   document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';
   document.getElementById('nav-settings').style.display = admin ? '' : 'none';
+  // Reports nav label: admins see "All Reports", techs see "My Reports"
+  var rptLabel = document.getElementById('nav-reports-label');
+  if (rptLabel) rptLabel.textContent = admin ? 'All Reports' : 'My Reports';
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = admin ? '' : 'none';
   });
@@ -2573,7 +2576,7 @@ function renderView(name) {
       setNav('scanner');
       break;
     case 'reports':
-      bc.innerHTML = '<span class="cur">All Reports</span>';
+      bc.innerHTML = '<span class="cur">' + (isAdmin() ? 'All Reports' : 'My Reports') + '</span>';
       setNav('reports');
       renderReportsView();
       break;
@@ -6955,7 +6958,20 @@ function renderReportsView() {
   const filterTo = document.getElementById('rpt-filter-to')?.value || '';
   const search = (document.getElementById('rpt-filter-search')?.value || '').toLowerCase().trim();
 
+  // Update page title for technicians — they only see their own reports
+  var titleEl = document.querySelector('#view-reports .ph-title');
+  if (titleEl) titleEl.textContent = isAdmin() ? 'All Reports' : 'My Reports';
+
   let list = (db.reports || []).slice().sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  // Technicians see only reports they created (fallback to techName match for legacy reports with no createdByUserId)
+  if (!isAdmin() && currentUser) {
+    list = list.filter(function(r) {
+      if (r.createdByUserId) return r.createdByUserId === currentUser.id;
+      if (r.techName && currentUser.name) return (r.techName || '').toLowerCase() === currentUser.name.toLowerCase();
+      return false;
+    });
+  }
 
   // Enrich with equipment/location/client info for filtering
   list = list.map(r => {

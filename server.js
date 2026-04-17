@@ -253,6 +253,7 @@ try { db.exec("ALTER TABLE clients ADD COLUMN passwordHash TEXT DEFAULT ''"); } 
 try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE equipment ADD COLUMN serviceFormTemplateId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN additionalPhotos TEXT DEFAULT '[]'"); } catch(e) {}
+try { db.exec("ALTER TABLE reports ADD COLUMN createdByUserId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE work_orders ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE quotes ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
@@ -1043,7 +1044,7 @@ app.get('/api/data', requireAuth, (req, res) => {
       else if (eq.photo.startsWith('data:')) eq.photo = ''; // strip legacy base64 from bulk load
     }
   });
-  const reports   = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdAt FROM reports ORDER BY createdAt DESC').all();
+  const reports   = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdByUserId,createdAt FROM reports ORDER BY createdAt DESC').all();
   const formTemplates = db.prepare('SELECT * FROM form_templates ORDER BY name').all();
   // Parse checklist JSON for each report
   reports.forEach(r => {
@@ -1389,9 +1390,11 @@ app.post('/api/reports', requireAuth, async (req, res) => {
   if (!equipmentId || !type) return res.status(400).json({ error: 'equipmentId and type required' });
   const id = genId();
   const addlPhotos = normalizeReportPhotos(additionalPhotos);
+  // Capture creator from session for tech ownership
+  const createdByUserId = req.session.user ? (req.session.user.id || '') : '';
   db.prepare(`INSERT INTO reports
-    (id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,photoBefore,photoAfter,photoNameplate,workOrderNumber,additionalPhotos,createdAt)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    (id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,photoBefore,photoAfter,photoNameplate,workOrderNumber,additionalPhotos,createdByUserId,createdAt)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, equipmentId, type, techName||'', date||'', status||'', workPerformed||'', cause||'',
          parts||'', recommendations||'', nextDate||'', JSON.stringify(checklist||[]),
          refrigerantType||'', suctionPressure||'', dischargePressure||'', supplyTemp||'', returnTemp||'',
@@ -1400,8 +1403,9 @@ app.post('/api/reports', requireAuth, async (req, res) => {
          photoNameplate && photoNameplate.startsWith('data:') ? savePhotoFile(photoNameplate) : (photoNameplate||''),
          workOrderNumber||'',
          JSON.stringify(addlPhotos),
+         createdByUserId,
          new Date().toISOString());
-  const report = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdAt FROM reports WHERE id=?').get(id);
+  const report = db.prepare('SELECT id,equipmentId,type,techName,date,status,workPerformed,cause,parts,recommendations,nextDate,checklist,refrigerantType,suctionPressure,dischargePressure,supplyTemp,returnTemp,workOrderNumber,additionalPhotos,createdByUserId,createdAt FROM reports WHERE id=?').get(id);
   report.checklist = checklist || [];
   report.additionalPhotos = expandReportPhotos(report.additionalPhotos);
   // Send email in background (don't block response)

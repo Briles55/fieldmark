@@ -560,6 +560,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
+      <span id="offline-chip" style="display:none;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;" onclick="drainOfflineQueue()"></span>
     </div>
   </div>
 
@@ -1902,6 +1903,76 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
 let db = { clients: [], locations: [], equipment: [], reports: [], formTemplates: [], serviceRequests: [], workOrders: [], users: [], timeCards: [] };
 let currentUser = null;
 
+// ─── IndexedDB helpers (offline queue) ─────────────────────────────────────
+const IDB_NAME = 'fieldmark-offline';
+const IDB_VERSION = 1;
+const IDB_STORE = 'pendingSubmissions';
+let _idbPromise = null;
+
+function idbOpen() {
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise(function(resolve, reject) {
+    var req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = function(e) {
+      var db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+    };
+    req.onsuccess = function() { resolve(req.result); };
+    req.onerror = function() { reject(req.error); };
+  });
+  return _idbPromise;
+}
+
+async function idbPut(val) {
+  var db = await idbOpen();
+  return new Promise(function(resolve, reject) {
+    var tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val);
+    tx.oncomplete = function() { resolve(); };
+    tx.onerror = function() { reject(tx.error); };
+  });
+}
+
+async function idbGetAll() {
+  var db = await idbOpen();
+  return new Promise(function(resolve, reject) {
+    var tx = db.transaction(IDB_STORE, 'readonly');
+    var req = tx.objectStore(IDB_STORE).getAll();
+    req.onsuccess = function() { resolve(req.result || []); };
+    req.onerror = function() { reject(req.error); };
+  });
+}
+
+async function idbDelete(id) {
+  var db = await idbOpen();
+  return new Promise(function(resolve, reject) {
+    var tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(id);
+    tx.oncomplete = function() { resolve(); };
+    tx.onerror = function() { reject(tx.error); };
+  });
+}
+
+// Endpoints that are safe to queue offline (idempotent-ish creates)
+var QUEUEABLE_ENDPOINTS = [
+  /^\/api\/reports(\/|$)/,
+  /^\/api\/work-orders(\/|$)/,
+  /^\/api\/service-requests(\/|$)/,
+  /^\/api\/quotes(\/|$)/,
+  /^\/api\/time-cards(\/|$)/,
+];
+
+function isQueueable(url) {
+  return QUEUEABLE_ENDPOINTS.some(function(re) { return re.test(url); });
+}
+
+function isNetworkError(err) {
+  if (!err) return false;
+  if (err.name === 'AbortError') return false; // timeout is user-visible, not offline
+  // Fetch fails with TypeError on network errors
+  return err.name === 'TypeError' || /network|fetch|offline|Failed to fetch/i.test(err.message || '');
+}
+
 async function apiGet(url) {
   const res = await fetch(url, { credentials: 'include' });
   if (res.status === 401) { currentUser = null; showLoginScreen(); throw new Error('Not authenticated'); }
@@ -1920,9 +1991,79 @@ async function apiPost(url, body, method='POST') {
   } catch(err) {
     clearTimeout(timeout);
     if (err.name === 'AbortError') throw new Error('Request timed out — try again');
+    // Offline queueing: save to IndexedDB and return a synthetic success for whitelisted endpoints
+    if (isNetworkError(err) && isQueueable(url) && (method === 'POST' || method === 'PUT')) {
+      try {
+        var localId = 'pending_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+        await idbPut({ id: localId, url: url, method: method, body: body, savedAt: new Date().toISOString() });
+        try { showToast('Saved offline — will sync when you\'re back online', 'info'); } catch(e) {}
+        updateOfflineChip();
+        return { queued: true, localId: localId, id: localId, _offlineQueued: true };
+      } catch(ee) { /* fall through and throw original */ }
+    }
     throw err;
   }
 }
+
+// Drain queue when online
+async function drainOfflineQueue() {
+  if (!navigator.onLine) return;
+  var items;
+  try { items = await idbGetAll(); } catch(e) { return; }
+  if (!items || !items.length) return;
+  var successCount = 0, failCount = 0;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    try {
+      const res = await fetch(it.url, {
+        method: it.method || 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(it.body)
+      });
+      if (res.ok) {
+        await idbDelete(it.id);
+        successCount++;
+      } else {
+        failCount++;
+      }
+    } catch(e) {
+      failCount++;
+    }
+  }
+  if (successCount > 0) {
+    try { await loadDB(); } catch(e) {}
+    showToast(successCount + ' queued item' + (successCount === 1 ? '' : 's') + ' synced', 'success');
+    // Refresh current view if applicable
+    if (app && app.view) { try { showView(app.view); } catch(e) {} }
+  }
+  if (failCount > 0) showToast(failCount + ' offline item(s) couldn\'t sync — will retry later', 'error');
+  updateOfflineChip();
+}
+
+async function updateOfflineChip() {
+  var chip = document.getElementById('offline-chip');
+  if (!chip) return;
+  var pending = 0;
+  try { pending = (await idbGetAll()).length; } catch(e) {}
+  var online = navigator.onLine;
+  if (!online) {
+    chip.innerHTML = '\u25CF Offline' + (pending > 0 ? ' (' + pending + ' pending)' : '');
+    chip.style.background = 'rgba(239,68,68,.15)';
+    chip.style.color = '#ef4444';
+    chip.style.display = '';
+  } else if (pending > 0) {
+    chip.innerHTML = '\u21BB Syncing ' + pending + ' item' + (pending === 1 ? '' : 's') + '...';
+    chip.style.background = 'rgba(245,158,11,.15)';
+    chip.style.color = '#f59e0b';
+    chip.style.display = '';
+  } else {
+    chip.style.display = 'none';
+  }
+}
+
+window.addEventListener('online', function() { updateOfflineChip(); drainOfflineQueue(); });
+window.addEventListener('offline', function() { updateOfflineChip(); });
 
 async function loadDB() {
   const data = await apiGet('/api/data');
@@ -8064,6 +8205,14 @@ async function submitReport(e) {
   };
   try {
     const created = await apiPost('/api/reports', reportData);
+    if (created && created._offlineQueued) {
+      // Queued offline — don't push into db.reports (the real id will come on sync)
+      try { localStorage.removeItem(reportDraftKey(app.equipmentId, app.reportType)); } catch(e) {}
+      if (app._reportDraftTimer) { clearInterval(app._reportDraftTimer); app._reportDraftTimer = null; }
+      btnEnd(ref,true,'Saved offline — will send when back online');
+      openEquipmentView(app.equipmentId);
+      return;
+    }
     db.reports.push(created);
     // Clear any saved draft for this equipment+type
     try { localStorage.removeItem(reportDraftKey(app.equipmentId, app.reportType)); } catch(e) {}
@@ -8922,6 +9071,8 @@ document.querySelectorAll('.overlay').forEach(o=>{ o.addEventListener('click', e
 
 // â”€â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 checkAuth();
+// Kick off offline queue drain + chip state after initial render
+setTimeout(function() { updateOfflineChip(); if (navigator.onLine) drainOfflineQueue(); }, 1500);
 </script>
 
 <!-- CDN scripts loaded AFTER page renders so they don't block initial display -->

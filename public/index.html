@@ -556,6 +556,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
       Team / Users
     </button>
+    <button id="nav-security-log" class="nav-item" onclick="nav('security-log',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      Security Log
+    </button>
     <button id="nav-settings" class="nav-item" onclick="nav('settings',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       Settings
@@ -1378,6 +1382,35 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
     </div>
 
+
+    <!-- SECURITY LOG (admin only) -->
+    <div id="view-security-log" class="view">
+      <div class="ph">
+        <div><div class="ph-title">Security Log</div><div class="ph-sub" id="sec-log-sub">Authentication events across all accounts</div></div>
+        <div>
+          <select class="fc" id="sec-log-filter" onchange="renderSecurityLog()" style="width:auto;padding:6px 12px;font-size:13px;">
+            <option value="">All events</option>
+            <option value="login_success">Successful sign-ins</option>
+            <option value="login_fail">Failed sign-ins</option>
+            <option value="login_fail_locked">Blocked (locked)</option>
+            <option value="account_locked">Account locks</option>
+            <option value="account_unlocked_admin">Manual unlocks</option>
+            <option value="password_reset_requested">Reset requested</option>
+            <option value="password_reset_requested_admin">Admin reset</option>
+            <option value="password_reset_completed">Reset completed</option>
+            <option value="logout">Logouts</option>
+          </select>
+        </div>
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>When</th><th>User</th><th>Type</th><th>Event</th><th>IP</th><th>Browser</th></tr></thead>
+            <tbody id="sec-log-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
     <!-- SETTINGS (admin only) -->
     <div id="view-settings" class="view">
@@ -2513,6 +2546,8 @@ function applyRoleUI() {
   document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
   document.getElementById('nav-users').style.display = admin ? '' : 'none';
   document.getElementById('nav-settings').style.display = admin ? '' : 'none';
+  var secLogNav = document.getElementById('nav-security-log');
+  if (secLogNav) secLogNav.style.display = admin ? '' : 'none';
   // Reports nav label: admins see "All Reports", techs see "My Reports"
   var rptLabel = document.getElementById('nav-reports-label');
   if (rptLabel) rptLabel.textContent = admin ? 'All Reports' : 'My Reports';
@@ -2680,6 +2715,11 @@ function renderView(name) {
       bc.innerHTML = '<span class="cur">Settings</span>';
       setNav('settings');
       renderSettingsView();
+      break;
+    case 'security-log':
+      bc.innerHTML = '<span class="cur">Security Log</span>';
+      setNav('security-log');
+      renderSecurityLog();
       break;
     case 'work-orders':
       bc.innerHTML = '<span class="cur">Work Orders</span>';
@@ -9134,6 +9174,47 @@ async function adminTriggerClientReset() {
     if (result && result.sent) btnEnd(ref, true, 'Reset email sent to client');
     else btnEnd(ref, false, (result && result.reason) || 'Email not sent — check email settings');
   } catch(err) { btnEnd(ref, false, err.message); }
+}
+
+async function renderSecurityLog() {
+  if (!isAdmin()) { showToast('Access restricted to administrators', 'error'); nav('dashboard'); return; }
+  var filter = document.getElementById('sec-log-filter')?.value || '';
+  var url = '/api/auth-audit?limit=200' + (filter ? '&action=' + encodeURIComponent(filter) : '');
+  try {
+    var rows = await apiGet(url);
+    document.getElementById('sec-log-sub').textContent = rows.length + ' event' + (rows.length === 1 ? '' : 's') + ' (most recent first)';
+    var tbody = document.getElementById('sec-log-tbody');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="empty-ico">🛡️</div><div class="empty-title">No events yet</div><div class="empty-desc">Authentication events will show up here.</div></div></td></tr>';
+      return;
+    }
+    var actionLabels = {
+      login_success: { label: 'Signed in', cls: 'bg' },
+      login_fail: { label: 'Failed sign-in', cls: 'ba' },
+      login_fail_locked: { label: 'Blocked (account locked)', cls: 'br' },
+      account_locked: { label: 'Account locked', cls: 'br' },
+      account_unlocked_admin: { label: 'Unlocked by admin', cls: 'bb' },
+      password_reset_requested: { label: 'Reset requested', cls: 'bgr' },
+      password_reset_requested_admin: { label: 'Admin sent reset', cls: 'bgr' },
+      password_reset_requested_no_match: { label: 'Reset requested (no match)', cls: 'bgr' },
+      password_reset_completed: { label: 'Password reset', cls: 'bg' },
+      logout: { label: 'Signed out', cls: 'bgr' },
+    };
+    tbody.innerHTML = rows.map(function(r) {
+      var meta = actionLabels[r.action] || { label: r.action, cls: 'bgr' };
+      var when = r.createdAt ? new Date(r.createdAt).toLocaleString() : '';
+      var ua = (r.userAgent || '').slice(0, 60);
+      var typeBadge = r.userType === 'staff' ? '<span class="badge ba" style="font-size:10px;">Staff</span>' : r.userType === 'client' ? '<span class="badge bb" style="font-size:10px;">Client</span>' : '<span style="font-size:11px;color:var(--muted);">—</span>';
+      return '<tr>' +
+        '<td style="font-size:12px;">' + esc(when) + '</td>' +
+        '<td><strong>' + esc(r.userLabel || '—') + '</strong></td>' +
+        '<td>' + typeBadge + '</td>' +
+        '<td><span class="badge ' + meta.cls + '">' + esc(meta.label) + '</span></td>' +
+        '<td style="font-size:11px;color:var(--muted);">' + esc(r.ip || '—') + '</td>' +
+        '<td style="font-size:10px;color:var(--muted);max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(r.userAgent || '') + '">' + esc(ua || '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  } catch(err) { showToast(err.message, 'error'); }
 }
 
 async function unlockUser(id) {

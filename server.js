@@ -268,6 +268,16 @@ try { db.exec("ALTER TABLE users ADD COLUMN loginAttempts INTEGER DEFAULT 0"); }
 try { db.exec("ALTER TABLE users ADD COLUMN lockedUntil TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN loginAttempts INTEGER DEFAULT 0"); } catch(e) {}
 try { db.exec("ALTER TABLE clients ADD COLUMN lockedUntil TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS auth_audit (
+  id TEXT PRIMARY KEY,
+  userType TEXT,
+  userId TEXT,
+  userLabel TEXT,
+  action TEXT NOT NULL,
+  ip TEXT,
+  userAgent TEXT,
+  createdAt TEXT NOT NULL
+)`); } catch(e) {}
 try { db.exec("ALTER TABLE work_orders ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE quotes ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
@@ -954,6 +964,27 @@ function requireClientAuth(req, res, next) {
   next();
 }
 
+// ─── AUTH AUDIT LOG ────────────────────────────────────────────────────────
+function logAuth(req, { userType, userId, userLabel, action }) {
+  try {
+    const id = genId();
+    const ip = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
+    const ua = (req.headers['user-agent'] || '').toString().slice(0, 500);
+    db.prepare('INSERT INTO auth_audit (id,userType,userId,userLabel,action,ip,userAgent,createdAt) VALUES (?,?,?,?,?,?,?,?)')
+      .run(id, userType || '', userId || '', userLabel || '', action, ip, ua, new Date().toISOString());
+  } catch(e) { console.error('Audit log write failed:', e.message); }
+}
+
+// Admin: view audit log
+app.get('/api/auth-audit', requireAdmin, (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+  const action = req.query.action ? String(req.query.action) : '';
+  const rows = action
+    ? db.prepare('SELECT * FROM auth_audit WHERE action=? ORDER BY createdAt DESC LIMIT ?').all(action, limit)
+    : db.prepare('SELECT * FROM auth_audit ORDER BY createdAt DESC LIMIT ?').all(limit);
+  res.json(rows);
+});
+
 // ─── LOCKOUT HELPERS ──────────────────────────────────────────────────────
 const LOCKOUT_MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -1031,27 +1062,34 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=LOWER(?)').get(username);
-  if (!user) return res.status(401).json({ error: 'Incorrect username or password' });
+  if (!user) {
+    logAuth(req, { userType: 'staff', userId: '', userLabel: username, action: 'login_fail' });
+    return res.status(401).json({ error: 'Incorrect username or password' });
+  }
   if (isLocked(user)) {
+    logAuth(req, { userType: 'staff', userId: user.id, userLabel: user.username, action: 'login_fail_locked' });
     return res.status(403).json({ error: `Account is locked due to multiple failed sign-in attempts. Try again in ${minutesUntilUnlock(user)} minute(s), or use "Forgot password?" to reset.` });
   }
   const match = await bcrypt.compare(password, user.passwordHash);
   if (!match) {
     const r = registerFailedAttempt('staff', user.id);
-    if (r.nowLocked && user.email) {
-      sendLockoutEmail({ to: user.email, name: user.name }).catch(function(){});
-    }
     if (r.nowLocked) {
+      logAuth(req, { userType: 'staff', userId: user.id, userLabel: user.username, action: 'account_locked' });
+      if (user.email) sendLockoutEmail({ to: user.email, name: user.name }).catch(function(){});
       return res.status(403).json({ error: 'Too many failed attempts — your account is now locked for 15 minutes.' });
     }
+    logAuth(req, { userType: 'staff', userId: user.id, userLabel: user.username, action: 'login_fail' });
     return res.status(401).json({ error: 'Incorrect username or password' });
   }
   clearFailedAttempts('staff', user.id);
   req.session.user = { id: user.id, username: user.username, name: user.name, role: user.role };
+  logAuth(req, { userType: 'staff', userId: user.id, userLabel: user.username, action: 'login_success' });
   res.json(req.session.user);
 });
 
 app.post('/api/auth/logout', requireAuth, (req, res) => {
+  const u = req.session.user || {};
+  logAuth(req, { userType: 'staff', userId: u.id, userLabel: u.username, action: 'logout' });
   req.session.destroy(() => res.json({ ok: true }));
 });
 
@@ -1064,28 +1102,35 @@ app.post('/api/auth/client-login', loginLimiter, async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   const client = db.prepare('SELECT * FROM clients WHERE LOWER(email)=LOWER(?)').get(email);
-  if (!client || !client.passwordHash) return res.status(401).json({ error: 'Incorrect email or password' });
+  if (!client || !client.passwordHash) {
+    logAuth(req, { userType: 'client', userId: '', userLabel: email, action: 'login_fail' });
+    return res.status(401).json({ error: 'Incorrect email or password' });
+  }
   if (isLocked(client)) {
+    logAuth(req, { userType: 'client', userId: client.id, userLabel: client.email, action: 'login_fail_locked' });
     return res.status(403).json({ error: `Account is locked due to multiple failed sign-in attempts. Try again in ${minutesUntilUnlock(client)} minute(s), or use "Forgot password?" to reset.` });
   }
   const match = await bcrypt.compare(password, client.passwordHash);
   if (!match) {
     const r = registerFailedAttempt('client', client.id);
-    if (r.nowLocked && client.email) {
-      sendLockoutEmail({ to: client.email, name: client.name }).catch(function(){});
-    }
     if (r.nowLocked) {
+      logAuth(req, { userType: 'client', userId: client.id, userLabel: client.email, action: 'account_locked' });
+      if (client.email) sendLockoutEmail({ to: client.email, name: client.name }).catch(function(){});
       return res.status(403).json({ error: 'Too many failed attempts — your account is now locked for 15 minutes.' });
     }
+    logAuth(req, { userType: 'client', userId: client.id, userLabel: client.email, action: 'login_fail' });
     return res.status(401).json({ error: 'Incorrect email or password' });
   }
   clearFailedAttempts('client', client.id);
   req.session.client = { id: client.id, name: client.name, email: client.email };
   req.session.user = null; // clear any staff session
+  logAuth(req, { userType: 'client', userId: client.id, userLabel: client.email, action: 'login_success' });
   res.json({ id: client.id, name: client.name, email: client.email, role: 'client' });
 });
 
 app.post('/api/auth/client-logout', requireClientAuth, (req, res) => {
+  const c = req.session.client || {};
+  logAuth(req, { userType: 'client', userId: c.id, userLabel: c.email, action: 'logout' });
   req.session.destroy(() => res.json({ ok: true }));
 });
 
@@ -1467,6 +1512,10 @@ app.post('/api/auth/password-reset-request', passwordResetLimiter, async (req, r
       .run(token, userType, userId, now.toISOString(), expires.toISOString());
     // Send email (fire and forget — don't await to keep response fast and anti-enumeration)
     sendPasswordResetEmail({ to: email, name, token, triggeredByAdmin: false }).catch(function(e){ console.error('Reset email error:', e && e.message); });
+    logAuth(req, { userType, userId, userLabel: email, action: 'password_reset_requested' });
+  } else {
+    // Log miss too (helpful for detecting email-enumeration attempts)
+    logAuth(req, { userType: '', userId: '', userLabel: email, action: 'password_reset_requested_no_match' });
   }
   // Always same response, whether account exists or not
   res.json({ ok: true });
@@ -1509,22 +1558,31 @@ app.post('/api/auth/password-reset/:token', async (req, res) => {
   }
   // Mark the token used
   db.prepare('UPDATE password_reset_tokens SET usedAt=? WHERE id=?').run(new Date().toISOString(), req.params.token);
+  // Also clear any lockout on password reset — the user has proven they own the email
+  clearFailedAttempts(row.userType, row.userId);
+  // Audit: resolve a readable label
+  let label = '';
+  if (row.userType === 'staff') { const u = db.prepare('SELECT username FROM users WHERE id=?').get(row.userId); label = u ? u.username : ''; }
+  else { const c = db.prepare('SELECT email FROM clients WHERE id=?').get(row.userId); label = c ? c.email : ''; }
+  logAuth(req, { userType: row.userType, userId: row.userId, userLabel: label, action: 'password_reset_completed' });
   res.json({ ok: true });
 });
 
 // Admin: unlock a staff user account
 app.post('/api/users/:id/unlock', requireAdmin, (req, res) => {
-  const u = db.prepare('SELECT id FROM users WHERE id=?').get(req.params.id);
+  const u = db.prepare('SELECT id, username FROM users WHERE id=?').get(req.params.id);
   if (!u) return res.status(404).json({ error: 'User not found' });
   clearFailedAttempts('staff', u.id);
+  logAuth(req, { userType: 'staff', userId: u.id, userLabel: u.username, action: 'account_unlocked_admin' });
   res.json({ ok: true });
 });
 
 // Admin: unlock a client account
 app.post('/api/clients/:id/unlock', requireAdmin, (req, res) => {
-  const c = db.prepare('SELECT id FROM clients WHERE id=?').get(req.params.id);
+  const c = db.prepare('SELECT id, email FROM clients WHERE id=?').get(req.params.id);
   if (!c) return res.status(404).json({ error: 'Client not found' });
   clearFailedAttempts('client', c.id);
+  logAuth(req, { userType: 'client', userId: c.id, userLabel: c.email, action: 'account_unlocked_admin' });
   res.json({ ok: true });
 });
 
@@ -1543,6 +1601,7 @@ app.post('/api/users/:id/password-reset-request', requireAdmin, async (req, res)
   db.prepare('INSERT INTO password_reset_tokens (id, userType, userId, createdAt, expiresAt) VALUES (?,?,?,?,?)')
     .run(token, 'staff', u.id, now.toISOString(), expires.toISOString());
   const result = await sendPasswordResetEmail({ to: u.email, name: u.name, token, triggeredByAdmin: true });
+  logAuth(req, { userType: 'staff', userId: u.id, userLabel: u.email, action: 'password_reset_requested_admin' });
   res.json({ ok: true, sent: !!result.ok, reason: result.ok ? undefined : result.reason });
 });
 
@@ -1560,6 +1619,7 @@ app.post('/api/clients/:id/password-reset-request', requireAdmin, async (req, re
   db.prepare('INSERT INTO password_reset_tokens (id, userType, userId, createdAt, expiresAt) VALUES (?,?,?,?,?)')
     .run(token, 'client', c.id, now.toISOString(), expires.toISOString());
   const result = await sendPasswordResetEmail({ to: c.email, name: c.name, token, triggeredByAdmin: true });
+  logAuth(req, { userType: 'client', userId: c.id, userLabel: c.email, action: 'password_reset_requested_admin' });
   res.json({ ok: true, sent: !!result.ok, reason: result.ok ? undefined : result.reason });
 });
 

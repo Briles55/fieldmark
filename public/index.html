@@ -6522,9 +6522,12 @@ function renderClientsTable(search='') {
   tbody.innerHTML = list.map(c => {
     const locs = db.locations.filter(l=>l.clientId===c.id).length;
     const eqs = db.locations.filter(l=>l.clientId===c.id).reduce((n,l)=>n+db.equipment.filter(e=>e.locationId===l.id).length,0);
-    const adminCtrls = isAdmin() ? `<div style="display:flex;gap:6px;"><button class="btn btn-ghost btn-sm" onclick="openClientModal('${c.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="confirmDelete('client','${c.id}')">Delete</button></div>` : '';
+    const locked = c.lockedUntil && new Date(c.lockedUntil) > new Date();
+    const lockBadge = locked ? `<span class="badge br" style="margin-left:6px;font-size:10px;">🔒 Locked</span>` : '';
+    const unlockBtn = (locked && isAdmin()) ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();unlockClient('${c.id}')">Unlock</button>` : '';
+    const adminCtrls = isAdmin() ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">${unlockBtn}<button class="btn btn-ghost btn-sm" onclick="openClientModal('${c.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="confirmDelete('client','${c.id}')">Delete</button></div>` : '';
     return `<tr class="clickable" onclick="openClientView('${c.id}')">
-      <td><strong>${esc(c.name)}</strong></td>
+      <td><strong>${esc(c.name)}</strong>${lockBadge}</td>
       <td>${esc(c.phone||'\u2014')}</td>
       <td>${esc(c.email||'\u2014')}</td>
       <td><span class="badge bb">${locs}</span></td>
@@ -9065,7 +9068,10 @@ async function renderUsersView() {
     document.getElementById('users-sub').textContent = `${users.length} user${users.length!==1?'s':''}`;
     document.getElementById('users-tbody').innerHTML = users.map(u => {
       const isSelf = u.id === currentUser?.id;
-      return `<tr><td><strong>${esc(u.name)}</strong>${isSelf?'<span class="badge bb" style="margin-left:8px;font-size:10px;">You</span>':''}</td><td><code>${esc(u.username)}</code></td><td><span class="badge ${u.role==='admin'?'ba':'bgr'}">${u.role==='admin'?'Administrator':'Technician'}</span></td><td><div style="display:flex;gap:6px;"><button class="btn btn-ghost btn-sm" onclick="openUserModal('${u.id}')">Edit</button>${!isSelf?`<button class="btn btn-danger btn-sm" onclick="confirmDeleteUser('${u.id}')">Delete</button>`:''}</div></td></tr>`;
+      const locked = u.lockedUntil && new Date(u.lockedUntil) > new Date();
+      const lockBadge = locked ? `<span class="badge br" style="margin-left:6px;font-size:10px;">🔒 Locked</span>` : '';
+      const unlockBtn = locked ? `<button class="btn btn-outline btn-sm" onclick="unlockUser('${u.id}')">Unlock</button>` : '';
+      return `<tr><td><strong>${esc(u.name)}</strong>${isSelf?'<span class="badge bb" style="margin-left:8px;font-size:10px;">You</span>':''}${lockBadge}</td><td><code>${esc(u.username)}</code></td><td><span class="badge ${u.role==='admin'?'ba':'bgr'}">${u.role==='admin'?'Administrator':'Technician'}</span></td><td><div style="display:flex;gap:6px;flex-wrap:wrap;">${unlockBtn}<button class="btn btn-ghost btn-sm" onclick="openUserModal('${u.id}')">Edit</button>${!isSelf?`<button class="btn btn-danger btn-sm" onclick="confirmDeleteUser('${u.id}')">Delete</button>`:''}</div></td></tr>`;
     }).join('');
   } catch(err) { showToast(err.message,'error'); }
 }
@@ -9127,6 +9133,28 @@ async function adminTriggerClientReset() {
     var result = await apiPost('/api/clients/' + id + '/password-reset-request', {});
     if (result && result.sent) btnEnd(ref, true, 'Reset email sent to client');
     else btnEnd(ref, false, (result && result.reason) || 'Email not sent — check email settings');
+  } catch(err) { btnEnd(ref, false, err.message); }
+}
+
+async function unlockUser(id) {
+  if (!isAdmin()) return;
+  var ref = btnStart(_actionBtn);
+  try {
+    await apiPost('/api/users/' + id + '/unlock', {});
+    btnEnd(ref, true, 'Account unlocked');
+    renderUsersView();
+  } catch(err) { btnEnd(ref, false, err.message); }
+}
+
+async function unlockClient(id) {
+  if (!isAdmin()) return;
+  var ref = btnStart(_actionBtn);
+  try {
+    await apiPost('/api/clients/' + id + '/unlock', {});
+    btnEnd(ref, true, 'Client unlocked');
+    await loadDB();
+    if (app.view === 'clients') renderClientsTable('');
+    else if (app.view === 'client') renderClientDetail();
   } catch(err) { btnEnd(ref, false, err.message); }
 }
 

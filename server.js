@@ -264,6 +264,10 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
   expiresAt TEXT NOT NULL,
   usedAt TEXT DEFAULT ''
 )`); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN loginAttempts INTEGER DEFAULT 0"); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN lockedUntil TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN loginAttempts INTEGER DEFAULT 0"); } catch(e) {}
+try { db.exec("ALTER TABLE clients ADD COLUMN lockedUntil TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE work_orders ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE quotes ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
@@ -950,14 +954,99 @@ function requireClientAuth(req, res, next) {
   next();
 }
 
+// ─── LOCKOUT HELPERS ──────────────────────────────────────────────────────
+const LOCKOUT_MAX_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+function isLocked(row) {
+  if (!row || !row.lockedUntil) return false;
+  return new Date(row.lockedUntil) > new Date();
+}
+
+function minutesUntilUnlock(row) {
+  if (!row || !row.lockedUntil) return 0;
+  const ms = new Date(row.lockedUntil).getTime() - Date.now();
+  return Math.max(1, Math.ceil(ms / 60000));
+}
+
+// Registers a failed login attempt; locks the account if threshold exceeded.
+// Returns { locked: bool, nowLocked: bool } — nowLocked=true only on the
+// transition, so the caller can send the lockout notification email once.
+function registerFailedAttempt(userType, userId) {
+  const table = userType === 'staff' ? 'users' : 'clients';
+  const row = db.prepare(`SELECT loginAttempts, lockedUntil FROM ${table} WHERE id=?`).get(userId);
+  if (!row) return { locked: false, nowLocked: false };
+  const attempts = (row.loginAttempts || 0) + 1;
+  let nowLocked = false;
+  if (attempts >= LOCKOUT_MAX_ATTEMPTS) {
+    const until = new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString();
+    db.prepare(`UPDATE ${table} SET loginAttempts=?, lockedUntil=? WHERE id=?`).run(attempts, until, userId);
+    nowLocked = true;
+  } else {
+    db.prepare(`UPDATE ${table} SET loginAttempts=? WHERE id=?`).run(attempts, userId);
+  }
+  return { locked: nowLocked, nowLocked };
+}
+
+function clearFailedAttempts(userType, userId) {
+  const table = userType === 'staff' ? 'users' : 'clients';
+  db.prepare(`UPDATE ${table} SET loginAttempts=0, lockedUntil='' WHERE id=?`).run(userId);
+}
+
+async function sendLockoutEmail({ to, name }) {
+  const cfg = getEmailSettings();
+  if (!cfg.enabled) return;
+  const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
+  const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
+  if (!hasSes && !hasSmtp) return;
+  const appUrl = (cfg.appUrl || '').replace(/\/$/, '');
+  const fromName = cfg.fromName || 'FieldMark';
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222;">
+    <div style="background:#1a1d27;padding:24px 32px;border-radius:8px 8px 0 0;">
+      <h1 style="color:#3b82f6;margin:0;font-size:22px;">FieldMark</h1>
+      <p style="color:#94a3b8;margin:4px 0 0;">Security Alert</p>
+    </div>
+    <div style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+      <p>Hi ${name || 'there'},</p>
+      <p>We detected <strong>5 failed sign-in attempts</strong> in a row on your FieldMark account. As a precaution, your account has been <strong>temporarily locked for 15 minutes</strong>.</p>
+      <p>If this was you, wait 15 minutes and try again — make sure you're using the right password.</p>
+      <p><strong>If this wasn't you</strong>, someone may be trying to break into your account. We recommend resetting your password immediately:</p>
+      ${appUrl ? `<div style="text-align:center;margin:24px 0;"><a href="${appUrl}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;">Sign in to FieldMark</a></div>` : ''}
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px;">You can use the "Forgot password?" link on the sign-in page to set a new password.</p>
+    </div>
+  </div>`;
+  try {
+    const t = createMailTransport(cfg);
+    await t.sendMail({
+      from: `"${fromName}" <${cfg.sesFromEmail || cfg.smtpUser}>`,
+      to,
+      subject: 'FieldMark — Your account was temporarily locked',
+      html,
+    });
+  } catch(err) { console.error('Lockout email failed:', err.message); }
+}
+
 // ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=LOWER(?)').get(username);
   if (!user) return res.status(401).json({ error: 'Incorrect username or password' });
+  if (isLocked(user)) {
+    return res.status(403).json({ error: `Account is locked due to multiple failed sign-in attempts. Try again in ${minutesUntilUnlock(user)} minute(s), or use "Forgot password?" to reset.` });
+  }
   const match = await bcrypt.compare(password, user.passwordHash);
-  if (!match) return res.status(401).json({ error: 'Incorrect username or password' });
+  if (!match) {
+    const r = registerFailedAttempt('staff', user.id);
+    if (r.nowLocked && user.email) {
+      sendLockoutEmail({ to: user.email, name: user.name }).catch(function(){});
+    }
+    if (r.nowLocked) {
+      return res.status(403).json({ error: 'Too many failed attempts — your account is now locked for 15 minutes.' });
+    }
+    return res.status(401).json({ error: 'Incorrect username or password' });
+  }
+  clearFailedAttempts('staff', user.id);
   req.session.user = { id: user.id, username: user.username, name: user.name, role: user.role };
   res.json(req.session.user);
 });
@@ -976,8 +1065,21 @@ app.post('/api/auth/client-login', loginLimiter, async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   const client = db.prepare('SELECT * FROM clients WHERE LOWER(email)=LOWER(?)').get(email);
   if (!client || !client.passwordHash) return res.status(401).json({ error: 'Incorrect email or password' });
+  if (isLocked(client)) {
+    return res.status(403).json({ error: `Account is locked due to multiple failed sign-in attempts. Try again in ${minutesUntilUnlock(client)} minute(s), or use "Forgot password?" to reset.` });
+  }
   const match = await bcrypt.compare(password, client.passwordHash);
-  if (!match) return res.status(401).json({ error: 'Incorrect email or password' });
+  if (!match) {
+    const r = registerFailedAttempt('client', client.id);
+    if (r.nowLocked && client.email) {
+      sendLockoutEmail({ to: client.email, name: client.name }).catch(function(){});
+    }
+    if (r.nowLocked) {
+      return res.status(403).json({ error: 'Too many failed attempts — your account is now locked for 15 minutes.' });
+    }
+    return res.status(401).json({ error: 'Incorrect email or password' });
+  }
+  clearFailedAttempts('client', client.id);
   req.session.client = { id: client.id, name: client.name, email: client.email };
   req.session.user = null; // clear any staff session
   res.json({ id: client.id, name: client.name, email: client.email, role: 'client' });
@@ -1074,7 +1176,7 @@ app.get('/api/data', requireAuth, (req, res) => {
   });
   const workOrders = db.prepare('SELECT * FROM work_orders ORDER BY createdAt DESC').all();
   workOrders.forEach(wo => { try { wo.laborEntries = JSON.parse(wo.laborEntries); } catch { wo.laborEntries = []; } });
-  const users = db.prepare('SELECT id,username,name,role,email,createdAt FROM users ORDER BY name').all();
+  const users = db.prepare('SELECT id,username,name,role,email,lockedUntil,loginAttempts,createdAt FROM users ORDER BY name').all();
   const timeCards = db.prepare('SELECT * FROM time_cards ORDER BY weekStart DESC').all();
   const invoices = req.session.user.role === 'admin' ? db.prepare('SELECT * FROM invoices ORDER BY createdAt DESC').all() : [];
   invoices.forEach(inv => { try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; } });
@@ -1407,6 +1509,22 @@ app.post('/api/auth/password-reset/:token', async (req, res) => {
   }
   // Mark the token used
   db.prepare('UPDATE password_reset_tokens SET usedAt=? WHERE id=?').run(new Date().toISOString(), req.params.token);
+  res.json({ ok: true });
+});
+
+// Admin: unlock a staff user account
+app.post('/api/users/:id/unlock', requireAdmin, (req, res) => {
+  const u = db.prepare('SELECT id FROM users WHERE id=?').get(req.params.id);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  clearFailedAttempts('staff', u.id);
+  res.json({ ok: true });
+});
+
+// Admin: unlock a client account
+app.post('/api/clients/:id/unlock', requireAdmin, (req, res) => {
+  const c = db.prepare('SELECT id FROM clients WHERE id=?').get(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Client not found' });
+  clearFailedAttempts('client', c.id);
   res.json({ ok: true });
 });
 
@@ -3154,7 +3272,7 @@ app.post('/api/time-cards/reopen', requireAdmin, (req, res) => {
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
 app.get('/api/users', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id,username,name,role,email,createdAt FROM users ORDER BY name').all();
+  const users = db.prepare('SELECT id,username,name,role,email,lockedUntil,loginAttempts,createdAt FROM users ORDER BY name').all();
   res.json(users);
 });
 

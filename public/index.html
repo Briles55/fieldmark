@@ -440,6 +440,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <input class="fc" type="password" id="login-pass" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;font-size:15px;" onclick="doLogin()">Sign In</button>
+      <div style="text-align:center;margin-top:12px;"><a href="#" onclick="event.preventDefault();openForgotPassword();" style="font-size:13px;color:var(--accent);text-decoration:none;">Forgot password?</a></div>
     </div>
     <!-- Client login fields -->
     <div id="client-login-fields" style="display:none;">
@@ -452,6 +453,30 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <input class="fc" type="password" id="client-login-pass" placeholder="Enter your portal password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doClientLogin()">
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;font-size:15px;" onclick="doClientLogin()">Sign In to Portal</button>
+      <div style="text-align:center;margin-top:12px;"><a href="#" onclick="event.preventDefault();openForgotPassword();" style="font-size:13px;color:var(--accent);text-decoration:none;">Forgot password?</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<div class="overlay" id="modal-forgot">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-hd">
+      <span class="modal-title">Reset your password</span>
+      <button class="modal-x" onclick="closeModal('modal-forgot')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="modal-forgot-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Enter the email address on your account. If it matches a user, we'll email you a link to set a new password.</p>
+      <div class="fg">
+        <label class="flbl">Email</label>
+        <input class="fc" type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter')submitForgotPassword()">
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-secondary" onclick="closeModal('modal-forgot')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitForgotPassword()" id="forgot-submit-btn">Send reset link</button>
     </div>
   </div>
 </div>
@@ -2250,6 +2275,37 @@ async function doClientLogin() {
 async function loadClientDB() {
   const data = await apiGet('/api/client-data');
   db = { clients: [], locations: data.locations, equipment: data.equipment, reports: data.reports, formTemplates: data.formTemplates || [] };
+}
+
+function openForgotPassword() {
+  document.getElementById('forgot-email').value = '';
+  // Reset the body in case it was replaced by the success message
+  document.getElementById('modal-forgot-body').innerHTML = ''+
+    '<p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Enter the email address on your account. If it matches a user, we\'ll email you a link to set a new password.</p>'+
+    '<div class="fg"><label class="flbl">Email</label><input class="fc" type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key===\'Enter\')submitForgotPassword()"></div>';
+  var btn = document.getElementById('forgot-submit-btn');
+  if (btn) { btn.style.display = ''; btn.disabled = false; btn.textContent = 'Send reset link'; }
+  openModal('modal-forgot');
+  setTimeout(function() { var el = document.getElementById('forgot-email'); if (el) el.focus(); }, 50);
+}
+
+async function submitForgotPassword() {
+  var email = (document.getElementById('forgot-email').value || '').trim();
+  if (!email || email.indexOf('@') < 0) { showToast('Please enter a valid email', 'error'); return; }
+  var btn = document.getElementById('forgot-submit-btn');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    // Intentionally doesn't care about the response (anti-enumeration)
+    await fetch('/api/auth/password-reset-request', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email }) });
+  } catch(e) { /* swallow — always show generic success */ }
+  // Replace modal body with generic success message
+  document.getElementById('modal-forgot-body').innerHTML =
+    '<div style="text-align:center;padding:20px 0;">'+
+      '<div style="font-size:40px;margin-bottom:10px;">📧</div>'+
+      '<h3 style="font-size:16px;margin-bottom:8px;">Check your email</h3>'+
+      '<p style="font-size:13px;color:var(--muted);">If that email is registered with FieldMark, you\'ll receive a reset link within a minute. The link expires in 1 hour.</p>'+
+    '</div>';
+  btn.style.display = 'none';
 }
 
 function isClient() { return currentUser && currentUser.role === 'client'; }

@@ -453,7 +453,6 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;font-size:15px;" onclick="doClientLogin()">Sign In to Portal</button>
     </div>
-    <div class="login-hint" id="login-hint"></div>
   </div>
 </div>
 
@@ -2478,7 +2477,6 @@ async function checkAuth() {
   } catch(e2) {}
   // Not authenticated — show login
   loginScreen.style.display = 'flex';
-  document.getElementById('login-hint').innerHTML = '<strong>First time?</strong> Default login: <code>admin</code> / <code>fieldmark</code>';
   setTimeout(()=>document.getElementById('login-user').focus(), 50);
 }
 

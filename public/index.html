@@ -1573,8 +1573,14 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
       <div class="fg">
         <label class="flbl">Client Portal Password</label>
-        <input class="fc" type="password" id="c-portal-pass" placeholder="Set password for portal access (min 6 chars)">
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">If set, the client can log in to view their locations, equipment, and reports using their email and this password. Leave blank to keep unchanged when editing.</div>
+        <input class="fc" type="password" id="c-portal-pass" placeholder="8+ chars, 1 uppercase, 1 number — or leave blank and use Send Reset Email">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Client logs in with their email + this password. Must be 8+ chars, 1 uppercase, 1 number. Leave blank to keep unchanged.</div>
+        <div id="c-portal-reset-row" style="display:none;margin-top:8px;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="adminTriggerClientReset()" id="c-portal-reset-btn">
+            📧 Send password reset email
+          </button>
+          <span style="font-size:11px;color:var(--muted);margin-left:6px;">Emails a one-time link so the client picks their own password.</span>
+        </div>
       </div>
       <!-- Accounts Receivable Section (admin only) -->
       <div class="admin-only">
@@ -1762,12 +1768,16 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
         <div class="fg"><label class="flbl">Full Name *</label><input class="fc" type="text" id="u-name" placeholder="John Smith"></div>
         <div class="fg"><label class="flbl">Username *</label><input class="fc" type="text" id="u-username" placeholder="jsmith" autocomplete="off"></div>
       </div>
-      <div class="fg"><label class="flbl">Role *</label>
-        <select class="fc" id="u-role">
-          <option value="technician">Technician</option>
-          <option value="admin">Administrator</option>
-        </select>
+      <div class="fr">
+        <div class="fg"><label class="flbl">Email</label><input class="fc" type="email" id="u-email" placeholder="jsmith@company.com" autocomplete="off"></div>
+        <div class="fg"><label class="flbl">Role *</label>
+          <select class="fc" id="u-role">
+            <option value="technician">Technician</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </div>
       </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:-8px;">Email is required for password resets.</p>
       <hr class="div">
       <div id="user-pw-section">
         <div class="fr">
@@ -1775,6 +1785,12 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           <div class="fg"><label class="flbl">Confirm Password *</label><input class="fc" type="password" id="u-password2" placeholder="Repeat password" autocomplete="new-password"></div>
         </div>
         <p id="u-pw-note" style="font-size:12px;color:var(--muted);margin-top:-8px;display:none;">Leave blank to keep existing password</p>
+        <div id="u-pw-reset-row" style="display:none;margin-top:8px;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="adminTriggerUserReset()" id="u-pw-reset-btn">
+            📧 Send password reset email
+          </button>
+          <span style="font-size:11px;color:var(--muted);margin-left:6px;">Emails a one-time link so the user picks their own password.</span>
+        </div>
       </div>
     </div>
     <div class="modal-ft">
@@ -8552,6 +8568,18 @@ function openClientModal(id) {
   document.getElementById('c-state').value = c?.state||'';
   document.getElementById('c-notes').value = c?.notes||'';
   document.getElementById('c-portal-pass').value = '';
+  // Show reset-email button only for existing clients with an email
+  var cResetRow = document.getElementById('c-portal-reset-row');
+  var cResetBtn = document.getElementById('c-portal-reset-btn');
+  if (cResetRow && cResetBtn) {
+    if (id) {
+      cResetRow.style.display = '';
+      if (!c?.email) { cResetBtn.disabled = true; cResetBtn.title = 'Add an email first, then Save, then try again'; }
+      else { cResetBtn.disabled = false; cResetBtn.title = ''; }
+    } else {
+      cResetRow.style.display = 'none';
+    }
+  }
   // Logo preview
   app._clientLogo = c?.logo || '';
   document.getElementById('c-logo-input').value = '';
@@ -8992,15 +9020,58 @@ function openUserModal(id) {
   document.getElementById('user-id-field').value = id || '';
   document.getElementById('u-password').value = '';
   document.getElementById('u-password2').value = '';
+  document.getElementById('u-email').value = '';
+  var resetRow = document.getElementById('u-pw-reset-row');
+  var resetBtn = document.getElementById('u-pw-reset-btn');
   if (id) {
     document.getElementById('u-pw-lbl').textContent = 'New Password';
     document.getElementById('u-pw-note').style.display = 'block';
-    apiGet('/api/users').then(users => { const u = users.find(x=>x.id===id); document.getElementById('u-name').value = u?.name||''; document.getElementById('u-username').value = u?.username||''; document.getElementById('u-role').value = u?.role||'technician'; });
+    if (resetRow) resetRow.style.display = '';
+    apiGet('/api/users').then(users => {
+      const u = users.find(x=>x.id===id);
+      document.getElementById('u-name').value = u?.name||'';
+      document.getElementById('u-username').value = u?.username||'';
+      document.getElementById('u-role').value = u?.role||'technician';
+      document.getElementById('u-email').value = u?.email||'';
+      // Disable reset button if no email on file
+      if (resetBtn) {
+        if (!u?.email) { resetBtn.disabled = true; resetBtn.title = 'Add an email first, then Save, then try again'; }
+        else { resetBtn.disabled = false; resetBtn.title = ''; }
+      }
+    });
   } else {
-    document.getElementById('u-name').value = ''; document.getElementById('u-username').value = ''; document.getElementById('u-role').value = 'technician';
-    document.getElementById('u-pw-lbl').textContent = 'Password *'; document.getElementById('u-pw-note').style.display = 'none';
+    document.getElementById('u-name').value = '';
+    document.getElementById('u-username').value = '';
+    document.getElementById('u-role').value = 'technician';
+    document.getElementById('u-pw-lbl').textContent = 'Password *';
+    document.getElementById('u-pw-note').style.display = 'none';
+    if (resetRow) resetRow.style.display = 'none';
   }
   openModal('modal-user');
+}
+
+async function adminTriggerUserReset() {
+  if (!isAdmin()) return;
+  var id = document.getElementById('user-id-field').value;
+  if (!id) return;
+  var ref = btnStart(document.getElementById('u-pw-reset-btn'));
+  try {
+    var result = await apiPost('/api/users/' + id + '/password-reset-request', {});
+    if (result && result.sent) btnEnd(ref, true, 'Reset email sent');
+    else btnEnd(ref, false, (result && result.reason) || 'Email not sent — check email settings');
+  } catch(err) { btnEnd(ref, false, err.message); }
+}
+
+async function adminTriggerClientReset() {
+  if (!isAdmin()) return;
+  var id = document.getElementById('client-id-field').value;
+  if (!id) return;
+  var ref = btnStart(document.getElementById('c-portal-reset-btn'));
+  try {
+    var result = await apiPost('/api/clients/' + id + '/password-reset-request', {});
+    if (result && result.sent) btnEnd(ref, true, 'Reset email sent to client');
+    else btnEnd(ref, false, (result && result.reason) || 'Email not sent — check email settings');
+  } catch(err) { btnEnd(ref, false, err.message); }
 }
 
 async function saveUser() {
@@ -9009,6 +9080,7 @@ async function saveUser() {
   const name = document.getElementById('u-name').value.trim();
   const username = document.getElementById('u-username').value.trim();
   const role = document.getElementById('u-role').value;
+  const email = document.getElementById('u-email').value.trim();
   const pw = document.getElementById('u-password').value;
   const pw2 = document.getElementById('u-password2').value;
   if (!name || !username) { showToast('Name and username are required', 'error'); return; }
@@ -9017,7 +9089,7 @@ async function saveUser() {
   if (pw && (pw.length < 8 || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw))) { showToast('Password must be at least 8 characters with 1 uppercase letter and 1 number', 'error'); return; }
   var ref = btnStart(_actionBtn);
   try {
-    const body = { name, username, role }; if (pw) body.password = pw;
+    const body = { name, username, role, email }; if (pw) body.password = pw;
     if (id) { const u = await apiPost('/api/users/'+id, body, 'PUT'); if (currentUser && currentUser.id===id) { currentUser.name=u.name; currentUser.username=u.username; currentUser.role=u.role; updateSidebarUser(); } btnEnd(ref,true,'User updated'); }
     else { await apiPost('/api/users', body); btnEnd(ref,true,'User created'); }
     closeModal('modal-user'); renderUsersView();

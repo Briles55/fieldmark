@@ -1410,6 +1410,41 @@ app.post('/api/auth/password-reset/:token', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Admin: trigger a password reset email for a staff user
+app.post('/api/users/:id/password-reset-request', requireAdmin, async (req, res) => {
+  const u = db.prepare('SELECT id, name, email FROM users WHERE id=?').get(req.params.id);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  if (!u.email) return res.status(400).json({ error: 'User has no email on file — add one and save, then try again' });
+
+  // Invalidate previous unused tokens for this user
+  db.prepare("UPDATE password_reset_tokens SET usedAt=? WHERE userType='staff' AND userId=? AND usedAt=''")
+    .run(new Date().toISOString(), u.id);
+  const token = generatePasswordResetToken();
+  const now = new Date();
+  const expires = new Date(now.getTime() + 60 * 60 * 1000);
+  db.prepare('INSERT INTO password_reset_tokens (id, userType, userId, createdAt, expiresAt) VALUES (?,?,?,?,?)')
+    .run(token, 'staff', u.id, now.toISOString(), expires.toISOString());
+  const result = await sendPasswordResetEmail({ to: u.email, name: u.name, token, triggeredByAdmin: true });
+  res.json({ ok: true, sent: !!result.ok, reason: result.ok ? undefined : result.reason });
+});
+
+// Admin: trigger a password reset email for a client
+app.post('/api/clients/:id/password-reset-request', requireAdmin, async (req, res) => {
+  const c = db.prepare('SELECT id, name, email FROM clients WHERE id=?').get(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Client not found' });
+  if (!c.email) return res.status(400).json({ error: 'Client has no email on file — add one and save, then try again' });
+
+  db.prepare("UPDATE password_reset_tokens SET usedAt=? WHERE userType='client' AND userId=? AND usedAt=''")
+    .run(new Date().toISOString(), c.id);
+  const token = generatePasswordResetToken();
+  const now = new Date();
+  const expires = new Date(now.getTime() + 60 * 60 * 1000);
+  db.prepare('INSERT INTO password_reset_tokens (id, userType, userId, createdAt, expiresAt) VALUES (?,?,?,?,?)')
+    .run(token, 'client', c.id, now.toISOString(), expires.toISOString());
+  const result = await sendPasswordResetEmail({ to: c.email, name: c.name, token, triggeredByAdmin: true });
+  res.json({ ok: true, sent: !!result.ok, reason: result.ok ? undefined : result.reason });
+});
+
 // ─── ONBOARDING ──────────────────────────────────────────────────────────────
 function generateOnboardingToken(id) {
   return crypto.createHmac('sha256', SECRET).update(id + ':fieldmark-onboard').digest('hex').slice(0, 32);

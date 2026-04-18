@@ -255,6 +255,15 @@ try { db.exec("ALTER TABLE equipment ADD COLUMN serviceFormTemplateId TEXT DEFAU
 try { db.exec("ALTER TABLE reports ADD COLUMN additionalPhotos TEXT DEFAULT '[]'"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN createdByUserId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN techNotes TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id TEXT PRIMARY KEY,
+  userType TEXT NOT NULL,
+  userId TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  expiresAt TEXT NOT NULL,
+  usedAt TEXT DEFAULT ''
+)`); } catch(e) {}
 try { db.exec("ALTER TABLE work_orders ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE quotes ADD COLUMN reportId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE form_templates ADD COLUMN clientId TEXT DEFAULT ''"); } catch(e) {}
@@ -1065,7 +1074,7 @@ app.get('/api/data', requireAuth, (req, res) => {
   });
   const workOrders = db.prepare('SELECT * FROM work_orders ORDER BY createdAt DESC').all();
   workOrders.forEach(wo => { try { wo.laborEntries = JSON.parse(wo.laborEntries); } catch { wo.laborEntries = []; } });
-  const users = db.prepare('SELECT id,username,name,role,createdAt FROM users ORDER BY name').all();
+  const users = db.prepare('SELECT id,username,name,role,email,createdAt FROM users ORDER BY name').all();
   const timeCards = db.prepare('SELECT * FROM time_cards ORDER BY weekStart DESC').all();
   const invoices = req.session.user.role === 'admin' ? db.prepare('SELECT * FROM invoices ORDER BY createdAt DESC').all() : [];
   invoices.forEach(inv => { try { inv.lineItems = JSON.parse(inv.lineItems); } catch(e) { inv.lineItems = []; } });
@@ -1090,7 +1099,11 @@ app.post('/api/clients', requireAdmin, async (req, res) => {
   if (!name) return res.status(400).json({ error: 'Name required' });
   const id = genId();
   let hash = '';
-  if (portalPassword && portalPassword.length >= 6) hash = await bcrypt.hash(portalPassword, 10);
+  if (portalPassword) {
+    const s = validatePasswordStrength(portalPassword);
+    if (!s.valid) return res.status(400).json({ error: s.error });
+    hash = await bcrypt.hash(portalPassword, 10);
+  }
   const logoRef = logo && logo.startsWith('data:') ? savePhotoFile(logo) : (logo || '');
   db.prepare('INSERT INTO clients (id,name,phone,email,address,city,state,notes,passwordHash,logo,billingContact,billingEmail,billingPhone,billingAddress,paymentTerms,poRequired,taxId,creditLimit,accountNumber,defaultRate,arNotes,ratePlumber,rateHvacB,rateHvacA,rateElectrician,rateApprentice,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(id, name, phone||'', email||'', address||'', city||'', state||'', notes||'', hash, logoRef,
@@ -1114,7 +1127,9 @@ app.put('/api/clients/:id', requireAdmin, async (req, res) => {
          billingContact||'', billingEmail||'', billingPhone||'', billingAddress||'', paymentTerms||'', poRequired||'No',
          taxId||'', creditLimit||'', accountNumber||'', defaultRate||'', arNotes||'',
          ratePlumber||'', rateHvacB||'', rateHvacA||'', rateElectrician||'', rateApprentice||'', req.params.id);
-  if (portalPassword && portalPassword.length >= 6) {
+  if (portalPassword) {
+    const s = validatePasswordStrength(portalPassword);
+    if (!s.valid) return res.status(400).json({ error: s.error });
     const hash = await bcrypt.hash(portalPassword, 10);
     db.prepare('UPDATE clients SET passwordHash=? WHERE id=?').run(hash, req.params.id);
   }
@@ -1238,6 +1253,160 @@ app.delete('/api/form-templates/:id', requireAdmin, (req, res) => {
   // Clear formTemplateId / serviceFormTemplateId from any equipment using this template
   db.prepare("UPDATE equipment SET formTemplateId='' WHERE formTemplateId=?").run(req.params.id);
   db.prepare("UPDATE equipment SET serviceFormTemplateId='' WHERE serviceFormTemplateId=?").run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ─── PASSWORD HELPERS ───────────────────────────────────────────────────────
+const COMMON_PASSWORDS = new Set([
+  'password','password1','password12','password123','password1234',
+  'qwerty','qwerty123','abc123','abcd1234','letmein','monkey','dragon',
+  '12345678','123456789','1234567890','11111111','00000000',
+  'iloveyou','welcome','welcome1','admin','admin123','administrator',
+  'fieldmark','fieldmark1','letmein1','master','trustno1','superman','batman',
+  'football','baseball','hockey','soccer','princess','sunshine','shadow',
+  'michael','jennifer','jordan','michelle','daniel','joshua','amanda',
+  'charlie','maggie','ginger','pepper','hunter','buster','cookie','charlie1',
+  'password!','Password1','Welcome1','Admin123','Passw0rd'
+]);
+
+function validatePasswordStrength(pw) {
+  if (!pw || typeof pw !== 'string') return { valid: false, error: 'Password is required' };
+  if (pw.length < 8) return { valid: false, error: 'Password must be at least 8 characters' };
+  if (!/[A-Z]/.test(pw)) return { valid: false, error: 'Password must contain at least one uppercase letter' };
+  if (!/[0-9]/.test(pw)) return { valid: false, error: 'Password must contain at least one number' };
+  if (COMMON_PASSWORDS.has(pw.toLowerCase()) || COMMON_PASSWORDS.has(pw)) {
+    return { valid: false, error: 'That password is too common — please choose something less guessable' };
+  }
+  return { valid: true };
+}
+
+function generatePasswordResetToken() {
+  // 32 random bytes as hex (64 chars) — not reversible, not predictable
+  return crypto.randomBytes(32).toString('hex');
+}
+
+async function sendPasswordResetEmail({ to, name, token, triggeredByAdmin }) {
+  const cfg = getEmailSettings();
+  if (!cfg.enabled) return { ok: false, reason: 'Email disabled' };
+  const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
+  const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
+  if (!hasSes && !hasSmtp) return { ok: false, reason: 'No email provider configured' };
+  const appUrl = (cfg.appUrl || '').replace(/\/$/, '');
+  if (!appUrl) return { ok: false, reason: 'App URL not configured' };
+  const link = `${appUrl}/reset-password?token=${token}`;
+  const fromName = cfg.fromName || 'FieldMark';
+  const adminLine = triggeredByAdmin
+    ? '<p style="color:#64748b;font-size:13px;">Your administrator requested this reset on your behalf.</p>'
+    : '<p style="color:#64748b;font-size:13px;">We received a request to reset your password. If that wasn\'t you, you can safely ignore this email.</p>';
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222;">
+    <div style="background:#1a1d27;padding:24px 32px;border-radius:8px 8px 0 0;">
+      <h1 style="color:#3b82f6;margin:0;font-size:22px;">FieldMark</h1>
+      <p style="color:#94a3b8;margin:4px 0 0;">Password Reset</p>
+    </div>
+    <div style="background:#fff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+      <p>Hi ${name || 'there'},</p>
+      ${adminLine}
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${link}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:600;font-size:15px;">Set New Password</a>
+      </div>
+      <p style="color:#64748b;font-size:12px;">This link expires in 1 hour and can only be used once.</p>
+      <p style="color:#94a3b8;font-size:12px;">If the button doesn't work, copy this link into your browser: ${link}</p>
+    </div>
+  </div>`;
+  try {
+    const transporter = createMailTransport(cfg);
+    await transporter.sendMail({
+      from: `"${fromName}" <${cfg.sesFromEmail || cfg.smtpUser}>`,
+      to,
+      subject: 'FieldMark — Reset your password',
+      html,
+    });
+    return { ok: true };
+  } catch(err) {
+    console.error('Password reset email failed:', err.message);
+    return { ok: false, reason: err.message };
+  }
+}
+
+// Rate limiter for password-reset-request: 3 requests per hour per IP
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many reset requests. Please try again in an hour.' },
+});
+
+// ─── PASSWORD RESET ENDPOINTS ──────────────────────────────────────────────
+
+// Public: request a reset link by email (anti-enumeration: always 200)
+app.post('/api/auth/password-reset-request', passwordResetLimiter, async (req, res) => {
+  const email = (req.body?.email || '').trim().toLowerCase();
+  if (!email) return res.json({ ok: true }); // generic response even on bad input
+
+  // Look up a staff user OR a client by email (first match wins — staff takes precedence)
+  let userType = null, userId = null, name = null;
+  const staffRow = db.prepare('SELECT id, name, email FROM users WHERE LOWER(email)=LOWER(?) AND email != \'\'').get(email);
+  if (staffRow) { userType = 'staff'; userId = staffRow.id; name = staffRow.name; }
+  else {
+    const clientRow = db.prepare('SELECT id, name, email FROM clients WHERE LOWER(email)=LOWER(?) AND email != \'\'').get(email);
+    if (clientRow) { userType = 'client'; userId = clientRow.id; name = clientRow.name; }
+  }
+
+  if (userType) {
+    // Invalidate any previous unused tokens for this account
+    db.prepare("UPDATE password_reset_tokens SET usedAt=? WHERE userType=? AND userId=? AND usedAt=''")
+      .run(new Date().toISOString(), userType, userId);
+    // Generate new one
+    const token = generatePasswordResetToken();
+    const now = new Date();
+    const expires = new Date(now.getTime() + 60 * 60 * 1000);
+    db.prepare('INSERT INTO password_reset_tokens (id, userType, userId, createdAt, expiresAt) VALUES (?,?,?,?,?)')
+      .run(token, userType, userId, now.toISOString(), expires.toISOString());
+    // Send email (fire and forget — don't await to keep response fast and anti-enumeration)
+    sendPasswordResetEmail({ to: email, name, token, triggeredByAdmin: false }).catch(function(e){ console.error('Reset email error:', e && e.message); });
+  }
+  // Always same response, whether account exists or not
+  res.json({ ok: true });
+});
+
+// Public: verify a token (used by the /reset-password page to gate the form)
+app.get('/api/auth/password-reset/:token', (req, res) => {
+  const row = db.prepare('SELECT * FROM password_reset_tokens WHERE id=?').get(req.params.token);
+  if (!row) return res.status(404).json({ error: 'Invalid or expired link' });
+  if (row.usedAt) return res.status(400).json({ error: 'This link has already been used' });
+  if (new Date(row.expiresAt) < new Date()) return res.status(400).json({ error: 'This link has expired' });
+  // Look up the name to display a friendly greeting
+  let name = '';
+  if (row.userType === 'staff') {
+    const u = db.prepare('SELECT name FROM users WHERE id=?').get(row.userId);
+    name = u ? u.name : '';
+  } else {
+    const c = db.prepare('SELECT name FROM clients WHERE id=?').get(row.userId);
+    name = c ? c.name : '';
+  }
+  res.json({ valid: true, name, userType: row.userType });
+});
+
+// Public: submit a new password via the reset token
+app.post('/api/auth/password-reset/:token', async (req, res) => {
+  const row = db.prepare('SELECT * FROM password_reset_tokens WHERE id=?').get(req.params.token);
+  if (!row) return res.status(404).json({ error: 'Invalid or expired link' });
+  if (row.usedAt) return res.status(400).json({ error: 'This link has already been used' });
+  if (new Date(row.expiresAt) < new Date()) return res.status(400).json({ error: 'This link has expired' });
+  const password = req.body?.password;
+  const strength = validatePasswordStrength(password);
+  if (!strength.valid) return res.status(400).json({ error: strength.error });
+  const hash = await bcrypt.hash(password, 10);
+  if (row.userType === 'staff') {
+    db.prepare('UPDATE users SET passwordHash=? WHERE id=?').run(hash, row.userId);
+  } else if (row.userType === 'client') {
+    db.prepare('UPDATE clients SET passwordHash=? WHERE id=?').run(hash, row.userId);
+  } else {
+    return res.status(400).json({ error: 'Invalid token' });
+  }
+  // Mark the token used
+  db.prepare('UPDATE password_reset_tokens SET usedAt=? WHERE id=?').run(new Date().toISOString(), req.params.token);
   res.json({ ok: true });
 });
 
@@ -2950,36 +3119,38 @@ app.post('/api/time-cards/reopen', requireAdmin, (req, res) => {
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
 app.get('/api/users', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id,username,name,role,createdAt FROM users ORDER BY name').all();
+  const users = db.prepare('SELECT id,username,name,role,email,createdAt FROM users ORDER BY name').all();
   res.json(users);
 });
 
 app.post('/api/users', requireAdmin, async (req, res) => {
-  const { username, name, role, password } = req.body;
+  const { username, name, role, password, email } = req.body;
   if (!username || !name || !password) return res.status(400).json({ error: 'username, name and password required' });
-  if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) return res.status(400).json({ error: 'Password must be at least 8 characters with 1 uppercase letter and 1 number' });
+  const strength = validatePasswordStrength(password);
+  if (!strength.valid) return res.status(400).json({ error: strength.error });
   const existing = db.prepare('SELECT id FROM users WHERE LOWER(username)=LOWER(?)').get(username);
   if (existing) return res.status(400).json({ error: 'Username already exists' });
   const hash = await bcrypt.hash(password, 10);
   const id   = genId();
-  db.prepare('INSERT INTO users (id,username,name,role,passwordHash,createdAt) VALUES (?,?,?,?,?,?)')
-    .run(id, username, name, role||'technician', hash, new Date().toISOString());
-  res.json({ id, username, name, role: role||'technician', createdAt: new Date().toISOString() });
+  db.prepare('INSERT INTO users (id,username,name,role,passwordHash,email,createdAt) VALUES (?,?,?,?,?,?,?)')
+    .run(id, username, name, role||'technician', hash, email||'', new Date().toISOString());
+  res.json({ id, username, name, role: role||'technician', email: email||'', createdAt: new Date().toISOString() });
 });
 
 app.put('/api/users/:id', requireAdmin, async (req, res) => {
-  const { username, name, role, password } = req.body;
+  const { username, name, role, password, email } = req.body;
   if (!username || !name) return res.status(400).json({ error: 'username and name required' });
   const existing = db.prepare('SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND id!=?').get(username, req.params.id);
   if (existing) return res.status(400).json({ error: 'Username already exists' });
   if (password) {
-    if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) return res.status(400).json({ error: 'Password must be at least 8 characters with 1 uppercase letter and 1 number' });
+    const strength = validatePasswordStrength(password);
+    if (!strength.valid) return res.status(400).json({ error: strength.error });
     const hash = await bcrypt.hash(password, 10);
-    db.prepare('UPDATE users SET username=?,name=?,role=?,passwordHash=? WHERE id=?')
-      .run(username, name, role||'technician', hash, req.params.id);
+    db.prepare('UPDATE users SET username=?,name=?,role=?,email=?,passwordHash=? WHERE id=?')
+      .run(username, name, role||'technician', email||'', hash, req.params.id);
   } else {
-    db.prepare('UPDATE users SET username=?,name=?,role=? WHERE id=?')
-      .run(username, name, role||'technician', req.params.id);
+    db.prepare('UPDATE users SET username=?,name=?,role=?,email=? WHERE id=?')
+      .run(username, name, role||'technician', email||'', req.params.id);
   }
   // Update session if editing self
   if (req.session.user.id === req.params.id) {
@@ -3124,6 +3295,120 @@ app.post('/api/import', requireAdmin, (req, res) => {
 });
 
 // ─── ONBOARDING PUBLIC PAGE ──────────────────────────────────────────────────
+// ─── PASSWORD RESET PUBLIC PAGE ─────────────────────────────────────────────
+app.get('/reset-password', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reset Password — FieldMark</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;color:#1a1a2e;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;max-width:440px;width:100%;overflow:hidden;}
+.hd{background:#1a1d27;padding:20px 28px;display:flex;align-items:center;gap:12px;}
+.hd-icon{width:36px;height:36px;background:rgba(59,130,246,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;}
+.hd-name{font-size:20px;font-weight:700;color:#3b82f6;letter-spacing:-.5px;}
+.hd-sub{font-size:11px;color:#94a3b8;}
+.body{padding:28px 32px;}
+.body h2{font-size:20px;margin-bottom:6px;}
+.body p.sub{color:#64748b;font-size:13px;margin-bottom:20px;}
+.fg{margin-bottom:14px;}
+.flbl{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px;}
+.fc{width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;color:#1a1a2e;background:#fff;}
+.fc:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+.rules{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin:12px 0;font-size:12px;color:#475569;}
+.rules ul{list-style:none;padding:0;}
+.rules li{padding:2px 0;display:flex;align-items:center;gap:6px;}
+.rules li.ok{color:#22c55e;}
+.rules li.ok::before{content:"✓";font-weight:700;}
+.rules li:not(.ok)::before{content:"○";color:#94a3b8;}
+.btn{display:block;width:100%;padding:12px 28px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;background:#3b82f6;color:#fff;margin-top:8px;}
+.btn:hover{background:#2563eb;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.done{text-align:center;padding:40px 20px;}
+.done h2{font-size:22px;margin-bottom:8px;color:#22c55e;}
+.err{text-align:center;padding:40px 20px;color:#ef4444;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;display:none;}
+</style></head><body>
+<div class="card">
+  <div class="hd">
+    <div class="hd-icon"><svg width="20" height="20" fill="none" stroke="#3b82f6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></div>
+    <div><div class="hd-name">FieldMark</div><div class="hd-sub">Reset your password</div></div>
+  </div>
+  <div class="body" id="main">
+    <div style="text-align:center;padding:40px 0;color:#94a3b8;">Loading...</div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+  var token = new URLSearchParams(location.search).get('token');
+  var main = document.getElementById('main');
+  if(!token){main.innerHTML='<div class="err"><h2>Invalid Link</h2><p>No reset token found in the URL.</p></div>';return;}
+
+  fetch('/api/auth/password-reset/'+encodeURIComponent(token)).then(function(r){return r.json().then(function(d){return{status:r.status,data:d};});}).then(function(resp){
+    if(resp.status !== 200 || !resp.data.valid){
+      main.innerHTML='<div class="err"><h2>Link Unavailable</h2><p>'+esc(resp.data.error || 'This link is no longer valid.')+'</p></div>';
+      return;
+    }
+    renderForm(resp.data.name || 'there');
+  }).catch(function(){main.innerHTML='<div class="err"><h2>Error</h2><p>Could not verify this link.</p></div>';});
+
+  function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+
+  function renderForm(name){
+    main.innerHTML = ''+
+      '<h2>Set a new password</h2>'+
+      '<p class="sub">Hi '+esc(name)+' — choose a password below. This link will expire in 1 hour.</p>'+
+      '<div class="fg"><label class="flbl">New password</label><input class="fc" type="password" id="pw1" autocomplete="new-password"></div>'+
+      '<div class="fg"><label class="flbl">Confirm new password</label><input class="fc" type="password" id="pw2" autocomplete="new-password"></div>'+
+      '<div class="rules" id="rules">'+
+        '<div style="font-weight:700;margin-bottom:6px;">Requirements</div>'+
+        '<ul>'+
+          '<li id="r-len">At least 8 characters</li>'+
+          '<li id="r-upper">One uppercase letter (A–Z)</li>'+
+          '<li id="r-num">One number (0–9)</li>'+
+          '<li id="r-match">Passwords match</li>'+
+        '</ul>'+
+      '</div>'+
+      '<button class="btn" id="submit-btn" type="button" disabled>Set Password</button>';
+
+    var pw1 = document.getElementById('pw1');
+    var pw2 = document.getElementById('pw2');
+    var btn = document.getElementById('submit-btn');
+    function refresh(){
+      var v = pw1.value, v2 = pw2.value;
+      setOk('r-len', v.length >= 8);
+      setOk('r-upper', /[A-Z]/.test(v));
+      setOk('r-num', /[0-9]/.test(v));
+      setOk('r-match', v.length > 0 && v === v2);
+      btn.disabled = !(v.length >= 8 && /[A-Z]/.test(v) && /[0-9]/.test(v) && v === v2);
+    }
+    function setOk(id, ok){ var el=document.getElementById(id); if(el) el.className = ok ? 'ok' : ''; }
+    pw1.oninput = refresh;
+    pw2.oninput = refresh;
+    btn.onclick = function(){
+      btn.disabled = true; btn.textContent = 'Saving...';
+      fetch('/api/auth/password-reset/'+encodeURIComponent(token), {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ password: pw1.value })
+      }).then(function(r){return r.json().then(function(d){return{status:r.status,data:d};});}).then(function(resp){
+        if(resp.status !== 200){
+          showToast(resp.data.error || 'Could not set password');
+          btn.disabled = false; btn.textContent = 'Set Password';
+          return;
+        }
+        main.innerHTML = '<div class="done"><div style="font-size:48px;margin-bottom:12px;">✓</div><h2>Password updated</h2><p style="color:#64748b;margin-top:8px;">You can now sign in with your new password.</p><a href="/" style="display:inline-block;margin-top:20px;background:#3b82f6;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-weight:600;font-size:14px;">Sign In</a></div>';
+      }).catch(function(){ showToast('Network error — please try again'); btn.disabled = false; btn.textContent = 'Set Password'; });
+    };
+  }
+
+  function showToast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(function(){t.style.display='none';},4000); }
+})();
+<\/script>
+</body></html>`);
+});
+
 app.get('/onboard', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">

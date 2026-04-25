@@ -409,6 +409,23 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
   .content{padding:16px;}
   #mob-overlay.open{display:block;}
 }
+
+/* Print styles — used for the P&L "Print / Save PDF" action */
+@media print {
+  body { background:#fff !important; color:#000 !important; }
+  #sidebar, .topbar, .breadcrumb, .pnl-actions, .mobile-btn, #toasts, .nav-item { display:none !important; }
+  #main { margin-left:0 !important; }
+  .content { padding:0 !important; max-width:100% !important; }
+  .view { padding:0 !important; }
+  .ph { border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:16px; }
+  .card { border:1px solid #999 !important; box-shadow:none !important; page-break-inside:avoid; }
+  .card-hd { background:#f4f4f4 !important; }
+  .badge { border:1px solid #ccc !important; }
+  table { border-collapse:collapse !important; width:100%; }
+  table th, table td { border:1px solid #ccc !important; padding:6px !important; }
+  .btn { display:none !important; }
+  @page { margin: 12mm 10mm; }
+}
 </style>
 </head>
 <body>
@@ -539,6 +556,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
     <button id="nav-invoices" class="nav-item" onclick="nav('invoices',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
       Invoices
+    </button>
+    <button id="nav-profit-loss" class="nav-item" onclick="nav('profit-loss',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Profit &amp; Loss
     </button>
     <button id="nav-quotes" class="nav-item" onclick="nav('quotes',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -1114,6 +1135,22 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       </div>
       <div id="tc-toolbar" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;"></div>
       <div id="tc-content"></div>
+    </div>
+
+    <!-- PROFIT & LOSS (admin only) -->
+    <div id="view-profit-loss" class="view">
+      <div class="ph">
+        <div><div class="ph-title">Profit &amp; Loss</div><div class="ph-sub" id="pnl-period-label">Loading...</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" class="pnl-actions">
+          <button class="btn btn-ghost btn-sm" onclick="pnlShiftMonth(-1)">◀ Prev</button>
+          <button class="btn btn-ghost btn-sm" onclick="pnlShiftMonth(1)">Next ▶</button>
+          <button class="btn btn-ghost btn-sm" onclick="pnlSetThisMonth()">This Month</button>
+          <button class="btn btn-ghost btn-sm" onclick="pnlSetLastMonth()">Last Month</button>
+          <button class="btn btn-ghost btn-sm" onclick="pnlSetYTD()">YTD</button>
+          <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Print / Save PDF</button>
+        </div>
+      </div>
+      <div id="pnl-content"></div>
     </div>
 
     <!-- INVOICES (admin only) -->
@@ -2570,6 +2607,8 @@ function applyRoleUI() {
   document.getElementById('nav-work-orders').style.display = '';
   document.getElementById('nav-time-cards').style.display = '';
   document.getElementById('nav-invoices').style.display = admin ? '' : 'none';
+  var pnlNav = document.getElementById('nav-profit-loss');
+  if (pnlNav) pnlNav.style.display = admin ? '' : 'none';
   document.getElementById('nav-quotes').style.display = admin ? '' : 'none';
   document.getElementById('nav-service-requests').style.display = admin ? '' : 'none';
   document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
@@ -2774,6 +2813,11 @@ function renderView(name) {
       bc.innerHTML = '<span class="cur">Invoices</span>';
       setNav('invoices');
       renderInvoicesView();
+      break;
+    case 'profit-loss':
+      bc.innerHTML = '<span class="cur">Profit &amp; Loss</span>';
+      setNav('profit-loss');
+      renderProfitLoss();
       break;
     case 'invoice-detail':
       bc.innerHTML = '<span onclick="nav(\'invoices\')">Invoices</span><span class="bc-sep">/</span><span class="cur">Invoice Detail</span>';
@@ -3016,6 +3060,194 @@ function renderPortalReports(search) {
 }
 
 // ─── INVOICES ────────────────────────────────────────────────────────────────
+// ─── PROFIT & LOSS ────────────────────────────────────────────────────────
+function pnlMoney(n) { return '$' + (Math.round((parseFloat(n)||0) * 100) / 100).toFixed(2); }
+function pnlPct(n) { return (n === null || n === undefined || isNaN(n)) ? '—' : (n >= 0 ? '+' : '') + n.toFixed(1) + '%'; }
+function pnlIsoStartOfMonth(year, monthIdx) {
+  return new Date(Date.UTC(year, monthIdx, 1)).toISOString();
+}
+
+// app.pnlPeriod = { year, month } where month is 0-based; null = full YTD
+if (typeof app !== 'undefined') app.pnlPeriod = app.pnlPeriod || null;
+
+function pnlCurrentMonthRange() {
+  var now = new Date();
+  return {
+    from: pnlIsoStartOfMonth(now.getFullYear(), now.getMonth()),
+    to:   pnlIsoStartOfMonth(now.getFullYear(), now.getMonth() + 1),
+    year: now.getFullYear(), month: now.getMonth(),
+  };
+}
+
+function pnlActiveRange() {
+  if (app.pnlPeriod && app.pnlPeriod.kind === 'ytd') {
+    var n = new Date();
+    return {
+      from: pnlIsoStartOfMonth(n.getFullYear(), 0),
+      to:   pnlIsoStartOfMonth(n.getFullYear(), n.getMonth() + 1),
+      kind: 'ytd',
+      year: n.getFullYear(),
+    };
+  }
+  if (app.pnlPeriod && typeof app.pnlPeriod.year === 'number') {
+    var y = app.pnlPeriod.year, m = app.pnlPeriod.month;
+    return { from: pnlIsoStartOfMonth(y, m), to: pnlIsoStartOfMonth(y, m + 1), year: y, month: m };
+  }
+  return pnlCurrentMonthRange();
+}
+
+function pnlShiftMonth(delta) {
+  var r = pnlActiveRange();
+  if (r.kind === 'ytd') { r = pnlCurrentMonthRange(); }
+  var d = new Date(Date.UTC(r.year, r.month + delta, 1));
+  app.pnlPeriod = { year: d.getUTCFullYear(), month: d.getUTCMonth() };
+  renderProfitLoss();
+}
+
+function pnlSetThisMonth() { app.pnlPeriod = null; renderProfitLoss(); }
+function pnlSetLastMonth() {
+  var n = new Date();
+  var d = new Date(Date.UTC(n.getFullYear(), n.getMonth() - 1, 1));
+  app.pnlPeriod = { year: d.getUTCFullYear(), month: d.getUTCMonth() };
+  renderProfitLoss();
+}
+function pnlSetYTD() { app.pnlPeriod = { kind: 'ytd' }; renderProfitLoss(); }
+
+async function renderProfitLoss() {
+  if (!isAdmin()) { showToast('Access restricted to administrators', 'error'); nav('dashboard'); return; }
+  var range = pnlActiveRange();
+  var labelEl = document.getElementById('pnl-period-label');
+  var content = document.getElementById('pnl-content');
+  if (labelEl) labelEl.textContent = 'Loading...';
+  if (content) content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);">Crunching numbers...</div>';
+  try {
+    var data = await apiGet('/api/reports/profit-loss?from=' + encodeURIComponent(range.from) + '&to=' + encodeURIComponent(range.to));
+    if (labelEl) labelEl.textContent = data.period.label;
+    content.innerHTML = renderPnlHtml(data);
+  } catch(err) {
+    if (labelEl) labelEl.textContent = 'Error';
+    content.innerHTML = '<div class="card"><div class="card-body" style="color:var(--red);">' + esc(err.message) + '</div></div>';
+  }
+}
+
+function renderPnlHtml(d) {
+  var marginCls = d.marginPct >= 30 ? 'bg' : d.marginPct >= 10 ? 'ba' : 'br';
+  var marginIco = d.marginPct >= 30 ? '🟢' : d.marginPct >= 10 ? '🟡' : '🔴';
+  function deltaIcon(v) {
+    if (v === null || v === undefined || isNaN(v)) return '';
+    if (Math.abs(v) < 0.5) return '<span style="color:var(--muted);font-size:11px;">▬ flat</span>';
+    return v > 0
+      ? '<span style="color:var(--green);font-size:11px;">▲ ' + pnlPct(v) + '</span>'
+      : '<span style="color:var(--red);font-size:11px;">▼ ' + pnlPct(v) + '</span>';
+  }
+  var prevLbl = (d.prevPeriod && d.prevPeriod.prevLabel) ? ' vs ' + esc(d.prevPeriod.prevLabel) : '';
+
+  var h = '';
+
+  // Summary cards
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:20px;">';
+  h += '<div class="card"><div class="card-body" style="text-align:center;padding:24px 16px;">' +
+    '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Revenue</div>' +
+    '<div style="font-size:28px;font-weight:700;margin:6px 0;color:var(--green);">' + pnlMoney(d.revenue.total) + '</div>' +
+    '<div style="font-size:12px;color:var(--muted);">' + d.revenue.count + ' invoice' + (d.revenue.count===1?'':'s') + ' (excl. tax)</div>' +
+    '<div style="margin-top:6px;">' + deltaIcon(d.prevPeriod?.revenueDelta) + (d.prevPeriod?.revenueDelta!==null?'<span style="color:var(--muted);font-size:11px;">' + esc(prevLbl) + '</span>':'') + '</div>' +
+    '</div></div>';
+  h += '<div class="card"><div class="card-body" style="text-align:center;padding:24px 16px;">' +
+    '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Total Cost</div>' +
+    '<div style="font-size:28px;font-weight:700;margin:6px 0;color:var(--red);">' + pnlMoney(d.costs.total) + '</div>' +
+    '<div style="font-size:12px;color:var(--muted);">Labor + Parts + Subs − Returns</div>' +
+    '<div style="margin-top:6px;">' + deltaIcon(d.prevPeriod?.costDelta) + '</div>' +
+    '</div></div>';
+  h += '<div class="card"><div class="card-body" style="text-align:center;padding:24px 16px;">' +
+    '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Gross Profit</div>' +
+    '<div style="font-size:28px;font-weight:700;margin:6px 0;color:' + (d.grossProfit >= 0 ? 'var(--green)' : 'var(--red)') + ';">' + pnlMoney(d.grossProfit) + '</div>' +
+    '<div style="font-size:12px;color:var(--muted);">Revenue − Cost</div>' +
+    '<div style="margin-top:6px;">' + deltaIcon(d.prevPeriod?.profitDelta) + '</div>' +
+    '</div></div>';
+  h += '<div class="card"><div class="card-body" style="text-align:center;padding:24px 16px;">' +
+    '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Margin</div>' +
+    '<div style="font-size:28px;font-weight:700;margin:6px 0;">' + marginIco + ' ' + d.marginPct.toFixed(1) + '%</div>' +
+    '<div><span class="badge ' + marginCls + '">' + (d.marginPct >= 30 ? 'Healthy' : d.marginPct >= 10 ? 'Tight' : d.marginPct >= 0 ? 'Critical' : 'Loss') + '</span></div>' +
+    '</div></div>';
+  h += '</div>';
+
+  // Revenue card
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Revenue — ' + esc(d.period.label) + '</span><span class="badge bgr">' + d.revenue.count + '</span></div>';
+  if (!d.revenue.count) {
+    h += '<div class="card-body"><div class="empty"><div class="empty-desc">No invoices in this period.</div></div></div>';
+  } else {
+    h += '<div class="tbl-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Client</th><th>Status</th><th style="text-align:right;">Subtotal</th><th style="text-align:right;">Tax</th><th style="text-align:right;">Total</th></tr></thead><tbody>';
+    d.revenue.invoices.forEach(function(i) {
+      var stCls = i.status === 'Paid' ? 'bg' : i.status === 'Sent' ? 'bb' : 'bgr';
+      h += '<tr>' +
+        '<td><strong>' + esc(i.invoiceNumber) + '</strong></td>' +
+        '<td>' + esc(fmtDate(i.createdAt)) + '</td>' +
+        '<td>' + esc(i.clientName) + '</td>' +
+        '<td><span class="badge ' + stCls + '">' + esc(i.status) + '</span></td>' +
+        '<td style="text-align:right;">' + pnlMoney(i.subtotal) + '</td>' +
+        '<td style="text-align:right;color:var(--muted);">' + pnlMoney(i.taxAmount) + '</td>' +
+        '<td style="text-align:right;">' + pnlMoney(i.total) + '</td>' +
+        '</tr>';
+    });
+    h += '<tr><td colspan="4" style="text-align:right;font-weight:700;padding-top:10px;">Revenue (subtotal, excluding tax):</td><td style="text-align:right;font-weight:700;color:var(--green);">' + pnlMoney(d.revenue.total) + '</td><td colspan="2"></td></tr>';
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+
+  // Cost — Labor
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Labor Cost</span><span class="badge bgr">' + pnlMoney(d.costs.labor.total) + '</span></div>';
+  var trades = Object.keys(d.costs.labor.byTrade);
+  if (!trades.length) {
+    h += '<div class="card-body"><div class="empty"><div class="empty-desc">No labor logged on work orders in this period.</div></div></div>';
+  } else {
+    h += '<div class="tbl-wrap"><table><thead><tr><th>Trade</th><th style="text-align:right;">Hours</th><th style="text-align:right;">Burdened Cost</th></tr></thead><tbody>';
+    trades.sort().forEach(function(k) {
+      var t = d.costs.labor.byTrade[k];
+      var warn = d.costs.labor.missingBurdenWarn.indexOf(k) >= 0;
+      var label = ({ plumber:'Plumber', hvacb:'HVAC B Gas Fitter', hvaca:'HVAC A Gas Fitter', electrician:'Electrician', apprentice:'Apprentice' })[k] || k;
+      h += '<tr' + (warn ? ' style="background:rgba(245,158,11,.08);"' : '') + '>' +
+        '<td><strong>' + esc(label) + '</strong>' + (warn ? ' <span style="font-size:11px;color:#b45309;">⚠ no burden rate set — counted as $0</span>' : '') + '</td>' +
+        '<td style="text-align:right;">' + t.hours.toFixed(2) + '</td>' +
+        '<td style="text-align:right;">' + pnlMoney(t.cost) + '</td>' +
+        '</tr>';
+    });
+    h += '<tr><td colspan="2" style="text-align:right;font-weight:700;padding-top:10px;">Total labor cost:</td><td style="text-align:right;font-weight:700;color:var(--red);">' + pnlMoney(d.costs.labor.total) + '</td></tr>';
+    h += '</tbody></table></div>';
+    if (d.costs.labor.missingBurdenWarn.length) {
+      h += '<div style="padding:10px 16px;font-size:12px;color:#b45309;background:rgba(245,158,11,.08);border-top:1px solid var(--border);">⚠ One or more trades have no burden rate configured. Set rates in <strong>Settings → Labor Burden</strong> for accurate cost reporting.</div>';
+    }
+  }
+  h += '</div>';
+
+  // Cost — Parts & Subs
+  function lineCard(title, total, lines) {
+    var hh = '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">' + esc(title) + '</span><span class="badge bgr">' + pnlMoney(total) + '</span></div>';
+    if (!lines.length) {
+      hh += '<div class="card-body"><div class="empty"><div class="empty-desc">None in this period.</div></div></div>';
+    } else {
+      hh += '<div class="tbl-wrap"><table><thead><tr><th>PO #</th><th>Vendor</th><th>Work Order</th><th style="text-align:right;">Cost</th></tr></thead><tbody>';
+      lines.forEach(function(l) {
+        hh += '<tr><td><strong>' + esc(l.poNumber) + '</strong></td><td>' + esc(l.vendorName || '—') + '</td><td>' + esc(l.woNumber || '—') + '</td><td style="text-align:right;">' + pnlMoney(l.total) + '</td></tr>';
+      });
+      hh += '</tbody></table></div>';
+    }
+    hh += '</div>';
+    return hh;
+  }
+  h += lineCard('Parts (Confirmed POs)', d.costs.parts.total, d.costs.parts.lines);
+  h += lineCard('Subcontractor (Confirmed POs)', d.costs.subs.total, d.costs.subs.lines);
+  if (d.costs.returns.lines.length) h += lineCard('Returns (credit)', -d.costs.returns.total, d.costs.returns.lines);
+
+  // Bottom-line summary box
+  h += '<div class="card" style="margin-top:16px;border:2px solid var(--accent);"><div class="card-body" style="text-align:right;">' +
+    '<div style="font-size:13px;">Revenue: <strong>' + pnlMoney(d.revenue.total) + '</strong></div>' +
+    '<div style="font-size:13px;">Total Cost: <strong>' + pnlMoney(d.costs.total) + '</strong></div>' +
+    '<div style="font-size:22px;font-weight:700;margin-top:10px;padding-top:10px;border-top:2px solid var(--text);color:' + (d.grossProfit >= 0 ? 'var(--green)' : 'var(--red)') + ';">Gross Profit: ' + pnlMoney(d.grossProfit) + ' (' + d.marginPct.toFixed(1) + '%)</div>' +
+    '</div></div>';
+
+  return h;
+}
+
 function renderInvoicesView() {
   var list = db.invoices || [];
   var search = (document.getElementById('inv-filter-search')?.value || '').toLowerCase();

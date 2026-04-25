@@ -3489,6 +3489,181 @@ app.post('/api/labor-burden', requireAdmin, (req, res) => {
   res.json(burden);
 });
 
+// ─── PROFIT & LOSS ────────────────────────────────────────────────────────────
+
+// Calculate a Profit & Loss summary for any date range.
+// Accrual basis (revenue counted by createdAt, not paidAt).
+// Tax excluded (uses invoice.subtotal not invoice.total).
+function calcProfitLoss(startISO, endISO) {
+  // Format the human-readable label (e.g. "April 2026" if range is one calendar month)
+  const startD = new Date(startISO);
+  const endD = new Date(endISO);
+  const monthFmt = { year: 'numeric', month: 'long' };
+  const dayFmt = { year: 'numeric', month: 'short', day: 'numeric' };
+  const isFullMonth = startD.getUTCDate() === 1
+    && endD.getUTCDate() === 1
+    && (endD.getUTCMonth() === (startD.getUTCMonth() + 1) % 12);
+  const label = isFullMonth
+    ? startD.toLocaleDateString(undefined, monthFmt)
+    : startD.toLocaleDateString(undefined, dayFmt) + ' – ' + new Date(endD.getTime() - 86400000).toLocaleDateString(undefined, dayFmt);
+
+  // ── Revenue ──
+  const invoiceRows = db.prepare(`
+    SELECT inv.id, inv.invoiceNumber, inv.createdAt, inv.status, inv.subtotal, inv.total, inv.taxAmount, inv.clientId
+    FROM invoices inv
+    WHERE inv.createdAt >= ? AND inv.createdAt < ?
+      AND inv.status NOT IN ('Draft', 'Warranty')
+    ORDER BY inv.createdAt ASC
+  `).all(startISO, endISO);
+
+  const clientNameById = {};
+  if (invoiceRows.length) {
+    const clientIds = [...new Set(invoiceRows.map(i => i.clientId))];
+    const ph = clientIds.map(() => '?').join(',');
+    const clients = db.prepare(`SELECT id, name FROM clients WHERE id IN (${ph})`).all(...clientIds);
+    clients.forEach(c => { clientNameById[c.id] = c.name; });
+  }
+
+  const invoices = invoiceRows.map(i => ({
+    id: i.id,
+    invoiceNumber: i.invoiceNumber,
+    createdAt: i.createdAt,
+    status: i.status,
+    clientName: clientNameById[i.clientId] || '(unknown)',
+    subtotal: i.subtotal || 0,
+    total: i.total || 0,
+    taxAmount: i.taxAmount || 0,
+  }));
+  const revenueTotal = invoices.reduce((s, i) => s + (i.subtotal || 0), 0);
+
+  // ── Costs ──
+  // Labor burden rates
+  const burdenRow = db.prepare("SELECT value FROM settings WHERE key='laborBurden'").get();
+  const burden = burdenRow ? (function() { try { return JSON.parse(burdenRow.value); } catch(e) { return {}; } })() : {};
+
+  // Aggregate labor by trade from work orders created in the period
+  const woRows = db.prepare('SELECT id, woNumber, laborEntries FROM work_orders WHERE createdAt >= ? AND createdAt < ?').all(startISO, endISO);
+  const byTrade = {};
+  const missingBurdenWarn = new Set();
+  woRows.forEach(wo => {
+    let entries = [];
+    try { entries = JSON.parse(wo.laborEntries || '[]'); } catch(e) { entries = []; }
+    if (!Array.isArray(entries)) entries = [];
+    entries.forEach(e => {
+      const trade = (e.trade || '').toLowerCase();
+      const hours = parseFloat(e.hours) || 0;
+      if (!trade || hours <= 0) return;
+      // Map trade strings used in the app to burden keys
+      const key = trade === 'plumber' ? 'plumber'
+        : trade === 'hvacb' || trade === 'hvac b gas fitter' ? 'hvacb'
+        : trade === 'hvaca' || trade === 'hvac a gas fitter' ? 'hvaca'
+        : trade === 'electrician' ? 'electrician'
+        : trade === 'apprentice' ? 'apprentice'
+        : trade;
+      if (!byTrade[key]) byTrade[key] = { hours: 0, cost: 0 };
+      const rate = parseFloat(burden[key]) || 0;
+      if (rate <= 0) missingBurdenWarn.add(key);
+      byTrade[key].hours += hours;
+      byTrade[key].cost += hours * rate;
+    });
+  });
+  const laborTotal = Object.values(byTrade).reduce((s, t) => s + t.cost, 0);
+
+  // Purchase orders linked to WOs in the period
+  const poRows = db.prepare(`
+    SELECT po.id, po.poNumber, po.type, po.total, po.subcontractorId, po.wholesalerId, wo.woNumber
+    FROM purchase_orders po
+    LEFT JOIN work_orders wo ON po.woId = wo.id
+    WHERE wo.createdAt >= ? AND wo.createdAt < ?
+      AND po.status = 'Confirmed'
+  `).all(startISO, endISO);
+
+  const subNameById = {};
+  const whNameById = {};
+  if (poRows.length) {
+    const sIds = [...new Set(poRows.map(p => p.subcontractorId).filter(Boolean))];
+    if (sIds.length) {
+      const ph = sIds.map(() => '?').join(',');
+      db.prepare(`SELECT id, name FROM subcontractors WHERE id IN (${ph})`).all(...sIds).forEach(s => { subNameById[s.id] = s.name; });
+    }
+    const wIds = [...new Set(poRows.map(p => p.wholesalerId).filter(Boolean))];
+    if (wIds.length) {
+      const ph = wIds.map(() => '?').join(',');
+      db.prepare(`SELECT id, name FROM wholesalers WHERE id IN (${ph})`).all(...wIds).forEach(w => { whNameById[w.id] = w.name; });
+    }
+  }
+
+  const partsLines = [];
+  const subsLines = [];
+  const returnsLines = [];
+  poRows.forEach(p => {
+    const line = {
+      poNumber: p.poNumber,
+      woNumber: p.woNumber || '',
+      vendorName: subNameById[p.subcontractorId] || whNameById[p.wholesalerId] || '',
+      total: parseFloat(p.total) || 0,
+    };
+    if (p.type === 'Subcontractor') subsLines.push(line);
+    else if (p.type === 'Return') returnsLines.push(line);
+    else partsLines.push(line);
+  });
+
+  const partsTotal = partsLines.reduce((s, l) => s + l.total, 0);
+  const subsTotal = subsLines.reduce((s, l) => s + l.total, 0);
+  const returnsTotal = returnsLines.reduce((s, l) => s + l.total, 0);
+  const costTotal = laborTotal + partsTotal + subsTotal - returnsTotal;
+
+  const grossProfit = revenueTotal - costTotal;
+  const marginPct = revenueTotal > 0 ? (grossProfit / revenueTotal * 100) : 0;
+
+  return {
+    period: { from: startISO, to: endISO, label },
+    revenue: { total: revenueTotal, count: invoices.length, invoices },
+    costs: {
+      labor: { total: laborTotal, byTrade, missingBurdenWarn: [...missingBurdenWarn] },
+      parts: { total: partsTotal, lines: partsLines },
+      subs:  { total: subsTotal, lines: subsLines },
+      returns: { total: returnsTotal, lines: returnsLines },
+      total: costTotal,
+    },
+    grossProfit,
+    marginPct,
+  };
+}
+
+// Helper: shift a date range backward by its length to compute the previous period
+function previousPeriodRange(startISO, endISO) {
+  const start = new Date(startISO).getTime();
+  const end = new Date(endISO).getTime();
+  const span = end - start;
+  return {
+    from: new Date(start - span).toISOString(),
+    to: new Date(end - span).toISOString(),
+  };
+}
+
+app.get('/api/reports/profit-loss', requireAdmin, (req, res) => {
+  const from = req.query.from;
+  const to = req.query.to;
+  if (!from || !to) return res.status(400).json({ error: 'from and to query params required (ISO dates)' });
+  try {
+    const current = calcProfitLoss(from, to);
+    const prev = previousPeriodRange(from, to);
+    const prevCalc = calcProfitLoss(prev.from, prev.to);
+    const pct = (a, b) => b === 0 ? null : ((a - b) / Math.abs(b) * 100);
+    current.prevPeriod = {
+      revenueDelta: pct(current.revenue.total, prevCalc.revenue.total),
+      costDelta:    pct(current.costs.total,   prevCalc.costs.total),
+      profitDelta:  pct(current.grossProfit,   prevCalc.grossProfit),
+      prevLabel:    prevCalc.period.label,
+    };
+    res.json(current);
+  } catch(err) {
+    console.error('P&L calc failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── TEST EMAIL ───────────────────────────────────────────────────────────────
 app.post('/api/email/test', requireAdmin, async (req, res) => {
   const cfg = getEmailSettings();

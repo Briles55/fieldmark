@@ -33,6 +33,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-item:hover{background:var(--surface2);color:var(--text);}
 .nav-item.active{background:rgba(59,130,246,.15);color:var(--accent);border-right:2px solid var(--accent);}
 .nav-icon{width:17px;height:17px;flex-shrink:0;}
+/* P&L invoice table — clickable rows + tighter typography */
+.pnl-inv-table tr.clickable:hover { background: rgba(59,130,246,.06); }
+.pnl-inv-table th { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
+.pnl-inv-table td { font-size:13px; vertical-align:top; }
+
 /* Collapsible nav groups (admin only) */
 .nav-group{margin-top:8px;}
 .nav-group-header{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 4px;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;cursor:pointer;user-select:none;border:none;background:none;width:100%;text-align:left;font-family:inherit;transition:color .15s;}
@@ -3319,26 +3324,59 @@ function renderPnlHtml(d) {
     '</div></div>';
   h += '</div>';
 
-  // Revenue card
-  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Revenue — ' + esc(d.period.label) + '</span><span class="badge bgr">' + d.revenue.count + '</span></div>';
+  // Revenue card — detailed clickable invoice list
+  h += '<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Invoices — ' + esc(d.period.label) + '</span><span class="badge bgr">' + d.revenue.count + '</span></div>';
   if (!d.revenue.count) {
     h += '<div class="card-body"><div class="empty"><div class="empty-desc">No invoices in this period.</div></div></div>';
   } else {
-    h += '<div class="tbl-wrap"><table><thead><tr><th>Invoice #</th><th>Date</th><th>Client</th><th>Status</th><th style="text-align:right;">Subtotal</th><th style="text-align:right;">Tax</th><th style="text-align:right;">Total</th></tr></thead><tbody>';
+    h += '<div class="tbl-wrap"><table class="pnl-inv-table"><thead><tr>' +
+      '<th>Invoice #</th>' +
+      '<th>Date</th>' +
+      '<th>Client / Location</th>' +
+      '<th>Work Order</th>' +
+      '<th>Status</th>' +
+      '<th style="text-align:right;">Items</th>' +
+      '<th style="text-align:right;">Subtotal</th>' +
+      '<th style="text-align:right;">Tax</th>' +
+      '<th style="text-align:right;">Total</th>' +
+      '<th>Paid</th>' +
+      '</tr></thead><tbody>';
     d.revenue.invoices.forEach(function(i) {
       var stCls = i.status === 'Paid' ? 'bg' : i.status === 'Sent' ? 'bb' : 'bgr';
-      h += '<tr>' +
+      var paidCell = '';
+      if (i.status === 'Paid' && i.paymentDate) {
+        var paymentLine = pnlMoney(i.paymentAmount || i.total);
+        if (i.paymentMethod) paymentLine += ' <span style="color:var(--muted);font-size:11px;">(' + esc(i.paymentMethod) + ')</span>';
+        paidCell = paymentLine + '<br><span style="color:var(--muted);font-size:11px;">' + esc(fmtDate(i.paymentDate)) + '</span>';
+      } else if (i.dueDate) {
+        var overdue = new Date(i.dueDate) < new Date() && i.status !== 'Paid';
+        paidCell = '<span style="color:' + (overdue ? 'var(--red)' : 'var(--muted)') + ';font-size:11px;">' + (overdue ? 'Overdue ' : 'Due ') + esc(fmtDate(i.dueDate)) + '</span>';
+      } else {
+        paidCell = '<span style="color:var(--muted);font-size:11px;">—</span>';
+      }
+      var clientLine = '<strong>' + esc(i.clientName) + '</strong>';
+      if (i.locationName) clientLine += '<br><span style="color:var(--muted);font-size:11px;">' + esc(i.locationName) + '</span>';
+      var woLine = i.woNumber
+        ? '<span style="font-size:12px;font-weight:600;color:var(--accent);">' + esc(i.woNumber) + '</span>' +
+          (i.woDescription ? '<br><span style="color:var(--muted);font-size:11px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;max-width:240px;">' + esc(i.woDescription) + '</span>' : '')
+        : '<span style="color:var(--muted);font-size:11px;">—</span>';
+
+      h += '<tr class="clickable" style="cursor:pointer;" onclick="openInvoiceDetail(\'' + esc(i.id) + '\')">' +
         '<td><strong>' + esc(i.invoiceNumber) + '</strong></td>' +
-        '<td>' + esc(fmtDate(i.createdAt)) + '</td>' +
-        '<td>' + esc(i.clientName) + '</td>' +
+        '<td><span style="font-size:12px;">' + esc(fmtDate(i.createdAt)) + '</span></td>' +
+        '<td>' + clientLine + '</td>' +
+        '<td>' + woLine + '</td>' +
         '<td><span class="badge ' + stCls + '">' + esc(i.status) + '</span></td>' +
-        '<td style="text-align:right;">' + pnlMoney(i.subtotal) + '</td>' +
-        '<td style="text-align:right;color:var(--muted);">' + pnlMoney(i.taxAmount) + '</td>' +
-        '<td style="text-align:right;">' + pnlMoney(i.total) + '</td>' +
+        '<td style="text-align:right;color:var(--muted);font-size:12px;">' + i.lineItemCount + '</td>' +
+        '<td style="text-align:right;font-weight:600;">' + pnlMoney(i.subtotal) + '</td>' +
+        '<td style="text-align:right;color:var(--muted);font-size:12px;">' + pnlMoney(i.taxAmount) + '</td>' +
+        '<td style="text-align:right;font-weight:700;">' + pnlMoney(i.total) + '</td>' +
+        '<td style="font-size:12px;">' + paidCell + '</td>' +
         '</tr>';
     });
-    h += '<tr><td colspan="4" style="text-align:right;font-weight:700;padding-top:10px;">Revenue (subtotal, excluding tax):</td><td style="text-align:right;font-weight:700;color:var(--green);">' + pnlMoney(d.revenue.total) + '</td><td colspan="2"></td></tr>';
+    h += '<tr style="background:var(--bg2);"><td colspan="6" style="text-align:right;font-weight:700;padding:12px;">Revenue (subtotal, excluding tax):</td><td style="text-align:right;font-weight:700;color:var(--green);padding:12px;">' + pnlMoney(d.revenue.total) + '</td><td colspan="3"></td></tr>';
     h += '</tbody></table></div>';
+    h += '<div style="padding:8px 16px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);">💡 Click any invoice row to view the full details.</div>';
   }
   h += '</div>';
 

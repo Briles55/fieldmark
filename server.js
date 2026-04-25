@@ -3509,31 +3509,68 @@ function calcProfitLoss(startISO, endISO) {
 
   // ── Revenue ──
   const invoiceRows = db.prepare(`
-    SELECT inv.id, inv.invoiceNumber, inv.createdAt, inv.status, inv.subtotal, inv.total, inv.taxAmount, inv.clientId
+    SELECT inv.id, inv.invoiceNumber, inv.createdAt, inv.status, inv.subtotal, inv.total, inv.taxAmount,
+           inv.clientId, inv.woId, inv.lineItems, inv.dueDate, inv.sentAt, inv.paidAt,
+           inv.paymentAmount, inv.paymentMethod, inv.paymentDate, inv.paymentRef, inv.notes
     FROM invoices inv
     WHERE inv.createdAt >= ? AND inv.createdAt < ?
       AND inv.status NOT IN ('Draft', 'Warranty')
     ORDER BY inv.createdAt ASC
   `).all(startISO, endISO);
 
+  // Resolve client + work order + location info for each invoice row
   const clientNameById = {};
+  const locByWoId = {}; // woId -> { woNumber, locationId, equipmentId, description }
+  const locById = {};   // locationId -> { buildingName, address, city, state }
   if (invoiceRows.length) {
     const clientIds = [...new Set(invoiceRows.map(i => i.clientId))];
-    const ph = clientIds.map(() => '?').join(',');
-    const clients = db.prepare(`SELECT id, name FROM clients WHERE id IN (${ph})`).all(...clientIds);
-    clients.forEach(c => { clientNameById[c.id] = c.name; });
+    if (clientIds.length) {
+      const ph = clientIds.map(() => '?').join(',');
+      db.prepare(`SELECT id, name FROM clients WHERE id IN (${ph})`).all(...clientIds).forEach(c => { clientNameById[c.id] = c.name; });
+    }
+    const woIds = [...new Set(invoiceRows.map(i => i.woId).filter(Boolean))];
+    if (woIds.length) {
+      const ph2 = woIds.map(() => '?').join(',');
+      db.prepare(`SELECT id, woNumber, locationId, equipmentId, description FROM work_orders WHERE id IN (${ph2})`).all(...woIds).forEach(w => { locByWoId[w.id] = w; });
+      const locIds = [...new Set(Object.values(locByWoId).map(w => w.locationId).filter(Boolean))];
+      if (locIds.length) {
+        const ph3 = locIds.map(() => '?').join(',');
+        db.prepare(`SELECT id, buildingName, address, city, state FROM locations WHERE id IN (${ph3})`).all(...locIds).forEach(l => { locById[l.id] = l; });
+      }
+    }
   }
 
-  const invoices = invoiceRows.map(i => ({
-    id: i.id,
-    invoiceNumber: i.invoiceNumber,
-    createdAt: i.createdAt,
-    status: i.status,
-    clientName: clientNameById[i.clientId] || '(unknown)',
-    subtotal: i.subtotal || 0,
-    total: i.total || 0,
-    taxAmount: i.taxAmount || 0,
-  }));
+  const invoices = invoiceRows.map(i => {
+    let lineItems = [];
+    try { lineItems = JSON.parse(i.lineItems || '[]'); } catch(e) { lineItems = []; }
+    if (!Array.isArray(lineItems)) lineItems = [];
+    const wo = i.woId ? locByWoId[i.woId] : null;
+    const loc = wo ? locById[wo.locationId] : null;
+    return {
+      id: i.id,
+      invoiceNumber: i.invoiceNumber,
+      createdAt: i.createdAt,
+      status: i.status,
+      clientId: i.clientId,
+      clientName: clientNameById[i.clientId] || '(unknown)',
+      subtotal: i.subtotal || 0,
+      total: i.total || 0,
+      taxAmount: i.taxAmount || 0,
+      woId: i.woId || '',
+      woNumber: wo ? wo.woNumber : '',
+      woDescription: wo ? wo.description : '',
+      locationName: loc ? loc.buildingName : '',
+      lineItemCount: lineItems.length,
+      dueDate: i.dueDate || '',
+      sentAt: i.sentAt || '',
+      paidAt: i.paidAt || '',
+      paymentAmount: i.paymentAmount || 0,
+      paymentMethod: i.paymentMethod || '',
+      paymentDate: i.paymentDate || '',
+      paymentRef: i.paymentRef || '',
+      notes: i.notes || '',
+    };
+  });
   const revenueTotal = invoices.reduce((s, i) => s + (i.subtotal || 0), 0);
 
   // ── Costs ──

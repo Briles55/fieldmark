@@ -764,8 +764,52 @@ function getSmtpConfig(emailAddr) {
 // Otherwise, it returns a real nodemailer SMTP transport.
 function createMailTransport(cfgOverride) {
   const cfg = cfgOverride || getEmailSettings();
-  const useSes = (cfg.provider === 'ses') || (cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
+  const usePostmark = (cfg.provider === 'postmark') || (cfg.postmarkToken && cfg.postmarkFromEmail && !cfg.provider);
+  const useSes = (cfg.provider === 'ses') || (cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail && !cfg.provider);
 
+  // Postmark — HTTPS API (works on any host, no SMTP required)
+  if (usePostmark && cfg.postmarkToken && cfg.postmarkFromEmail) {
+    return {
+      async sendMail(opts) {
+        const fromAddress = opts.from || `"${cfg.fromName || 'FieldMark'}" <${cfg.postmarkFromEmail}>`;
+        const toList = Array.isArray(opts.to) ? opts.to.join(', ') : opts.to;
+        const body = {
+          From: fromAddress,
+          To: toList,
+          Subject: opts.subject || '',
+          HtmlBody: opts.html || '',
+          MessageStream: cfg.postmarkStream || 'outbound',
+        };
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 20000);
+        try {
+          const res = await fetch('https://api.postmarkapp.com/email', {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'X-Postmark-Server-Token': cfg.postmarkToken,
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+          clearTimeout(t);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || (data && data.ErrorCode && data.ErrorCode !== 0)) {
+            const msg = (data && (data.Message || data.message)) || ('Postmark error ' + res.status);
+            throw new Error(msg);
+          }
+          return data;
+        } catch(err) {
+          clearTimeout(t);
+          if (err.name === 'AbortError') throw new Error('Postmark request timed out');
+          throw err;
+        }
+      },
+    };
+  }
+
+  // AWS SES — HTTPS API
   if (useSes && cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail) {
     const client = new SESv2Client({
       region: cfg.awsRegion || 'us-east-1',
@@ -1029,7 +1073,8 @@ async function sendLockoutEmail({ to, name }) {
   if (!cfg.enabled) return;
   const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
   const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
-  if (!hasSes && !hasSmtp) return;
+  const hasPostmark = !!(cfg.postmarkToken && cfg.postmarkFromEmail);
+  if (!hasSes && !hasSmtp && !hasPostmark) return;
   const appUrl = (cfg.appUrl || '').replace(/\/$/, '');
   const fromName = cfg.fromName || 'FieldMark';
   const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222;">
@@ -1049,7 +1094,7 @@ async function sendLockoutEmail({ to, name }) {
   try {
     const t = createMailTransport(cfg);
     await t.sendMail({
-      from: `"${fromName}" <${cfg.sesFromEmail || cfg.smtpUser}>`,
+      from: `"${fromName}" <${cfg.postmarkFromEmail || cfg.sesFromEmail || cfg.smtpUser}>`,
       to,
       subject: 'FieldMark — Your account was temporarily locked',
       html,
@@ -1437,7 +1482,8 @@ async function sendPasswordResetEmail({ to, name, token, triggeredByAdmin }) {
   if (!cfg.enabled) return { ok: false, reason: 'Email disabled' };
   const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
   const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
-  if (!hasSes && !hasSmtp) return { ok: false, reason: 'No email provider configured' };
+  const hasPostmark = !!(cfg.postmarkToken && cfg.postmarkFromEmail);
+  if (!hasSes && !hasSmtp && !hasPostmark) return { ok: false, reason: 'No email provider configured' };
   const appUrl = (cfg.appUrl || '').replace(/\/$/, '');
   if (!appUrl) return { ok: false, reason: 'App URL not configured' };
   const link = `${appUrl}/reset-password?token=${token}`;
@@ -1463,7 +1509,7 @@ async function sendPasswordResetEmail({ to, name, token, triggeredByAdmin }) {
   try {
     const transporter = createMailTransport(cfg);
     await transporter.sendMail({
-      from: `"${fromName}" <${cfg.sesFromEmail || cfg.smtpUser}>`,
+      from: `"${fromName}" <${cfg.postmarkFromEmail || cfg.sesFromEmail || cfg.smtpUser}>`,
       to,
       subject: 'FieldMark — Reset your password',
       html,
@@ -3388,13 +3434,15 @@ app.get('/api/settings', requireAdmin, (req, res) => {
   const safe = { ...cfg };
   if (safe.smtpPass) safe.smtpPass = '••••••••';
   if (safe.awsSecretKey) safe.awsSecretKey = '••••••••';
+  if (safe.postmarkToken) safe.postmarkToken = '••••••••';
   res.json(safe);
 });
 
 app.post('/api/settings', requireAdmin, (req, res) => {
   const existing = getEmailSettings();
   const { enabled, provider, smtpUser, smtpPass, fromName, appUrl,
-          awsAccessKey, awsSecretKey, awsRegion, sesFromEmail } = req.body;
+          awsAccessKey, awsSecretKey, awsRegion, sesFromEmail,
+          postmarkToken, postmarkFromEmail, postmarkStream } = req.body;
   const cfg = {
     enabled: !!enabled,
     provider: provider || existing.provider || 'smtp',
@@ -3406,6 +3454,9 @@ app.post('/api/settings', requireAdmin, (req, res) => {
     awsSecretKey: awsSecretKey && awsSecretKey !== '••••••••' ? awsSecretKey : (existing.awsSecretKey || ''),
     awsRegion:    awsRegion !== undefined ? awsRegion : (existing.awsRegion || 'us-east-1'),
     sesFromEmail: sesFromEmail !== undefined ? sesFromEmail : (existing.sesFromEmail || ''),
+    postmarkToken: postmarkToken && postmarkToken !== '••••••••' ? postmarkToken : (existing.postmarkToken || ''),
+    postmarkFromEmail: postmarkFromEmail !== undefined ? postmarkFromEmail : (existing.postmarkFromEmail || ''),
+    postmarkStream: postmarkStream !== undefined ? postmarkStream : (existing.postmarkStream || 'outbound'),
   };
 
   const row = db.prepare("SELECT key FROM settings WHERE key='email'").get();
@@ -3414,7 +3465,8 @@ app.post('/api/settings', requireAdmin, (req, res) => {
 
   const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
   const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
-  res.json({ ok: true, hasCreds: hasSes || hasSmtp, provider: cfg.provider });
+  const hasPostmark = !!(cfg.postmarkToken && cfg.postmarkFromEmail);
+  res.json({ ok: true, hasCreds: hasSes || hasSmtp || hasPostmark, provider: cfg.provider });
 });
 
 // ─── LABOR BURDEN ─────────────────────────────────────────────────────────────
@@ -3445,7 +3497,8 @@ app.post('/api/email/test', requireAdmin, async (req, res) => {
 
   const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
   const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
-  if (!hasSes && !hasSmtp) return res.status(400).json({ error: 'Configure an email provider first (AWS SES or SMTP)' });
+  const hasPostmark = !!(cfg.postmarkToken && cfg.postmarkFromEmail);
+  if (!hasSes && !hasSmtp && !hasPostmark) return res.status(400).json({ error: 'Configure an email provider first (Postmark, AWS SES, or SMTP)' });
 
   try {
     await Promise.race([

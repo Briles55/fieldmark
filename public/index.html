@@ -1430,10 +1430,29 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
             <div class="fg">
               <label class="flbl">Provider</label>
               <select class="fc" id="email-provider" onchange="toggleEmailProviderFields()">
-                <option value="ses">AWS SES (Recommended — scales to millions)</option>
+                <option value="postmark">Postmark (Recommended — best deliverability for transactional)</option>
+                <option value="ses">AWS SES (cheapest at scale)</option>
                 <option value="smtp">SMTP (Gmail / Outlook / Yahoo)</option>
               </select>
-              <div style="font-size:11px;color:var(--muted);margin-top:4px;">AWS SES uses HTTPS — bypasses cloud SMTP restrictions and scales cheaply.</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">Postmark and SES use HTTPS APIs — bypass cloud SMTP restrictions and scale cheaply.</div>
+            </div>
+
+            <!-- Postmark fields -->
+            <div id="postmark-fields" style="display:none;">
+              <div class="fg">
+                <label class="flbl">Postmark Server API Token</label>
+                <input class="fc" type="password" id="postmark-token" placeholder="Server-level API token from postmarkapp.com">
+                <div style="font-size:11px;color:var(--muted);margin-top:4px;">Find this under Servers → [your server] → API Tokens.</div>
+              </div>
+              <div class="fg">
+                <label class="flbl">Verified Sender Email</label>
+                <input class="fc" type="email" id="postmark-from-email" placeholder="noreply@field-mark.app (must be on a verified domain)">
+              </div>
+              <div class="fg">
+                <label class="flbl">Message Stream</label>
+                <input class="fc" type="text" id="postmark-stream" placeholder="outbound" value="outbound">
+                <div style="font-size:11px;color:var(--muted);margin-top:4px;">Default: <code>outbound</code>. Postmark also supports <code>broadcast</code> but transactional should always use outbound.</div>
+              </div>
             </div>
 
             <!-- AWS SES fields -->
@@ -1496,6 +1515,16 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
                 <button class="btn btn-secondary" onclick="sendTestEmail()" id="test-email-btn" style="white-space:nowrap;">Send Test</button>
               </div>
               <div id="test-email-status" style="font-size:13px;font-weight:600;margin-top:8px;display:none;"></div>
+            </div>
+            <hr class="div">
+            <div style="background:var(--bg);border-radius:8px;padding:16px;">
+              <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">Postmark Setup</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.8;">
+                <div><strong style="color:var(--text);">1.</strong> Sign up at <strong style="color:var(--accent);">postmarkapp.com</strong> and wait for account approval (usually under an hour during business hours)</div>
+                <div><strong style="color:var(--text);">2.</strong> Verify your sending domain in <strong style="color:var(--text);">Sender Signatures → Add Domain</strong>. Postmark gives you DKIM and Return-Path DNS records — add both in Netlify.</div>
+                <div><strong style="color:var(--text);">3.</strong> Open your default Server → <strong style="color:var(--text);">API Tokens</strong> → copy the Server token and paste above</div>
+                <div><strong style="color:var(--text);">4.</strong> Set the Sender Email to an address on your verified domain (e.g. <code>noreply@field-mark.app</code>)</div>
+              </div>
             </div>
             <hr class="div">
             <div style="background:var(--bg);border-radius:8px;padding:16px;">
@@ -8968,7 +8997,7 @@ async function renderSettingsView() {
   try {
     const cfg = await apiGet('/api/settings');
     document.getElementById('email-enabled').checked = cfg.enabled || false;
-    document.getElementById('email-provider').value = cfg.provider || 'ses';
+    document.getElementById('email-provider').value = cfg.provider || 'postmark';
     toggleEmailProviderFields();
 
     // SMTP fields
@@ -8984,6 +9013,15 @@ async function renderSettingsView() {
     secretField.placeholder = cfg.awsSecretKey === '••••••••' ? 'Secret saved ✓ — leave blank to keep, or enter new' : 'Secret access key from IAM';
     document.getElementById('aws-region').value = cfg.awsRegion || 'us-east-1';
     document.getElementById('ses-from-email').value = cfg.sesFromEmail || '';
+
+    // Postmark fields
+    var pmTokenField = document.getElementById('postmark-token');
+    if (pmTokenField) {
+      pmTokenField.value = '';
+      pmTokenField.placeholder = cfg.postmarkToken === '••••••••' ? 'Token saved ✓ — leave blank to keep, or enter new' : 'Server-level API token from postmarkapp.com';
+    }
+    if (document.getElementById('postmark-from-email')) document.getElementById('postmark-from-email').value = cfg.postmarkFromEmail || '';
+    if (document.getElementById('postmark-stream')) document.getElementById('postmark-stream').value = cfg.postmarkStream || 'outbound';
 
     document.getElementById('from-name').value = cfg.fromName || '';
     document.getElementById('app-url').value = cfg.appUrl || '';
@@ -9003,6 +9041,8 @@ async function renderSettingsView() {
 }
 function toggleEmailProviderFields() {
   var provider = document.getElementById('email-provider').value;
+  var pm = document.getElementById('postmark-fields');
+  if (pm) pm.style.display = provider === 'postmark' ? '' : 'none';
   document.getElementById('ses-fields').style.display = provider === 'ses' ? '' : 'none';
   document.getElementById('smtp-fields').style.display = provider === 'smtp' ? '' : 'none';
 }
@@ -9013,6 +9053,7 @@ async function saveEmailConfig() {
   var provider = document.getElementById('email-provider').value;
   var passVal = document.getElementById('smtp-pass').value.trim();
   var secretVal = document.getElementById('aws-secret-key').value.trim();
+  var pmTokenVal = (document.getElementById('postmark-token')?.value || '').trim();
   const cfg = {
     enabled: document.getElementById('email-enabled').checked,
     provider: provider,
@@ -9022,10 +9063,15 @@ async function saveEmailConfig() {
     awsSecretKey: secretVal || '••••••••',
     awsRegion: document.getElementById('aws-region').value,
     sesFromEmail: document.getElementById('ses-from-email').value.trim(),
+    postmarkToken: pmTokenVal || '••••••••',
+    postmarkFromEmail: (document.getElementById('postmark-from-email')?.value || '').trim(),
+    postmarkStream: (document.getElementById('postmark-stream')?.value || 'outbound').trim() || 'outbound',
     fromName: document.getElementById('from-name').value.trim(),
     appUrl: document.getElementById('app-url').value.trim()
   };
-  if (provider === 'ses') {
+  if (provider === 'postmark') {
+    if (!cfg.postmarkFromEmail) { btnEnd(ref,false,'Verified Sender Email is required'); return; }
+  } else if (provider === 'ses') {
     if (!cfg.awsAccessKey) { btnEnd(ref,false,'AWS Access Key is required'); return; }
     if (!cfg.sesFromEmail) { btnEnd(ref,false,'Verified Sender Email is required'); return; }
   } else {
@@ -9042,6 +9088,10 @@ async function saveEmailConfig() {
       var secretField = document.getElementById('aws-secret-key');
       secretField.value = '';
       secretField.placeholder = 'Secret saved ✓ — leave blank to keep, or enter new';
+    }
+    if (pmTokenVal) {
+      var pmField = document.getElementById('postmark-token');
+      if (pmField) { pmField.value = ''; pmField.placeholder = 'Token saved ✓ — leave blank to keep, or enter new'; }
     }
     btnEnd(ref,true, result.hasCreds ? 'Settings saved — now send a test email below to verify' : 'Settings saved');
   } catch(err) {

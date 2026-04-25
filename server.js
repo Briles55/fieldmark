@@ -254,6 +254,8 @@ try { db.exec("ALTER TABLE equipment ADD COLUMN formTemplateId TEXT DEFAULT ''")
 try { db.exec("ALTER TABLE equipment ADD COLUMN serviceFormTemplateId TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN additionalPhotos TEXT DEFAULT '[]'"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN createdByUserId TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE time_cards ADD COLUMN paidAt TEXT DEFAULT ''"); } catch(e) {}
+try { db.exec("ALTER TABLE time_cards ADD COLUMN paidBy TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE reports ADD COLUMN techNotes TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''"); } catch(e) {}
 try { db.exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -3371,9 +3373,247 @@ app.post('/api/time-cards/reopen', requireAdmin, (req, res) => {
   if (!userId || !weekStart) return res.status(400).json({ error: 'userId and weekStart required' });
   let tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(userId, weekStart);
   if (tc) {
-    db.prepare("UPDATE time_cards SET status='Draft', submittedAt='', approvedAt='', approvedBy='' WHERE id=?").run(tc.id);
+    db.prepare("UPDATE time_cards SET status='Draft', submittedAt='', approvedAt='', approvedBy='', paidAt='', paidBy='' WHERE id=?").run(tc.id);
   }
   res.json({ ok: true });
+});
+
+app.post('/api/time-cards/mark-paid', requireAdmin, (req, res) => {
+  const { userId, weekStart } = req.body;
+  if (!userId || !weekStart) return res.status(400).json({ error: 'userId and weekStart required' });
+  const tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(userId, weekStart);
+  if (!tc) return res.status(404).json({ error: 'Time card not found' });
+  if (tc.status !== 'Approved') return res.status(400).json({ error: 'Only approved time cards can be marked as paid' });
+  db.prepare('UPDATE time_cards SET paidAt=?, paidBy=? WHERE id=?').run(new Date().toISOString(), req.session.user.id, tc.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/time-cards/unmark-paid', requireAdmin, (req, res) => {
+  const { userId, weekStart } = req.body;
+  if (!userId || !weekStart) return res.status(400).json({ error: 'userId and weekStart required' });
+  const tc = db.prepare('SELECT * FROM time_cards WHERE userId=? AND weekStart=?').get(userId, weekStart);
+  if (tc) db.prepare("UPDATE time_cards SET paidAt='', paidBy='' WHERE id=?").run(tc.id);
+  res.json({ ok: true });
+});
+
+// ─── TIME CARDS PAYROLL EXPORT ──────────────────────────────────────────────
+// Stat holidays mirror the client-side STAT_HOLIDAYS list.
+const SERVER_STAT_HOLIDAYS = [
+  '01-01', // New Year's Day
+  '07-01', // Canada Day
+  '12-25', // Christmas Day
+  '12-26', // Boxing Day
+];
+function isStatHolidayServer(dateStr) {
+  if (!dateStr) return false;
+  const md = String(dateStr).slice(5, 10); // MM-DD
+  return SERVER_STAT_HOLIDAYS.indexOf(md) >= 0;
+}
+
+// Classify a list of labor entries for a SINGLE technician's SINGLE week into
+// regular / OT / DT. Mirrors the client-side classifyHours() logic.
+// Returns each entry annotated with { regular, ot, dt } portions of its hours,
+// plus weekly totals.
+function classifyWeek(entries) {
+  if (!Array.isArray(entries) || !entries.length) {
+    return { entries: [], regular: 0, ot: 0, dt: 0, total: 0 };
+  }
+  const sorted = entries.slice().sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+  let weekdayHours = 0;
+  const annotated = [];
+  let totalReg = 0, totalOt = 0, totalDt = 0;
+  sorted.forEach(e => {
+    const h = parseFloat(e.hours) || 0;
+    let reg = 0, ot = 0, dt = 0;
+    if (h <= 0) {
+      annotated.push({ ...e, regular: 0, ot: 0, dt: 0 });
+      return;
+    }
+    if (isStatHolidayServer(e.date)) {
+      dt = h;
+    } else {
+      const dayObj = new Date(e.date + 'T00:00:00Z');
+      const day = dayObj.getUTCDay(); // 0=Sun, 6=Sat
+      if (day === 0 || day === 6) {
+        ot = h;
+      } else {
+        if (weekdayHours + h <= 40) {
+          reg = h;
+        } else if (weekdayHours >= 40) {
+          ot = h;
+        } else {
+          reg = 40 - weekdayHours;
+          ot = h - reg;
+        }
+        weekdayHours += h;
+      }
+    }
+    totalReg += reg; totalOt += ot; totalDt += dt;
+    annotated.push({ ...e, regular: reg, ot: ot, dt: dt });
+  });
+  const r = (n) => Math.round(n * 100) / 100;
+  return {
+    entries: annotated,
+    regular: r(totalReg),
+    ot: r(totalOt),
+    dt: r(totalDt),
+    total: r(totalReg + totalOt + totalDt),
+  };
+}
+
+// CSV escaping: wrap value in quotes if it contains comma/quote/newline; double-up internal quotes.
+function csvEscape(val) {
+  if (val === null || val === undefined) return '';
+  const s = String(val);
+  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function csvRow(arr) { return arr.map(csvEscape).join(',') + '\r\n'; }
+
+// Find Monday of any given date (server time) — returns YYYY-MM-DD
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const day = d.getUTCDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+// Collect labor entries from all WOs in a date range, grouped by tech + week.
+// Returns: { '<userId>:<weekStart>': { userId, name, weekStart, entries: [...], status, paidAt } }
+function collectPayrollEntries(fromDate, toDate, statusFilter) {
+  // statusFilter is an array like ['Approved'] or ['Approved','Submitted','Draft']
+  const allowedStatuses = (statusFilter && statusFilter.length) ? statusFilter : ['Approved'];
+
+  // Pull all work orders + parse labor entries
+  const woRows = db.prepare("SELECT id, woNumber, locationId, laborEntries FROM work_orders").all();
+  const locRows = db.prepare("SELECT id, buildingName, address, city, state FROM locations").all();
+  const locById = {}; locRows.forEach(l => { locById[l.id] = l; });
+  const userRows = db.prepare("SELECT id, name, username, email, role FROM users").all();
+  const userById = {}; userRows.forEach(u => { userById[u.id] = u; });
+
+  // Bucket labor entries by tech + week
+  const buckets = {};
+  woRows.forEach(wo => {
+    let entries = [];
+    try { entries = JSON.parse(wo.laborEntries || '[]'); } catch(e) { entries = []; }
+    if (!Array.isArray(entries)) entries = [];
+    entries.forEach(e => {
+      if (!e || !e.userId || !e.date) return;
+      if (e.date < fromDate || e.date > toDate) return;
+      const wk = mondayOf(e.date);
+      const key = e.userId + ':' + wk;
+      if (!buckets[key]) buckets[key] = { userId: e.userId, weekStart: wk, entries: [] };
+      const loc = wo.locationId ? locById[wo.locationId] : null;
+      buckets[key].entries.push({
+        ...e,
+        woNumber: wo.woNumber || '',
+        woId: wo.id,
+        locationName: loc ? loc.buildingName : '',
+        locationAddress: loc ? [loc.address, loc.city, loc.state].filter(Boolean).join(', ') : '',
+      });
+    });
+  });
+
+  // Attach time card status / paidAt and filter by status
+  const tcRows = db.prepare('SELECT * FROM time_cards').all();
+  const tcByKey = {}; tcRows.forEach(t => { tcByKey[t.userId + ':' + t.weekStart] = t; });
+  const result = [];
+  Object.keys(buckets).forEach(k => {
+    const b = buckets[k];
+    const tc = tcByKey[k];
+    const status = tc ? tc.status : 'Draft';
+    if (allowedStatuses.indexOf(status) < 0) return;
+    const u = userById[b.userId];
+    result.push({
+      userId: b.userId,
+      userName: u ? u.name : '(unknown)',
+      userEmail: u ? (u.email || u.username || '') : '',
+      weekStart: b.weekStart,
+      status,
+      paidAt: tc ? (tc.paidAt || '') : '',
+      approvedAt: tc ? (tc.approvedAt || '') : '',
+      submittedAt: tc ? (tc.submittedAt || '') : '',
+      entries: b.entries,
+    });
+  });
+  // Sort by user name then week
+  result.sort((a, b) => {
+    const n = a.userName.localeCompare(b.userName);
+    return n !== 0 ? n : a.weekStart.localeCompare(b.weekStart);
+  });
+  return result;
+}
+
+app.get('/api/time-cards/export', requireAdmin, (req, res) => {
+  const from = (req.query.from || '').toString();
+  const to = (req.query.to || '').toString();
+  const format = (req.query.format || 'detail').toString();
+  const statusesParam = (req.query.statuses || 'Approved').toString();
+  const statuses = statusesParam.split(',').map(s => s.trim()).filter(Boolean);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    return res.status(400).json({ error: 'from and to must be YYYY-MM-DD dates' });
+  }
+
+  const buckets = collectPayrollEntries(from, to, statuses);
+
+  // Build CSV (UTF-8 BOM so Excel detects encoding correctly)
+  let csv = '﻿';
+
+  if (format === 'summary') {
+    csv += csvRow([
+      'Technician', 'Email/Username', 'Week Starting', 'Week Ending',
+      'Regular Hours', 'Overtime Hours', 'Double-Time Hours', 'Total Hours',
+      'Status', 'Approved On', 'Paid On',
+    ]);
+    let totRg = 0, totOt = 0, totDt = 0;
+    buckets.forEach(b => {
+      const cls = classifyWeek(b.entries);
+      const wkEnd = (function() {
+        const d = new Date(b.weekStart + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 6);
+        return d.toISOString().slice(0, 10);
+      })();
+      csv += csvRow([
+        b.userName, b.userEmail, b.weekStart, wkEnd,
+        cls.regular.toFixed(2), cls.ot.toFixed(2), cls.dt.toFixed(2), cls.total.toFixed(2),
+        b.status, (b.approvedAt || '').slice(0, 10), (b.paidAt || '').slice(0, 10),
+      ]);
+      totRg += cls.regular; totOt += cls.ot; totDt += cls.dt;
+    });
+    csv += csvRow([
+      'TOTALS', '', '', '',
+      totRg.toFixed(2), totOt.toFixed(2), totDt.toFixed(2), (totRg + totOt + totDt).toFixed(2),
+      '', '', '',
+    ]);
+  } else {
+    // detail: one row per labor entry
+    csv += csvRow([
+      'Technician', 'Email/Username', 'Date', 'Day',
+      'Hours', 'Regular', 'Overtime', 'Double-Time',
+      'Work Order #', 'Location', 'Address', 'Description',
+      'Week Starting', 'Status', 'Paid On',
+    ]);
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    buckets.forEach(b => {
+      const cls = classifyWeek(b.entries);
+      cls.entries.forEach(e => {
+        const dayIdx = new Date((e.date || '') + 'T00:00:00Z').getUTCDay();
+        csv += csvRow([
+          b.userName, b.userEmail, e.date || '', isNaN(dayIdx) ? '' : dayNames[dayIdx],
+          (parseFloat(e.hours) || 0).toFixed(2),
+          (e.regular || 0).toFixed(2), (e.ot || 0).toFixed(2), (e.dt || 0).toFixed(2),
+          e.woNumber || '', e.locationName || '', e.locationAddress || '', e.desc || '',
+          b.weekStart, b.status, (b.paidAt || '').slice(0, 10),
+        ]);
+      });
+    });
+  }
+
+  const filename = `payroll-${format}-${from}-to-${to}.csv`;
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
 });
 
 // ─── USERS ────────────────────────────────────────────────────────────────────

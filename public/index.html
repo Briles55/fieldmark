@@ -5795,7 +5795,8 @@ async function renderTimeCardsAdmin() {
   var ws = app.tcWeekStart;
   document.getElementById('tc-title').textContent = 'All Time Cards';
   document.getElementById('tc-sub').textContent = formatWeekRange(ws);
-  document.getElementById('tc-actions').innerHTML = '';
+  document.getElementById('tc-actions').innerHTML =
+    '<button class="btn btn-primary btn-sm" onclick="openPayrollExport()">📊 Export to Excel</button>';
   document.getElementById('tc-toolbar').innerHTML =
     '<button class="btn btn-ghost btn-sm" onclick="tcAdminPrev()">&larr; Prev Week</button>' +
     '<strong style="font-size:14px;">' + formatWeekRange(ws) + '</strong>' +
@@ -5832,6 +5833,7 @@ async function renderTimeCardsAdmin() {
       html += '<div style="display:flex;align-items:center;gap:8px;">';
       html += '<span style="font-size:12px;color:var(--muted);">' + classified.total + ' hrs (R:' + classified.regular + ' OT:' + classified.overtime + ' DT:' + classified.doubleTime + ')</span>';
       html += '<span class="badge ' + statusBadge + '">' + esc(tc.status) + '</span>';
+      if (tc.paidAt) html += '<span class="badge bg" style="font-size:10px;">💵 Paid</span>';
       html += '</div></div>';
 
       html += '<div id="' + cardId + '" style="display:none;">';
@@ -5869,9 +5871,16 @@ async function renderTimeCardsAdmin() {
         html += '<button class="btn btn-primary btn-sm" onclick="approveTimeCard(\'' + user.id + '\',\'' + ws + '\')">Approve</button>';
         html += '<button class="btn btn-secondary btn-sm" onclick="reopenTimeCard(\'' + user.id + '\',\'' + ws + '\')">Reopen</button>';
       } else if (tc.status === 'Approved') {
+        if (!tc.paidAt) {
+          html += '<button class="btn btn-primary btn-sm" onclick="markTimeCardPaid(\'' + user.id + '\',\'' + ws + '\')">Mark Paid</button>';
+        } else {
+          html += '<button class="btn btn-ghost btn-sm" onclick="unmarkTimeCardPaid(\'' + user.id + '\',\'' + ws + '\')">Unmark Paid</button>';
+        }
         html += '<button class="btn btn-secondary btn-sm" onclick="reopenTimeCard(\'' + user.id + '\',\'' + ws + '\')">Reopen</button>';
         var approver = (db.users||[]).find(function(u){return u.id===tc.approvedBy;});
-        html += '<span style="font-size:11px;color:var(--muted);align-self:center;">Approved by ' + esc(approver?.name||'Admin') + ' ' + fmtDT(tc.approvedAt) + '</span>';
+        html += '<span style="font-size:11px;color:var(--muted);align-self:center;">Approved by ' + esc(approver?.name||'Admin') + ' ' + fmtDT(tc.approvedAt);
+        if (tc.paidAt) html += ' • Paid ' + fmtDT(tc.paidAt);
+        html += '</span>';
       } else {
         html += '<span style="font-size:11px;color:var(--muted);align-self:center;">Not yet submitted</span>';
       }
@@ -5899,6 +5908,121 @@ async function reopenTimeCard(userId, weekStart) {
     if (isAdmin()) renderTimeCardsAdmin();
     else renderMyTimeCard();
   } catch(e) { btnEnd(ref,false,e.message); }
+}
+
+async function markTimeCardPaid(userId, weekStart) {
+  var ref = btnStart(_actionBtn);
+  try {
+    await apiPost('/api/time-cards/mark-paid', { userId, weekStart });
+    btnEnd(ref, true, 'Marked paid');
+    renderTimeCardsAdmin();
+  } catch(e) { btnEnd(ref, false, e.message); }
+}
+
+async function unmarkTimeCardPaid(userId, weekStart) {
+  if (!confirm('Remove the paid status from this time card?')) return;
+  var ref = btnStart(_actionBtn);
+  try {
+    await apiPost('/api/time-cards/unmark-paid', { userId, weekStart });
+    btnEnd(ref, true, 'Unmarked');
+    renderTimeCardsAdmin();
+  } catch(e) { btnEnd(ref, false, e.message); }
+}
+
+// ─── PAYROLL EXPORT MODAL ──────────────────────────────────────────────────
+function openPayrollExport() {
+  if (!isAdmin()) return;
+  // Default range: this pay period — last 14 days starting from a Monday
+  var now = new Date();
+  var defaultTo = now.toISOString().slice(0, 10);
+  var twoWeeksAgo = new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000);
+  // Snap to Monday
+  var day = twoWeeksAgo.getDay();
+  var diff = (day === 0 ? -6 : 1) - day;
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() + diff);
+  var defaultFrom = twoWeeksAgo.toISOString().slice(0, 10);
+
+  var modal = document.getElementById('modal-payroll-export');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-payroll-export';
+    modal.className = 'overlay';
+    modal.innerHTML = ''+
+      '<div class="modal" style="max-width:560px;">'+
+        '<div class="modal-hd">'+
+          '<span class="modal-title">Export Time Entries to Excel</span>'+
+          '<button class="modal-x" onclick="closeModal(\'modal-payroll-export\')">'+
+            '<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'+
+          '</button>'+
+        '</div>'+
+        '<div class="modal-body">'+
+          '<p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Generates a CSV file ready to share with your payroll service. Opens cleanly in Excel.</p>'+
+          '<div class="fr">'+
+            '<div class="fg"><label class="flbl">From Date</label><input class="fc" type="date" id="pe-from" value="'+defaultFrom+'"></div>'+
+            '<div class="fg"><label class="flbl">To Date</label><input class="fc" type="date" id="pe-to" value="'+defaultTo+'"></div>'+
+          '</div>'+
+          '<div class="fg"><label class="flbl">Format</label>'+
+            '<select class="fc" id="pe-format">'+
+              '<option value="detail">Detail — one row per work-day entry (recommended)</option>'+
+              '<option value="summary">Summary — one row per technician per week</option>'+
+            '</select>'+
+            '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Detail format gives payroll the most flexibility (they can pivot/group as needed). Summary is shorter — good for a quick weekly recap.</div>'+
+          '</div>'+
+          '<div class="fg"><label class="flbl">Include Statuses</label>'+
+            '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;">'+
+              '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="pe-st-approved" checked style="accent-color:var(--accent);width:14px;height:14px;"> Approved</label>'+
+              '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="pe-st-submitted" style="accent-color:var(--accent);width:14px;height:14px;"> Submitted</label>'+
+              '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="pe-st-draft" style="accent-color:var(--accent);width:14px;height:14px;"> Draft</label>'+
+            '</div>'+
+            '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Default: Approved only (safest for payroll). Include Submitted/Draft only if you need a preview of unfinalized hours.</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="modal-ft">'+
+          '<button class="btn btn-secondary" onclick="closeModal(\'modal-payroll-export\')">Cancel</button>'+
+          '<button class="btn btn-primary" id="pe-download-btn" onclick="downloadPayrollCsv()">Download CSV</button>'+
+        '</div>'+
+      '</div>';
+    document.body.appendChild(modal);
+  }
+  openModal('modal-payroll-export');
+}
+
+function downloadPayrollCsv() {
+  var from = document.getElementById('pe-from').value;
+  var to = document.getElementById('pe-to').value;
+  var format = document.getElementById('pe-format').value;
+  if (!from || !to) { showToast('Select a date range', 'error'); return; }
+  if (from > to) { showToast('From date must be before To date', 'error'); return; }
+  var statuses = [];
+  if (document.getElementById('pe-st-approved').checked) statuses.push('Approved');
+  if (document.getElementById('pe-st-submitted').checked) statuses.push('Submitted');
+  if (document.getElementById('pe-st-draft').checked) statuses.push('Draft');
+  if (!statuses.length) { showToast('Select at least one status to include', 'error'); return; }
+
+  var ref = btnStart(document.getElementById('pe-download-btn'));
+  // Trigger download via a hidden anchor — preserves cookies for auth
+  var url = '/api/time-cards/export?from=' + encodeURIComponent(from) +
+            '&to=' + encodeURIComponent(to) +
+            '&format=' + encodeURIComponent(format) +
+            '&statuses=' + encodeURIComponent(statuses.join(','));
+  // Use fetch to detect errors before triggering download
+  fetch(url, { credentials: 'include' }).then(function(res) {
+    if (!res.ok) return res.json().then(function(d) { throw new Error(d.error || 'Export failed'); });
+    return res.blob();
+  }).then(function(blob) {
+    var dlUrl = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = dlUrl;
+    a.download = 'payroll-' + format + '-' + from + '-to-' + to + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(dlUrl); }, 5000);
+    btnEnd(ref, true, 'Downloaded');
+    setTimeout(function() { closeModal('modal-payroll-export'); }, 800);
+  }).catch(function(err) {
+    btnEnd(ref, false, err.message);
+  });
 }
 
 async function submitTimeCard() {

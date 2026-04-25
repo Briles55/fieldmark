@@ -33,6 +33,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-item:hover{background:var(--surface2);color:var(--text);}
 .nav-item.active{background:rgba(59,130,246,.15);color:var(--accent);border-right:2px solid var(--accent);}
 .nav-icon{width:17px;height:17px;flex-shrink:0;}
+/* Collapsible nav groups (admin only) */
+.nav-group{margin-top:8px;}
+.nav-group-header{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 4px;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;cursor:pointer;user-select:none;border:none;background:none;width:100%;text-align:left;font-family:inherit;transition:color .15s;}
+.nav-group-header:hover{color:var(--text);}
+.nav-group-chevron{transition:transform .15s;font-size:10px;opacity:.6;}
+.nav-group.collapsed .nav-group-chevron{transform:rotate(-90deg);}
+.nav-group-body{display:flex;flex-direction:column;}
+.nav-group.collapsed .nav-group-body{display:none;}
+.nav-group .nav-item{padding-left:28px;}
 .sb-footer{padding:16px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);}
 
 /* MAIN */
@@ -509,10 +518,14 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
       Dashboard
     </button>
-    <button id="nav-clients" class="nav-item" onclick="nav('clients',this)">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-      Clients
+
+    <!-- Tech-only QR scanner (above Operations group; admins don't see this) -->
+    <button id="nav-scanner" class="nav-item" style="display:none;" onclick="nav('scanner',this)">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+      QR Scanner
     </button>
+
+    <!-- Client portal nav items (only visible during client portal mode) -->
     <button id="nav-portal-locations" class="nav-item" onclick="nav('portal-locations',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       <span>Locations</span>
@@ -537,54 +550,105 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       <span>Asset Lifecycle</span>
     </button>
-    <button id="nav-scanner" class="nav-item" style="display:none;" onclick="nav('scanner',this)">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
-      QR Scanner
+
+    <!-- ━━━━━━━━━━━━━━ OPERATIONS GROUP (admin) ━━━━━━━━━━━━━━ -->
+    <div class="nav-group" id="nav-group-operations" data-group="operations" style="display:none;">
+      <button class="nav-group-header" onclick="toggleNavGroup('operations')">
+        <span>📋 Operations</span>
+        <span class="nav-group-chevron">▼</span>
+      </button>
+      <div class="nav-group-body">
+        <button id="nav-clients" class="nav-item" onclick="nav('clients',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Clients
+        </button>
+        <button id="nav-work-orders" class="nav-item" onclick="nav('work-orders',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+          Work Orders
+        </button>
+        <button id="nav-quotes" class="nav-item" onclick="nav('quotes',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Quotes
+        </button>
+        <button id="nav-service-requests" class="nav-item" onclick="nav('service-requests',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          Service Requests
+        </button>
+        <button id="nav-reports" class="nav-item" onclick="nav('reports',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span id="nav-reports-label">All Reports</span>
+        </button>
+        <button id="nav-time-cards" class="nav-item" onclick="nav('time-cards',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Time Cards
+        </button>
+        <button id="nav-form-templates" class="nav-item" onclick="nav('form-templates',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+          Form Builder
+        </button>
+      </div>
+    </div>
+
+    <!-- Tech-only fallback for Clients (clients link not inside admin Operations group) -->
+    <button id="nav-tech-clients" class="nav-item" onclick="nav('clients',this)" style="display:none;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      Clients
     </button>
-    <button id="nav-reports" class="nav-item" onclick="nav('reports',this)">
+    <!-- Tech-only Reports (the 'My Reports' nav button isn't inside the admin group) -->
+    <button id="nav-tech-reports" class="nav-item" onclick="nav('reports',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-      <span id="nav-reports-label">All Reports</span>
+      <span>My Reports</span>
     </button>
-    <button id="nav-work-orders" class="nav-item" onclick="nav('work-orders',this)" style="display:none;">
+    <!-- Tech-only Work Orders -->
+    <button id="nav-tech-work-orders" class="nav-item" onclick="nav('work-orders',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
       Work Orders
     </button>
-    <button id="nav-time-cards" class="nav-item" onclick="nav('time-cards',this)" style="display:none;">
+    <!-- Tech-only Time Cards -->
+    <button id="nav-tech-time-cards" class="nav-item" onclick="nav('time-cards',this)" style="display:none;">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       Time Cards
     </button>
-    <button id="nav-invoices" class="nav-item" onclick="nav('invoices',this)" style="display:none;">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-      Invoices
-    </button>
-    <button id="nav-profit-loss" class="nav-item" onclick="nav('profit-loss',this)" style="display:none;">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-      Profit &amp; Loss
-    </button>
-    <button id="nav-quotes" class="nav-item" onclick="nav('quotes',this)" style="display:none;">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-      Quotes
-    </button>
-    <button id="nav-service-requests" class="nav-item" onclick="nav('service-requests',this)" style="display:none;">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-      Service Requests
-    </button>
-    <button id="nav-form-templates" class="nav-item" onclick="nav('form-templates',this)" style="display:none;">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-      Form Builder
-    </button>
-    <button id="nav-users" class="nav-item" onclick="nav('users',this)" style="display:none;">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-      Team / Users
-    </button>
-    <button id="nav-security-log" class="nav-item" onclick="nav('security-log',this)" style="display:none;">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-      Security Log
-    </button>
-    <button id="nav-settings" class="nav-item" onclick="nav('settings',this)" style="display:none;">
-      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-      Settings
-    </button>
+
+    <!-- ━━━━━━━━━━━━━━ ACCOUNTING GROUP (admin) ━━━━━━━━━━━━━━ -->
+    <div class="nav-group" id="nav-group-accounting" data-group="accounting" style="display:none;">
+      <button class="nav-group-header" onclick="toggleNavGroup('accounting')">
+        <span>💰 Accounting</span>
+        <span class="nav-group-chevron">▼</span>
+      </button>
+      <div class="nav-group-body">
+        <button id="nav-invoices" class="nav-item" onclick="nav('invoices',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          Invoices
+        </button>
+        <button id="nav-profit-loss" class="nav-item" onclick="nav('profit-loss',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Profit &amp; Loss
+        </button>
+      </div>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━ ADMIN GROUP (admin) ━━━━━━━━━━━━━━ -->
+    <div class="nav-group" id="nav-group-admin" data-group="admin" style="display:none;">
+      <button class="nav-group-header" onclick="toggleNavGroup('admin')">
+        <span>🛠 Admin</span>
+        <span class="nav-group-chevron">▼</span>
+      </button>
+      <div class="nav-group-body">
+        <button id="nav-users" class="nav-item" onclick="nav('users',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          Team / Users
+        </button>
+        <button id="nav-security-log" class="nav-item" onclick="nav('security-log',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          Security Log
+        </button>
+        <button id="nav-settings" class="nav-item" onclick="nav('settings',this)">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Settings
+        </button>
+      </div>
+    </div>
   </nav>
   <div class="sb-user">
     <div class="sb-uname" id="sb-uname">â€”</div>
@@ -2421,17 +2485,14 @@ function isClient() { return currentUser && currentUser.role === 'client'; }
 
 function enterClientMode() {
   document.body.classList.add('client-portal-mode');
-  // Hide nav items not relevant to clients
+  // Hide everything except client portal nav items
   document.getElementById('nav-dashboard').style.display = 'none';
-  document.getElementById('nav-clients').style.display = 'none';
-  document.getElementById('nav-scanner').style.display = 'none';
-  document.getElementById('nav-reports').style.display = 'none';
-  document.getElementById('nav-work-orders').style.display = 'none';
-  document.getElementById('nav-time-cards').style.display = 'none';
-  document.getElementById('nav-service-requests').style.display = 'none';
-  document.getElementById('nav-form-templates').style.display = 'none';
-  document.getElementById('nav-users').style.display = 'none';
-  document.getElementById('nav-settings').style.display = 'none';
+  ['nav-scanner','nav-tech-clients','nav-tech-reports','nav-tech-work-orders','nav-tech-time-cards'].forEach(id => {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  ['nav-group-operations','nav-group-accounting','nav-group-admin'].forEach(id => {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
   // Show client portal nav items
   document.getElementById('nav-portal-locations').style.display = '';
   document.getElementById('nav-portal-equipment').style.display = '';
@@ -2454,25 +2515,14 @@ function enterClientMode() {
 
 function exitClientMode() {
   document.body.classList.remove('client-portal-mode');
-  // Restore sidebar branding
   document.querySelector('.sb-logo p').textContent = 'Service Management';
   // Hide client portal nav items
-  document.getElementById('nav-portal-locations').style.display = 'none';
-  document.getElementById('nav-portal-equipment').style.display = 'none';
-  document.getElementById('nav-portal-reports').style.display = 'none';
-  document.getElementById('nav-portal-request').style.display = 'none';
-  document.getElementById('nav-portal-quotes').style.display = 'none';
-  document.getElementById('nav-portal-lifecycle').style.display = 'none';
-  // Restore staff nav visibility (will be re-set by applyRoleUI on next staff login)
+  ['nav-portal-locations','nav-portal-equipment','nav-portal-reports','nav-portal-request','nav-portal-quotes','nav-portal-lifecycle'].forEach(id => {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  // Restore Dashboard. applyRoleUI() will be called on next staff login to show
+  // the right groups vs flat tech items.
   document.getElementById('nav-dashboard').style.display = '';
-  document.getElementById('nav-clients').style.display = '';
-  document.getElementById('nav-reports').style.display = '';
-  document.getElementById('nav-work-orders').style.display = '';
-  document.getElementById('nav-time-cards').style.display = '';
-  document.getElementById('nav-invoices').style.display = '';
-  document.getElementById('nav-quotes').style.display = '';
-  document.getElementById('nav-service-requests').style.display = '';
-  document.getElementById('nav-form-templates').style.display = '';
 }
 
 async function doLogout() {
@@ -2613,25 +2663,59 @@ function makeSearchable(selectId) {
 function applyRoleUI() {
   if (isClient()) return; // client portal mode manages its own nav visibility
   const admin = isAdmin();
-  document.getElementById('nav-clients').style.display = '';
-  document.getElementById('nav-work-orders').style.display = '';
-  document.getElementById('nav-time-cards').style.display = '';
-  document.getElementById('nav-invoices').style.display = admin ? '' : 'none';
-  var pnlNav = document.getElementById('nav-profit-loss');
-  if (pnlNav) pnlNav.style.display = admin ? '' : 'none';
-  document.getElementById('nav-quotes').style.display = admin ? '' : 'none';
-  document.getElementById('nav-service-requests').style.display = admin ? '' : 'none';
-  document.getElementById('nav-form-templates').style.display = admin ? '' : 'none';
-  document.getElementById('nav-users').style.display = admin ? '' : 'none';
-  document.getElementById('nav-settings').style.display = admin ? '' : 'none';
-  var secLogNav = document.getElementById('nav-security-log');
-  if (secLogNav) secLogNav.style.display = admin ? '' : 'none';
+  // Groups (admin-only)
+  ['nav-group-operations','nav-group-accounting','nav-group-admin'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.style.display = admin ? '' : 'none';
+  });
+  // Flat tech-only nav items (visible only when NOT admin)
+  ['nav-scanner','nav-tech-clients','nav-tech-reports','nav-tech-work-orders','nav-tech-time-cards'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.style.display = admin ? 'none' : '';
+  });
   // Reports nav label: admins see "All Reports", techs see "My Reports"
   var rptLabel = document.getElementById('nav-reports-label');
   if (rptLabel) rptLabel.textContent = admin ? 'All Reports' : 'My Reports';
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = admin ? '' : 'none';
   });
+  // Restore collapsed state from localStorage for admin groups
+  if (admin) restoreNavGroupState();
+}
+
+function toggleNavGroup(name) {
+  var el = document.getElementById('nav-group-' + name);
+  if (!el) return;
+  el.classList.toggle('collapsed');
+  saveNavGroupState();
+}
+
+function saveNavGroupState() {
+  try {
+    var state = {};
+    document.querySelectorAll('.nav-group').forEach(g => {
+      state[g.dataset.group] = g.classList.contains('collapsed');
+    });
+    localStorage.setItem('fm_nav_groups', JSON.stringify(state));
+  } catch(e) {}
+}
+
+function restoreNavGroupState() {
+  try {
+    var state = JSON.parse(localStorage.getItem('fm_nav_groups') || '{}');
+    document.querySelectorAll('.nav-group').forEach(g => {
+      if (state[g.dataset.group]) g.classList.add('collapsed');
+      else g.classList.remove('collapsed');
+    });
+  } catch(e) {}
+}
+
+// Auto-expand whichever group contains the active page (so user always sees where they are)
+function ensureActiveGroupExpanded() {
+  var active = document.querySelector('.nav-group .nav-item.active');
+  if (!active) return;
+  var group = active.closest('.nav-group');
+  if (group) group.classList.remove('collapsed');
 }
 
 function handleHashRoute() {
@@ -2710,8 +2794,35 @@ function nav(viewName, navEl) {
 
 function setNav(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ids = { dashboard:'nav-dashboard', clients:'nav-clients', scanner:'nav-scanner', reports:'nav-reports', 'work-orders':'nav-work-orders', 'time-cards':'nav-time-cards', invoices:'nav-invoices', quotes:'nav-quotes', 'service-requests':'nav-service-requests', 'form-templates':'nav-form-templates', users:'nav-users', settings:'nav-settings', 'portal-locations':'nav-portal-locations', 'portal-equipment':'nav-portal-equipment', 'portal-reports':'nav-portal-reports', 'portal-request':'nav-portal-request', 'portal-quotes':'nav-portal-quotes' };
-  if (ids[name]) { const el = document.getElementById(ids[name]); if (el) el.classList.add('active'); }
+  // Map view name -> nav button id. For shared (admin + tech) views, both ids
+  // exist in the DOM but only one is visible; activating both is harmless.
+  const idMap = {
+    dashboard: ['nav-dashboard'],
+    scanner: ['nav-scanner'],
+    clients: ['nav-clients', 'nav-tech-clients'],
+    reports: ['nav-reports', 'nav-tech-reports'],
+    'work-orders': ['nav-work-orders', 'nav-tech-work-orders'],
+    'time-cards': ['nav-time-cards', 'nav-tech-time-cards'],
+    invoices: ['nav-invoices'],
+    quotes: ['nav-quotes'],
+    'profit-loss': ['nav-profit-loss'],
+    'service-requests': ['nav-service-requests'],
+    'form-templates': ['nav-form-templates'],
+    users: ['nav-users'],
+    settings: ['nav-settings'],
+    'security-log': ['nav-security-log'],
+    'portal-locations': ['nav-portal-locations'],
+    'portal-equipment': ['nav-portal-equipment'],
+    'portal-reports': ['nav-portal-reports'],
+    'portal-request': ['nav-portal-request'],
+    'portal-quotes': ['nav-portal-quotes'],
+    'portal-lifecycle': ['nav-portal-lifecycle'],
+    drafts: [], // no nav item (accessed from dashboard tile)
+  };
+  var ids = idMap[name] || [];
+  ids.forEach(id => { var el = document.getElementById(id); if (el) el.classList.add('active'); });
+  // After marking active, ensure the parent group is expanded
+  ensureActiveGroupExpanded();
 }
 
 function showView(name) {

@@ -1148,6 +1148,16 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
           <button class="btn btn-ghost btn-sm" onclick="pnlSetLastMonth()">Last Month</button>
           <button class="btn btn-ghost btn-sm" onclick="pnlSetYTD()">YTD</button>
           <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Print / Save PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="pnlSendNow()" id="pnl-send-btn" title="Email this period's P&L to all admins now">📧 Email Now</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="pnl-auto-email-toggle" onchange="pnlSaveAutoEmailFlag()" style="accent-color:var(--accent);width:16px;height:16px;">
+            <span>Email me last month's P&amp;L on the 1st of every month</span>
+          </label>
+          <span style="font-size:11px;color:var(--muted);">Sends to all admin users with an email on file. Uses your configured email provider.</span>
         </div>
       </div>
       <div id="pnl-content"></div>
@@ -3120,14 +3130,41 @@ async function renderProfitLoss() {
   var content = document.getElementById('pnl-content');
   if (labelEl) labelEl.textContent = 'Loading...';
   if (content) content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);">Crunching numbers...</div>';
+  // Load auto-email flag (separately, ignore failures)
+  try {
+    var flag = await apiGet('/api/reports/profit-loss/auto-email');
+    var t = document.getElementById('pnl-auto-email-toggle');
+    if (t) t.checked = !!flag.enabled;
+  } catch(e) {}
   try {
     var data = await apiGet('/api/reports/profit-loss?from=' + encodeURIComponent(range.from) + '&to=' + encodeURIComponent(range.to));
     if (labelEl) labelEl.textContent = data.period.label;
     content.innerHTML = renderPnlHtml(data);
+    // Stash the active range for "Email Now"
+    app._pnlActiveFrom = range.from;
+    app._pnlActiveTo = range.to;
   } catch(err) {
     if (labelEl) labelEl.textContent = 'Error';
     content.innerHTML = '<div class="card"><div class="card-body" style="color:var(--red);">' + esc(err.message) + '</div></div>';
   }
+}
+
+async function pnlSaveAutoEmailFlag() {
+  var enabled = document.getElementById('pnl-auto-email-toggle').checked;
+  try {
+    await apiPost('/api/reports/profit-loss/auto-email', { enabled });
+    showToast(enabled ? 'Monthly P&L email enabled' : 'Monthly P&L email disabled', 'success');
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+async function pnlSendNow() {
+  if (!isAdmin()) return;
+  var ref = btnStart(document.getElementById('pnl-send-btn'));
+  try {
+    var result = await apiPost('/api/reports/profit-loss/send-now', { from: app._pnlActiveFrom, to: app._pnlActiveTo });
+    if (result.ok) btnEnd(ref, true, 'Sent to ' + result.sent + ' admin' + (result.sent === 1 ? '' : 's'));
+    else btnEnd(ref, false, result.reason || 'Send failed');
+  } catch(err) { btnEnd(ref, false, err.message); }
 }
 
 function renderPnlHtml(d) {

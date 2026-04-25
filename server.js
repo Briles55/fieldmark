@@ -3664,6 +3664,227 @@ app.get('/api/reports/profit-loss', requireAdmin, (req, res) => {
   }
 });
 
+// Render P&L data as a self-contained HTML email body
+function renderPnlEmailHtml(d) {
+  const m = (n) => '$' + (Math.round((parseFloat(n)||0) * 100) / 100).toFixed(2);
+  const e = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const tradeLabels = { plumber:'Plumber', hvacb:'HVAC B Gas Fitter', hvaca:'HVAC A Gas Fitter', electrician:'Electrician', apprentice:'Apprentice' };
+  const marginColor = d.marginPct >= 30 ? '#22c55e' : d.marginPct >= 10 ? '#f59e0b' : '#ef4444';
+  let h = `<div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;color:#222;">
+    <div style="background:#1a1d27;padding:24px 32px;border-radius:8px 8px 0 0;">
+      <h1 style="color:#3b82f6;margin:0;font-size:22px;">FieldMark</h1>
+      <p style="color:#94a3b8;margin:4px 0 0;">Profit &amp; Loss — ${e(d.period.label)}</p>
+    </div>
+    <div style="background:#fff;padding:28px 32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:16px;border:1px solid #e2e8f0;text-align:center;background:#f8fafc;width:25%;">
+            <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Revenue</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;color:#22c55e;">${m(d.revenue.total)}</div>
+            <div style="font-size:11px;color:#64748b;">${d.revenue.count} invoice${d.revenue.count===1?'':'s'}</div>
+          </td>
+          <td style="padding:16px;border:1px solid #e2e8f0;text-align:center;background:#f8fafc;width:25%;">
+            <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Total Cost</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;color:#ef4444;">${m(d.costs.total)}</div>
+            <div style="font-size:11px;color:#64748b;">labor + parts + subs</div>
+          </td>
+          <td style="padding:16px;border:1px solid #e2e8f0;text-align:center;background:#f8fafc;width:25%;">
+            <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Gross Profit</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;color:${d.grossProfit>=0?'#22c55e':'#ef4444'};">${m(d.grossProfit)}</div>
+          </td>
+          <td style="padding:16px;border:1px solid #e2e8f0;text-align:center;background:#f8fafc;width:25%;">
+            <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Margin</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;color:${marginColor};">${d.marginPct.toFixed(1)}%</div>
+          </td>
+        </tr>
+      </table>`;
+
+  // Revenue table
+  h += `<h2 style="font-size:15px;margin:0 0 8px;color:#1a1a1a;">Revenue</h2>`;
+  if (!d.revenue.count) {
+    h += `<p style="color:#64748b;font-size:13px;">No invoices in this period.</p>`;
+  } else {
+    h += `<table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12px;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">Invoice #</th>
+        <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">Client</th>
+        <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">Status</th>
+        <th style="padding:8px;border:1px solid #e2e8f0;text-align:right;">Subtotal</th>
+      </tr></thead><tbody>`;
+    d.revenue.invoices.forEach(i => {
+      h += `<tr>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;"><strong>${e(i.invoiceNumber)}</strong></td>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;">${e(i.clientName)}</td>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;">${e(i.status)}</td>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;">${m(i.subtotal)}</td>
+      </tr>`;
+    });
+    h += `<tr style="background:#f8fafc;"><td colspan="3" style="padding:8px;border:1px solid #e2e8f0;text-align:right;font-weight:700;">Total revenue (excl. tax):</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;font-weight:700;color:#22c55e;">${m(d.revenue.total)}</td></tr>`;
+    h += `</tbody></table>`;
+  }
+
+  // Labor table
+  const trades = Object.keys(d.costs.labor.byTrade);
+  h += `<h2 style="font-size:15px;margin:0 0 8px;color:#1a1a1a;">Labor Cost — ${m(d.costs.labor.total)}</h2>`;
+  if (!trades.length) {
+    h += `<p style="color:#64748b;font-size:13px;">No labor logged on work orders this period.</p>`;
+  } else {
+    h += `<table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12px;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">Trade</th>
+        <th style="padding:8px;border:1px solid #e2e8f0;text-align:right;">Hours</th>
+        <th style="padding:8px;border:1px solid #e2e8f0;text-align:right;">Burdened Cost</th>
+      </tr></thead><tbody>`;
+    trades.sort().forEach(k => {
+      const t = d.costs.labor.byTrade[k];
+      const warn = d.costs.labor.missingBurdenWarn.indexOf(k) >= 0;
+      h += `<tr${warn ? ' style="background:#fef3c7;"' : ''}>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;"><strong>${e(tradeLabels[k] || k)}</strong>${warn ? ' <span style="color:#b45309;font-size:11px;">⚠ no burden rate</span>' : ''}</td>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;">${t.hours.toFixed(2)}</td>
+        <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;">${m(t.cost)}</td>
+      </tr>`;
+    });
+    h += `</tbody></table>`;
+  }
+
+  // Parts and subs (concise — just totals + counts)
+  if (d.costs.parts.lines.length || d.costs.subs.lines.length || d.costs.returns.lines.length) {
+    h += `<table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px;">
+      <tr><td style="padding:8px;border:1px solid #e2e8f0;">Parts (${d.costs.parts.lines.length} confirmed POs)</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">${m(d.costs.parts.total)}</td></tr>
+      <tr><td style="padding:8px;border:1px solid #e2e8f0;">Subcontractor (${d.costs.subs.lines.length} confirmed POs)</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">${m(d.costs.subs.total)}</td></tr>
+      ${d.costs.returns.lines.length ? `<tr><td style="padding:8px;border:1px solid #e2e8f0;">Returns (credit)</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">−${m(d.costs.returns.total)}</td></tr>` : ''}
+    </table>`;
+  }
+
+  // Bottom summary
+  h += `<div style="border:2px solid #3b82f6;border-radius:6px;padding:16px;text-align:right;margin-top:16px;">
+    <div style="font-size:13px;">Revenue: <strong>${m(d.revenue.total)}</strong></div>
+    <div style="font-size:13px;">Total Cost: <strong>${m(d.costs.total)}</strong></div>
+    <div style="font-size:20px;font-weight:700;margin-top:8px;padding-top:8px;border-top:2px solid #1a1a1a;color:${d.grossProfit>=0?'#22c55e':'#ef4444'};">Gross Profit: ${m(d.grossProfit)} (${d.marginPct.toFixed(1)}%)</div>
+  </div>
+  <p style="color:#94a3b8;font-size:11px;margin-top:24px;">Generated automatically by FieldMark on ${new Date().toLocaleDateString()}. Accrual basis — revenue counted when invoiced, tax excluded.</p>
+  </div></div>`;
+
+  return h;
+}
+
+// Send a P&L email for a given range to all admins with email on file
+async function sendMonthlyPnlEmail(startISO, endISO) {
+  const cfg = getEmailSettings();
+  if (!cfg.enabled) return { ok: false, reason: 'Email disabled' };
+  const hasSes = !!(cfg.awsAccessKey && cfg.awsSecretKey && cfg.sesFromEmail);
+  const hasSmtp = !!(cfg.smtpUser && cfg.smtpPass);
+  const hasPostmark = !!(cfg.postmarkToken && cfg.postmarkFromEmail);
+  if (!hasSes && !hasSmtp && !hasPostmark) return { ok: false, reason: 'No email provider configured' };
+
+  const admins = db.prepare("SELECT name, email FROM users WHERE role='admin' AND email IS NOT NULL AND email != ''").all();
+  if (!admins.length) return { ok: false, reason: 'No admin users have an email on file' };
+
+  const data = calcProfitLoss(startISO, endISO);
+  const html = renderPnlEmailHtml(data);
+  const fromName = cfg.fromName || 'FieldMark';
+  const fromAddr = cfg.postmarkFromEmail || cfg.sesFromEmail || cfg.smtpUser;
+  const transporter = createMailTransport(cfg);
+  let sent = 0, failed = 0;
+  for (const admin of admins) {
+    try {
+      await transporter.sendMail({
+        from: `"${fromName}" <${fromAddr}>`,
+        to: admin.email,
+        subject: `FieldMark — Profit & Loss for ${data.period.label}`,
+        html,
+      });
+      sent++;
+    } catch(err) {
+      console.error(`P&L email to ${admin.email} failed:`, err.message);
+      failed++;
+    }
+  }
+  return { ok: sent > 0, sent, failed, periodLabel: data.period.label };
+}
+
+// Get/set the auto-email enabled flag (default true)
+function pnlAutoEmailEnabled() {
+  const row = db.prepare("SELECT value FROM settings WHERE key='pnlAutoEmail'").get();
+  if (!row) return true; // default on
+  try { return JSON.parse(row.value) === true; } catch(e) { return true; }
+}
+
+// Track when we last sent so the scheduler doesn't double-fire
+function pnlLastSentMonth() {
+  const row = db.prepare("SELECT value FROM settings WHERE key='pnlEmailLastSent'").get();
+  return row ? row.value : '';
+}
+function pnlMarkSentMonth(yyyymm) {
+  const existing = db.prepare("SELECT key FROM settings WHERE key='pnlEmailLastSent'").get();
+  if (existing) db.prepare("UPDATE settings SET value=? WHERE key='pnlEmailLastSent'").run(yyyymm);
+  else db.prepare("INSERT INTO settings (key,value) VALUES ('pnlEmailLastSent',?)").run(yyyymm);
+}
+
+// Scheduler: runs every hour, fires on the 1st of each month between 00:00 and 02:00
+async function pnlSchedulerTick() {
+  try {
+    if (!pnlAutoEmailEnabled()) return;
+    const now = new Date();
+    if (now.getDate() !== 1) return;
+    if (now.getHours() > 2) return; // narrow window so we only fire shortly after midnight
+    // Compute YYYY-MM for the previous month (the report covers the prev month)
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const yyyymm = prevMonth.getFullYear() + '-' + String(prevMonth.getMonth() + 1).padStart(2, '0');
+    if (pnlLastSentMonth() === yyyymm) return; // already sent this month's report
+    const startISO = new Date(Date.UTC(prevMonth.getFullYear(), prevMonth.getMonth(), 1)).toISOString();
+    const endISO   = new Date(Date.UTC(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 1)).toISOString();
+    const result = await sendMonthlyPnlEmail(startISO, endISO);
+    if (result.ok) {
+      pnlMarkSentMonth(yyyymm);
+      // Audit log
+      try {
+        const id = genId();
+        db.prepare('INSERT INTO auth_audit (id,userType,userId,userLabel,action,ip,userAgent,createdAt) VALUES (?,?,?,?,?,?,?,?)')
+          .run(id, 'system', '', 'P&L scheduler', 'pnl_email_sent', '', `period=${result.periodLabel}; sent=${result.sent}; failed=${result.failed}`, new Date().toISOString());
+      } catch(e) {}
+      console.log(`Auto P&L email sent for ${result.periodLabel} — ${result.sent} delivered, ${result.failed} failed`);
+    } else {
+      console.warn('Auto P&L email skipped:', result.reason);
+    }
+  } catch(err) {
+    console.error('P&L scheduler error:', err.message);
+  }
+}
+
+// Hourly tick (cheap; only does work once per month). Runs ~5 sec after server boot, then every hour.
+setTimeout(pnlSchedulerTick, 5000);
+setInterval(pnlSchedulerTick, 60 * 60 * 1000);
+
+// Admin endpoint: get/set auto-email enabled flag
+app.get('/api/reports/profit-loss/auto-email', requireAdmin, (req, res) => {
+  res.json({ enabled: pnlAutoEmailEnabled() });
+});
+app.post('/api/reports/profit-loss/auto-email', requireAdmin, (req, res) => {
+  const enabled = !!req.body?.enabled;
+  const row = db.prepare("SELECT key FROM settings WHERE key='pnlAutoEmail'").get();
+  if (row) db.prepare("UPDATE settings SET value=? WHERE key='pnlAutoEmail'").run(JSON.stringify(enabled));
+  else db.prepare("INSERT INTO settings (key,value) VALUES ('pnlAutoEmail',?)").run(JSON.stringify(enabled));
+  res.json({ ok: true, enabled });
+});
+
+// Admin endpoint: send the previous month's P&L right now (for testing or manual catch-up)
+app.post('/api/reports/profit-loss/send-now', requireAdmin, async (req, res) => {
+  const { from, to } = req.body || {};
+  let startISO, endISO;
+  if (from && to) {
+    startISO = from;
+    endISO = to;
+  } else {
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    startISO = new Date(Date.UTC(prev.getFullYear(), prev.getMonth(), 1)).toISOString();
+    endISO   = new Date(Date.UTC(prev.getFullYear(), prev.getMonth() + 1, 1)).toISOString();
+  }
+  const result = await sendMonthlyPnlEmail(startISO, endISO);
+  res.json(result);
+});
+
 // ─── TEST EMAIL ───────────────────────────────────────────────────────────────
 app.post('/api/email/test', requireAdmin, async (req, res) => {
   const cfg = getEmailSettings();

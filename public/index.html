@@ -33,6 +33,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-item:hover{background:var(--surface2);color:var(--text);}
 .nav-item.active{background:rgba(59,130,246,.15);color:var(--accent);border-right:2px solid var(--accent);}
 .nav-icon{width:17px;height:17px;flex-shrink:0;}
+/* AI review modal */
+@keyframes shimmer { 0%,100% { transform: translateX(-150%); } 50% { transform: translateX(150%); } }
+.ai-review-section{padding:10px 0;border-bottom:1px solid var(--border);}
+.ai-review-section:last-child{border-bottom:none;}
+.ai-review-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ai-review-col{border:1px solid var(--border);border-radius:8px;background:var(--bg);overflow:hidden;}
+.ai-review-col-pol{border-color:var(--accent);background:rgba(59,130,246,.04);}
+.ai-review-col-hd{padding:6px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--bg2);border-bottom:1px solid var(--border);}
+.ai-review-col-pol .ai-review-col-hd{color:var(--accent);}
+.ai-review-text{padding:10px 12px;font-size:13px;line-height:1.5;white-space:pre-wrap;color:var(--text);min-height:60px;}
+.ai-review-edit{width:100%;border:none;padding:10px 12px;font-size:13px;line-height:1.5;background:transparent;color:var(--text);font-family:inherit;resize:vertical;min-height:80px;outline:none;}
+.ai-review-controls{margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;font-size:12px;}
+.ai-radio{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--muted);}
+.ai-radio input{accent-color:var(--accent);}
+.ai-radio:hover{color:var(--text);}
+@media(max-width:680px){.ai-review-grid{grid-template-columns:1fr;}}
+
 /* P&L invoice table — clickable rows + tighter typography */
 .pnl-inv-table tr.clickable:hover { background: rgba(59,130,246,.06); }
 .pnl-inv-table th { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
@@ -1651,6 +1668,45 @@ hr.div{border:none;border-top:1px solid var(--border);margin:20px 0;}
                 <div><strong style="color:var(--text);">3.</strong> Create an <strong style="color:var(--text);">Access key</strong> for that user and paste both values above</div>
                 <div><strong style="color:var(--text);">4.</strong> While in sandbox mode, you can only send to verified addresses. Request production access in SES for unlimited sending.</div>
               </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">AI Report Refinement</span>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);">
+              <input type="checkbox" id="ai-enabled" style="accent-color:var(--accent);width:16px;height:16px;">
+              Enabled
+            </label>
+          </div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+              When enabled, technician reports run through Claude AI on submit. The AI polishes spelling, grammar, and phrasing while preserving every fact. Tech reviews and accepts before final submission. Tech Notes are <strong style="color:var(--text);">never</strong> sent to AI.
+            </p>
+            <div class="fg">
+              <label class="flbl">Anthropic API Key</label>
+              <input class="fc" type="password" id="ai-api-key" placeholder="sk-ant-api03-...">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;">Get a key at <strong style="color:var(--accent);">console.anthropic.com</strong> → API Keys. $5 free credit on signup; pay-as-you-go after.</div>
+            </div>
+            <div class="fg">
+              <label class="flbl">Model</label>
+              <select class="fc" id="ai-model">
+                <option value="claude-haiku-4-5">Claude Haiku 4.5 (recommended — fast, ~$0.002 per refinement)</option>
+                <option value="claude-sonnet-4-5">Claude Sonnet 4.5 (higher quality, ~5x cost)</option>
+              </select>
+            </div>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:12px;">
+              <button class="btn btn-primary" onclick="saveAiSettings()" id="save-ai-btn">Save AI Settings</button>
+            </div>
+            <hr class="div">
+            <div style="background:var(--bg);border-radius:8px;padding:14px;font-size:12px;color:var(--muted);line-height:1.7;">
+              <div style="font-weight:700;color:var(--text);margin-bottom:6px;">How it works</div>
+              <div>• When a tech hits <strong style="color:var(--text);">Submit Report</strong>, AI polishes Work Performed, Cause/Finding, and Recommendations.</div>
+              <div>• A review screen shows the original and polished side-by-side. Tech accepts, edits, or reverts each field.</div>
+              <div>• On final confirmation, the report saves with the chosen text.</div>
+              <div>• Tech Notes (admin-only) are never sent to AI — they save exactly as written.</div>
+              <div>• Per-tech rate limit: 100 refinements/hour to prevent runaway costs.</div>
+              <div>• If the AI service is down or times out, the tech sees a notice and can submit with their original text.</div>
             </div>
           </div>
         </div>
@@ -8911,16 +8967,56 @@ async function submitReport(e) {
   if (!app.reportPhotos.before) { showToast('Before photo is required','error'); return; }
   if (!app.reportPhotos.after) { showToast('After photo is required','error'); return; }
   if (!app.reportPhotos.nameplate) { showToast('Nameplate photo is required','error'); return; }
+
+  // ── AI REFINEMENT (if enabled) ──
+  // Gather the three text fields; tech is shown a side-by-side review and
+  // accepts/edits/reverts before we actually submit. AI is bypassed when
+  // disabled, offline, unconfigured, or it errors out.
+  var rawWork  = document.getElementById('rf-work')?.value.trim() || '';
+  var rawCause = document.getElementById('rf-cause')?.value.trim() || '';
+  var rawRecs  = document.getElementById('rf-recs')?.value.trim() || '';
+  var finalWork = rawWork, finalCause = rawCause, finalRecs = rawRecs;
+
+  var aiCfg = null;
+  if (navigator.onLine !== false) {
+    try { aiCfg = await apiGet('/api/ai-enabled'); } catch(e) { aiCfg = null; }
+  }
+  if (aiCfg && aiCfg.enabled) {
+    // Show a small busy overlay while we call the API
+    var refining = showRefiningOverlay();
+    var refined = null;
+    try {
+      var resp = await apiPost('/api/reports/refine', { workPerformed: rawWork, cause: rawCause, recommendations: rawRecs });
+      if (resp && resp.ok && resp.refined) refined = resp.refined;
+    } catch(err) {
+      console.warn('AI refine failed:', err.message);
+      showToast('AI refinement unavailable (' + err.message + ') — submitting with your original text.', 'warning');
+    }
+    refining.close();
+    if (refined) {
+      // Open the review modal and wait for the tech's choice
+      try {
+        var chosen = await openAiRefineReview({ work: rawWork, cause: rawCause, recs: rawRecs }, { work: refined.workPerformed, cause: refined.cause, recs: refined.recommendations });
+        if (chosen === null) { return; } // tech cancelled — abort submit
+        finalWork = chosen.work; finalCause = chosen.cause; finalRecs = chosen.recs;
+        // Push the chosen text back into the form fields so it shows after save
+        if (document.getElementById('rf-work')) document.getElementById('rf-work').value = finalWork;
+        if (document.getElementById('rf-cause')) document.getElementById('rf-cause').value = finalCause;
+        if (document.getElementById('rf-recs')) document.getElementById('rf-recs').value = finalRecs;
+      } catch(e) { /* if modal threw, just submit originals */ }
+    }
+  }
+
   var ref = btnStart(_actionBtn);
   const reportData = {
     equipmentId: app.equipmentId, type,
     techName: document.getElementById('rf-tech').value.trim(),
     date: date + (time?'T'+time:':00'),
     status: document.getElementById('rf-status').value,
-    workPerformed: document.getElementById('rf-work')?.value.trim()||'',
-    cause: document.getElementById('rf-cause')?.value.trim()||'',
+    workPerformed: finalWork,
+    cause: finalCause,
     parts: document.getElementById('rf-parts')?.value.trim()||'',
-    recommendations: document.getElementById('rf-recs')?.value.trim()||'',
+    recommendations: finalRecs,
     checklist,
     photoBefore: app.reportPhotos.before,
     photoAfter: app.reportPhotos.after,
@@ -8948,7 +9044,111 @@ async function submitReport(e) {
   } catch(err) { btnEnd(ref,false,err.message); }
 }
 
-// â”€â”€â”€ REPORT DETAIL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── AI REPORT REFINEMENT HELPERS ─────────────────────────────────────────
+function showRefiningOverlay() {
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:30px 40px;text-align:center;max-width:340px;">'+
+    '<div style="font-size:32px;margin-bottom:10px;">✨</div>'+
+    '<div style="font-size:15px;font-weight:600;margin-bottom:6px;">Polishing your report...</div>'+
+    '<div style="font-size:12px;color:var(--muted);">AI is reviewing your write-up. You\'ll see the polished version next.</div>'+
+    '<div style="margin-top:16px;width:100%;height:3px;background:var(--bg);border-radius:2px;overflow:hidden;"><div style="width:40%;height:100%;background:var(--accent);animation:shimmer 1.2s infinite;"></div></div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  return { close: function() { try { ov.remove(); } catch(e) {} } };
+}
+
+// Promise-based modal: shows original vs polished side-by-side for each of
+// workPerformed/cause/recommendations and lets the tech accept/edit/keep
+// each independently. Resolves with the final chosen text, or null on cancel.
+function openAiRefineReview(orig, polished) {
+  return new Promise(function(resolve) {
+    var existing = document.getElementById('modal-ai-review');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'modal-ai-review';
+    modal.className = 'overlay open';
+
+    function fieldBlock(key, label, origText, polText) {
+      var hasPol = polText !== undefined && polText !== null && polText !== origText;
+      var emptyOrig = !origText || origText.trim().length < 10;
+      // If the original is empty/short, no review needed for this field
+      if (emptyOrig) return '';
+      return ''+
+        '<div class="ai-review-section" data-key="'+key+'" data-orig="'+esc(origText)+'" data-pol="'+esc(polText || origText)+'">'+
+          '<div style="font-size:13px;font-weight:700;margin:14px 0 6px;color:var(--text);">'+esc(label)+'</div>'+
+          '<div class="ai-review-grid">'+
+            '<div class="ai-review-col">'+
+              '<div class="ai-review-col-hd">📝 Original</div>'+
+              '<div class="ai-review-text">'+esc(origText)+'</div>'+
+            '</div>'+
+            '<div class="ai-review-col ai-review-col-pol">'+
+              '<div class="ai-review-col-hd">✨ Polished</div>'+
+              '<textarea class="ai-review-edit" data-field="'+key+'">'+esc(polText || origText)+'</textarea>'+
+            '</div>'+
+          '</div>'+
+          '<div class="ai-review-controls">'+
+            '<label class="ai-radio"><input type="radio" name="ai-'+key+'" value="polished" checked> Use Polished</label>'+
+            '<label class="ai-radio"><input type="radio" name="ai-'+key+'" value="original"> Keep Original</label>'+
+          '</div>'+
+        '</div>';
+    }
+
+    var sections = ''+
+      fieldBlock('work', 'Work Performed', orig.work, polished.work) +
+      fieldBlock('cause', 'Cause / Finding', orig.cause, polished.cause) +
+      fieldBlock('recs', 'Recommendations', orig.recs, polished.recs);
+
+    if (!sections) {
+      // Nothing meaningful to refine — auto-accept and resolve with originals
+      resolve({ work: orig.work, cause: orig.cause, recs: orig.recs });
+      return;
+    }
+
+    modal.innerHTML = ''+
+      '<div class="modal" style="max-width:920px;width:96vw;">'+
+        '<div class="modal-hd">'+
+          '<span class="modal-title">✨ Review AI-Polished Report</span>'+
+          '<button class="modal-x" id="ai-review-cancel">'+
+            '<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'+
+          '</button>'+
+        '</div>'+
+        '<div class="modal-body" style="max-height:72vh;overflow-y:auto;">'+
+          '<p style="font-size:13px;color:var(--muted);margin-bottom:12px;">AI polished spelling, grammar, and phrasing while preserving every fact you wrote. Pick which version to use for each section. You can also edit the polished text directly.</p>'+
+          sections +
+        '</div>'+
+        '<div class="modal-ft">'+
+          '<button class="btn btn-secondary" id="ai-review-cancel-btn">Cancel</button>'+
+          '<button class="btn btn-primary" id="ai-review-confirm">Confirm &amp; Submit Report</button>'+
+        '</div>'+
+      '</div>';
+    document.body.appendChild(modal);
+
+    function cleanup() { try { modal.remove(); } catch(e) {} }
+    function cancel() { cleanup(); resolve(null); }
+    document.getElementById('ai-review-cancel').onclick = cancel;
+    document.getElementById('ai-review-cancel-btn').onclick = cancel;
+    document.getElementById('ai-review-confirm').onclick = function() {
+      // Build result by reading each section's chosen radio + textarea
+      var result = { work: orig.work, cause: orig.cause, recs: orig.recs };
+      modal.querySelectorAll('.ai-review-section').forEach(function(sec) {
+        var key = sec.getAttribute('data-key');
+        var origText = sec.getAttribute('data-orig');
+        var chosen = sec.querySelector('input[name="ai-' + key + '"]:checked')?.value || 'polished';
+        if (chosen === 'original') {
+          result[key] = origText;
+        } else {
+          var ta = sec.querySelector('textarea[data-field="' + key + '"]');
+          result[key] = ta ? ta.value : origText;
+        }
+      });
+      cleanup();
+      resolve(result);
+    };
+  });
+}
+
+// ─── REPORT DETAIL ───────────────────────────────────────────────────────
 function openReportDetail(id) {
   app.reportId = id; app.prevView = app.view;
   // Track reviewed reports
@@ -9568,6 +9768,17 @@ async function renderSettingsView() {
     document.getElementById('from-name').value = cfg.fromName || '';
     document.getElementById('app-url').value = cfg.appUrl || '';
   } catch(err) { /* first time, no settings yet */ }
+  // Load AI settings
+  try {
+    const ai = await apiGet('/api/ai-settings');
+    if (document.getElementById('ai-enabled')) document.getElementById('ai-enabled').checked = !!ai.enabled;
+    if (document.getElementById('ai-model')) document.getElementById('ai-model').value = ai.model || 'claude-haiku-4-5';
+    var aiKeyField = document.getElementById('ai-api-key');
+    if (aiKeyField) {
+      aiKeyField.value = '';
+      aiKeyField.placeholder = ai.apiKey === '••••••••' ? 'API key saved ✓ — leave blank to keep, or enter new' : 'sk-ant-api03-...';
+    }
+  } catch(e) { /* no AI settings yet */ }
   // Load labor burden
   try {
     const lb = await apiGet('/api/labor-burden');
@@ -9640,6 +9851,32 @@ async function saveEmailConfig() {
     btnEnd(ref,false,err.message);
   }
 }
+async function saveAiSettings() {
+  if (!isAdmin()) return;
+  var ref = btnStart(_actionBtn);
+  var keyVal = (document.getElementById('ai-api-key')?.value || '').trim();
+  const cfg = {
+    enabled: !!document.getElementById('ai-enabled').checked,
+    apiKey: keyVal || '••••••••',
+    model: document.getElementById('ai-model').value,
+  };
+  if (cfg.enabled && !keyVal && !document.getElementById('ai-api-key').placeholder.startsWith('API key saved')) {
+    btnEnd(ref, false, 'API key required to enable');
+    return;
+  }
+  try {
+    var result = await apiPost('/api/ai-settings', cfg);
+    if (keyVal) {
+      var keyField = document.getElementById('ai-api-key');
+      keyField.value = '';
+      keyField.placeholder = 'API key saved ✓ — leave blank to keep, or enter new';
+    }
+    btnEnd(ref, true, result.enabled ? 'AI refinement enabled' : 'Settings saved');
+  } catch(err) {
+    btnEnd(ref, false, err.message);
+  }
+}
+
 async function saveLaborBurden() {
   if (!isAdmin()) return;
   var ref = btnStart(_actionBtn);

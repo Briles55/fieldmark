@@ -3709,6 +3709,196 @@ app.post('/api/settings', requireAdmin, (req, res) => {
   res.json({ ok: true, hasCreds: hasSes || hasSmtp || hasPostmark, provider: cfg.provider });
 });
 
+// ─── AI REPORT REFINEMENT (Anthropic Claude) ─────────────────────────────────
+
+function getAiSettings() {
+  const row = db.prepare("SELECT value FROM settings WHERE key='ai'").get();
+  try { return row ? JSON.parse(row.value) : {}; } catch { return {}; }
+}
+
+// Public read (admin): masks the API key. Used by the Settings UI.
+app.get('/api/ai-settings', requireAdmin, (req, res) => {
+  const cfg = getAiSettings();
+  const safe = { ...cfg };
+  if (safe.apiKey) safe.apiKey = '••••••••';
+  res.json(safe);
+});
+
+// Whether AI refinement is on — readable by any authenticated user (so the
+// frontend Submit flow knows whether to invoke /api/reports/refine).
+app.get('/api/ai-enabled', requireAuth, (req, res) => {
+  const cfg = getAiSettings();
+  res.json({ enabled: !!(cfg.enabled && cfg.apiKey), model: cfg.model || 'claude-haiku-4-5' });
+});
+
+app.post('/api/ai-settings', requireAdmin, (req, res) => {
+  const existing = getAiSettings();
+  const { enabled, apiKey, model } = req.body || {};
+  const cfg = {
+    enabled: !!enabled,
+    apiKey: apiKey && apiKey !== '••••••••' ? apiKey : (existing.apiKey || ''),
+    model: model || existing.model || 'claude-haiku-4-5',
+  };
+  const row = db.prepare("SELECT key FROM settings WHERE key='ai'").get();
+  if (row) db.prepare("UPDATE settings SET value=? WHERE key='ai'").run(JSON.stringify(cfg));
+  else db.prepare("INSERT INTO settings (key,value) VALUES ('ai',?)").run(JSON.stringify(cfg));
+  res.json({ ok: true, enabled: cfg.enabled, hasKey: !!cfg.apiKey });
+});
+
+// Per-user rate limit: 100 refinements/hour (cost guard)
+const aiRateLimitWindow = 60 * 60 * 1000;
+const aiRateLimitMax = 100;
+const _aiCallLog = new Map(); // userId -> array of timestamps
+function aiCheckRate(userId) {
+  const now = Date.now();
+  const log = (_aiCallLog.get(userId) || []).filter(t => now - t < aiRateLimitWindow);
+  if (log.length >= aiRateLimitMax) return false;
+  log.push(now);
+  _aiCallLog.set(userId, log);
+  return true;
+}
+
+const REPORT_REFINER_SYSTEM_PROMPT = `You are a professional editor for HVAC and mechanical service reports. Your only job is to polish the language of field service reports written by busy technicians on their phones, so the report reads cleanly for the customer.
+
+CRITICAL RULES — these are inviolable:
+
+1. PRESERVE EVERY FACT. Never invent, omit, or change:
+   - Numbers (pressures, temperatures, hours, quantities, percentages)
+   - Model numbers, serial numbers, part numbers
+   - Refrigerant types (R-410A, R-22, R-32, etc.) — exact spelling
+   - Specific procedures the tech actually performed
+   - Recommendations the tech actually wrote
+   - Customer/site context
+
+2. FIX ONLY:
+   - Spelling and grammar
+   - Capitalization and punctuation
+   - Awkward phrasing into clear, professional sentences
+   - Run-on or fragmented sentences
+   - Lower-case proper nouns
+
+3. KEEP THE TECH'S VOICE. Do NOT:
+   - Add sales language (no "we recommend our Premium Service Plan")
+   - Inflate scope (no "performed comprehensive multi-point diagnostic")
+   - Add procedures the tech didn't mention
+   - Change "should" to "must" (or vice versa)
+   - Make the text longer than necessary — concise is professional
+   - Add boilerplate openers like "Upon arrival, I performed..."
+
+4. IF THE INPUT IS ALREADY GOOD, return it virtually unchanged. Do not over-edit.
+
+5. IF A FIELD IS EMPTY, very short ("n/a", "none", "see notes"), or just placeholder text, return it exactly as-is.
+
+INPUT FORMAT: A JSON object with up to three string fields:
+- workPerformed
+- cause
+- recommendations
+
+OUTPUT FORMAT: Return ONLY valid JSON in this exact shape, with NO additional commentary, NO markdown fences, NO explanations:
+{"workPerformed":"...","cause":"...","recommendations":"..."}
+
+If any input field was missing from the input, omit it from the output (don't return null).`;
+
+async function callAnthropicRefine(apiKey, model, fields) {
+  const userMessage = JSON.stringify({
+    workPerformed: fields.workPerformed || '',
+    cause: fields.cause || '',
+    recommendations: fields.recommendations || '',
+  });
+  const body = {
+    model: model || 'claude-haiku-4-5',
+    max_tokens: 2000,
+    system: REPORT_REFINER_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userMessage }],
+  };
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = (data && data.error && data.error.message) || ('Anthropic error ' + res.status);
+      throw new Error(msg);
+    }
+    // The response.content is an array of { type, text }. We want the text.
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    if (!text) throw new Error('Empty response from AI');
+    // Parse the JSON output. Be tolerant of stray whitespace or markdown fences.
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch (e) {
+      // Attempt to strip markdown fences and parse again
+      const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+      parsed = JSON.parse(cleaned);
+    }
+    return {
+      workPerformed: typeof parsed.workPerformed === 'string' ? parsed.workPerformed : undefined,
+      cause: typeof parsed.cause === 'string' ? parsed.cause : undefined,
+      recommendations: typeof parsed.recommendations === 'string' ? parsed.recommendations : undefined,
+    };
+  } catch (err) {
+    clearTimeout(t);
+    if (err.name === 'AbortError') throw new Error('AI request timed out');
+    throw err;
+  }
+}
+
+// Tech-or-admin: refine a report's text fields.
+app.post('/api/reports/refine', requireAuth, async (req, res) => {
+  const cfg = getAiSettings();
+  if (!cfg.enabled || !cfg.apiKey) return res.status(400).json({ error: 'AI refinement is not configured. Ask admin to set the Anthropic API key in Settings.' });
+
+  const userId = req.session.user?.id || '';
+  if (!aiCheckRate(userId)) return res.status(429).json({ error: 'Too many AI refinements this hour — try again later.' });
+
+  const { workPerformed, cause, recommendations } = req.body || {};
+  // Skip empty / trivial fields — saves tokens
+  function shouldRefine(s) {
+    if (typeof s !== 'string') return false;
+    const t = s.trim();
+    return t.length >= 10; // tiny strings or "n/a" left as-is
+  }
+  const input = {
+    workPerformed: shouldRefine(workPerformed) ? workPerformed : '',
+    cause:         shouldRefine(cause)         ? cause         : '',
+    recommendations: shouldRefine(recommendations) ? recommendations : '',
+  };
+  // If nothing meaningful to refine, echo back originals
+  if (!input.workPerformed && !input.cause && !input.recommendations) {
+    return res.json({ ok: true, refined: { workPerformed, cause, recommendations }, skipped: true });
+  }
+  try {
+    const refined = await callAnthropicRefine(cfg.apiKey, cfg.model, input);
+    // Merge: use refined where we asked it to refine, original where we didn't
+    const out = {
+      workPerformed: refined.workPerformed !== undefined ? refined.workPerformed : (workPerformed || ''),
+      cause:         refined.cause !== undefined         ? refined.cause         : (cause || ''),
+      recommendations: refined.recommendations !== undefined ? refined.recommendations : (recommendations || ''),
+    };
+    // Audit log
+    try {
+      const id = genId();
+      const username = req.session.user?.username || '';
+      db.prepare('INSERT INTO auth_audit (id,userType,userId,userLabel,action,ip,userAgent,createdAt) VALUES (?,?,?,?,?,?,?,?)')
+        .run(id, 'staff', userId, username, 'ai_refine_report', '', cfg.model || '', new Date().toISOString());
+    } catch(e) {}
+    res.json({ ok: true, refined: out });
+  } catch(err) {
+    console.error('AI refine error:', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // ─── LABOR BURDEN ─────────────────────────────────────────────────────────────
 app.get('/api/labor-burden', requireAdmin, (req, res) => {
   const row = db.prepare("SELECT value FROM settings WHERE key='laborBurden'").get();
